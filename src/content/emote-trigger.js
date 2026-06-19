@@ -8,13 +8,23 @@ export function openEmotePanel() {
     return false;
   }
 
-  console.debug('[Emozzk Lite] emote trigger:', trigger);
+  trigger.click();
+  return true;
+}
+
+export function toggleEmotePanel() {
+  const trigger = findEmoteTriggerButton();
+
+  if (!trigger) {
+    console.debug('[Emozzk Lite] emote trigger not found');
+    return false;
+  }
 
   trigger.click();
   return true;
 }
 
-function findEmoteTriggerButton() {
+export function findEmoteTriggerButton() {
   const input = findChatInput();
 
   if (!input) {
@@ -26,10 +36,6 @@ function findEmoteTriggerButton() {
   if (!root) return null;
 
   const buttons = Array.from(root.querySelectorAll('button[type="button"]'));
-
-  // 입력창 뒤에 있는 버튼만 본다.
-  // 같은 parent 안에서 프로필 버튼은 textarea 앞에 있고,
-  // 이모티콘 버튼은 textarea 뒤에 있음.
   const inputIndex = getChildIndex(input);
 
   const candidates = buttons.filter((button) => {
@@ -44,11 +50,7 @@ function isEmoteTriggerButton(button) {
 
   const name = getElementName(button);
 
-  // 부분 일치보다 정확 일치 우선.
-  // "내 사용중인 프로필 팝업" 같은 버튼 오검출 방지.
-  if (name === '이모티콘') return true;
-
-  return false;
+  return name === '이모티콘';
 }
 
 function getElementName(element) {
