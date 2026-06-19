@@ -1,4 +1,6 @@
-const BADGE_ROOT_ID = 'emozzk-lite-badge-root';
+const BADGE_CLASS = 'emzk-lite-badge';
+const BADGE_TARGET_ATTR = 'data-emzk-lite-badge-target';
+const BADGE_PATCH_ATTR = 'data-emzk-lite-position-patched';
 
 const BADGE_LABELS = [
   'F1',
@@ -14,63 +16,54 @@ const BADGE_LABELS = [
 ];
 
 export function renderEmoteBadges(buttons) {
-  const root = getBadgeRoot();
-
-  root.replaceChildren();
+  clearEmoteBadges();
 
   buttons.slice(0, BADGE_LABELS.length).forEach((button, index) => {
-    const badge = createBadge({
+    attachBadgeToButton({
+      button,
       label: BADGE_LABELS[index],
-      target: button,
     });
-
-    if (badge) {
-      root.appendChild(badge);
-    }
   });
-
-  if (!root.childElementCount) {
-    clearEmoteBadges();
-  }
 }
 
 export function clearEmoteBadges() {
-  const root = document.getElementById(BADGE_ROOT_ID);
+  document.querySelectorAll(`.${BADGE_CLASS}`).forEach((badge) => {
+    badge.remove();
+  });
 
-  if (root) {
-    root.remove();
-  }
+  document.querySelectorAll(`[${BADGE_PATCH_ATTR}="true"]`).forEach((button) => {
+    button.style.position = '';
+    button.removeAttribute(BADGE_PATCH_ATTR);
+  });
 }
 
-function getBadgeRoot() {
-  let root = document.getElementById(BADGE_ROOT_ID);
+function attachBadgeToButton({
+  button,
+  label,
+}) {
+  if (!button) return;
 
-  if (!root) {
-    root = document.createElement('div');
-    root.id = BADGE_ROOT_ID;
-    root.className = 'emzk-lite-badge-root';
-    root.setAttribute('aria-hidden', 'true');
+  const rect = button.getBoundingClientRect();
 
-    document.documentElement.appendChild(root);
-  }
+  if (rect.width <= 0 || rect.height <= 0) return;
 
-  return root;
-}
-
-function createBadge({ label, target }) {
-  if (!target) return null;
-
-  const rect = target.getBoundingClientRect();
-
-  if (rect.width <= 0 || rect.height <= 0) return null;
+  ensureButtonPositionContext(button);
 
   const badge = document.createElement('span');
 
-  badge.className = 'emzk-lite-badge';
+  badge.className = BADGE_CLASS;
   badge.textContent = label;
+  badge.setAttribute('aria-hidden', 'true');
 
-  badge.style.left = `${Math.round(rect.left + 2)}px`;
-  badge.style.top = `${Math.round(rect.top + 2)}px`;
+  button.setAttribute(BADGE_TARGET_ATTR, 'true');
+  button.appendChild(badge);
+}
 
-  return badge;
+function ensureButtonPositionContext(button) {
+  const style = window.getComputedStyle(button);
+
+  if (style.position !== 'static') return;
+
+  button.style.position = 'relative';
+  button.setAttribute(BADGE_PATCH_ATTR, 'true');
 }

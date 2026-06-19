@@ -1,5 +1,6 @@
 import { findEmotePanel } from './emote-panel.js';
 import { getVisibleEmoteButtons } from './emote-buttons.js';
+
 import {
   renderEmoteBadges,
   clearEmoteBadges,
@@ -18,8 +19,8 @@ export function startBadgeOverlay() {
 
   document.addEventListener('click', scheduleBadgeUpdate, true);
   document.addEventListener('keydown', scheduleBadgeUpdate, true);
+  document.addEventListener('scroll', scheduleBadgeUpdate, true);
   window.addEventListener('resize', scheduleBadgeUpdate, true);
-  window.addEventListener('scroll', scheduleBadgeUpdate, true);
 
   startPanelMutationObserver();
   scheduleBadgeUpdateBurst();
@@ -67,8 +68,8 @@ export function stopBadgeOverlay() {
 
   document.removeEventListener('click', scheduleBadgeUpdate, true);
   document.removeEventListener('keydown', scheduleBadgeUpdate, true);
+  document.removeEventListener('scroll', scheduleBadgeUpdate, true);
   window.removeEventListener('resize', scheduleBadgeUpdate, true);
-  window.removeEventListener('scroll', scheduleBadgeUpdate, true);
 
   stopPanelMutationObserver();
 
