@@ -3,7 +3,7 @@ import {
 } from './shortcut-guard.js';
 
 import {
-  toggleEmotePanel,
+  openEmotePanel,
 } from './emote-trigger.js';
 
 import {
@@ -12,18 +12,19 @@ import {
 
 import {
   isSelectCode,
-  clickVisibleEmoteByCode,
 } from './emote-buttons.js';
 
 import {
-  scheduleBadgeUpdate,
   scheduleBadgeUpdateBurst,
 } from './badge-overlay.js';
 
 import {
   scheduleChatInputFocusBurst,
-  scheduleChatInputNormalizeAfterEmoteBurst,
 } from './chat-input.js';
+
+import {
+  quickInsertEmoteByCode,
+} from './quick-emote-insert.js';
 
 export function attachShortcutController() {
   document.addEventListener('keydown', handleKeyDown, true);
@@ -32,6 +33,7 @@ export function attachShortcutController() {
 function handleKeyDown(event) {
   if (event.defaultPrevented) return;
   if (event.isComposing) return;
+  if (event.repeat) return;
 
   const hasModifier =
     event.ctrlKey ||
@@ -41,34 +43,37 @@ function handleKeyDown(event) {
 
   const panel = findEmotePanel();
 
-  if (panel && isSelectCode(event.code) && !hasModifier) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-
-    const clicked = clickVisibleEmoteByCode(event.code, panel);
-
-    if (clicked) {
-      scheduleChatInputNormalizeAfterEmoteBurst();
-      scheduleBadgeUpdate();
-    }
-
-    return;
-  }
-
   const isTyping =
     isTypingTarget(event.target) ||
     isTypingTarget(document.activeElement);
+
+  const isEmoteSelectShortcut =
+    isSelectCode(event.code) &&
+    !hasModifier &&
+    (panel || isTyping);
+
+  if (isEmoteSelectShortcut) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    quickInsertEmoteByCode(event.code);
+    return;
+  }
 
   if (isTyping) return;
   if (hasModifier) return;
 
   if (event.code === 'KeyE') {
     event.preventDefault();
+    event.stopPropagation();
     event.stopImmediatePropagation();
 
-    toggleEmotePanel();
+    const opened = openEmotePanel();
 
-    scheduleChatInputFocusBurst();
-    scheduleBadgeUpdateBurst();
+    if (opened) {
+      scheduleChatInputFocusBurst();
+      scheduleBadgeUpdateBurst();
+    }
   }
 }

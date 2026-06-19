@@ -1,6 +1,16 @@
-import { findChatInput } from './chat-input.js';
+import {
+  findChatInput,
+} from './chat-input.js';
+
+import {
+  findEmotePanel,
+} from './emote-panel.js';
 
 export function openEmotePanel() {
+  if (findEmotePanel()) {
+    return true;
+  }
+
   const trigger = findEmoteTriggerButton();
 
   if (!trigger) {
@@ -33,9 +43,15 @@ export function findEmoteTriggerButton() {
   }
 
   const root = input.parentElement;
-  if (!root) return null;
 
-  const buttons = Array.from(root.querySelectorAll('button[type="button"]'));
+  if (!root) {
+    return null;
+  }
+
+  const buttons = Array.from(
+    root.querySelectorAll('button[type="button"]')
+  );
+
   const inputIndex = getChildIndex(input);
 
   const candidates = buttons.filter((button) => {
@@ -66,7 +82,9 @@ function getElementName(element) {
 }
 
 function getChildIndex(element) {
-  if (!element?.parentElement) return -1;
+  if (!element?.parentElement) {
+    return -1;
+  }
 
   return Array.from(element.parentElement.children).indexOf(element);
 }
@@ -83,6 +101,7 @@ function isVisible(element) {
     rect.top < window.innerHeight &&
     rect.left < window.innerWidth &&
     style.display !== 'none' &&
-    style.visibility !== 'hidden'
+    style.visibility !== 'hidden' &&
+    style.opacity !== '0'
   );
 }
