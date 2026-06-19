@@ -1,0 +1,30 @@
+{
+  "name": "emozzk-lite",
+  "version": "0.1.0",
+  "description": "Keyboard controls for Chzzk's built-in emote panel",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "build:prod": "node scripts/build.js --prod"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HYEONS3/Emozzk-Lite.git"
+  },
+  "keywords": [
+    "chzzk",
+    "emote",
+    "keyboard-shortcuts",
+    "browser-extension"
+  ],
+  "author": "Hyeonse Jang",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/HYEONS3/Emozzk-Lite/issues"
+  },
+  "homepage": "https://github.com/HYEONS3/Emozzk-Lite#readme",
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}
