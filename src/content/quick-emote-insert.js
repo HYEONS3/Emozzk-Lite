@@ -13,12 +13,11 @@ import {
 
 import {
   focusChatInputAtEnd,
-  scheduleChatInputNormalizeAfterEmoteBurst,
+  scheduleChatInputNormalizeAfterEmoteSettle,
 } from './chat-input.js';
 
 import {
   scheduleBadgeUpdate,
-  scheduleBadgeUpdateBurst,
 } from './badge-overlay.js';
 
 let openingPromise = null;
@@ -54,8 +53,6 @@ async function ensureEmotePanelReady() {
       return null;
     }
 
-    scheduleBadgeUpdateBurst();
-
     openingPromise = waitForEmotePanelReady()
       .then((readyState) => {
         return readyState?.panel ?? null;
@@ -81,7 +78,7 @@ function insertEmoteFromPanel({
     return false;
   }
 
-  scheduleChatInputNormalizeAfterEmoteBurst();
+  scheduleChatInputNormalizeAfterEmoteSettle();
   scheduleBadgeUpdate();
 
   return true;

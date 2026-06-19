@@ -10,7 +10,6 @@ let rafId = 0;
 let started = false;
 let observer = null;
 
-const UPDATE_BURST_DELAYS = [0, 50, 100, 180, 300];
 
 export function startBadgeOverlay() {
   if (started) return;
@@ -23,7 +22,7 @@ export function startBadgeOverlay() {
   window.addEventListener('resize', scheduleBadgeUpdate, true);
 
   startPanelMutationObserver();
-  scheduleBadgeUpdateBurst();
+  scheduleBadgeUpdate();
 }
 
 export function scheduleBadgeUpdate() {
@@ -37,11 +36,6 @@ export function scheduleBadgeUpdate() {
   });
 }
 
-export function scheduleBadgeUpdateBurst() {
-  UPDATE_BURST_DELAYS.forEach((delay) => {
-    window.setTimeout(scheduleBadgeUpdate, delay);
-  });
-}
 
 export function updateBadgeOverlay() {
   const panel = findEmotePanel();

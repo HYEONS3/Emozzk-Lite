@@ -44,25 +44,10 @@ export function scheduleChatInputFocus() {
   });
 }
 
-export function scheduleChatInputFocusBurst() {
-  [0, 30, 80, 150, 250].forEach((delay) => {
-    window.setTimeout(() => {
-      focusChatInput();
-    }, delay);
-  });
-}
 
 export function scheduleChatInputFocusEnd() {
   requestAnimationFrame(() => {
     focusChatInputAtEnd();
-  });
-}
-
-export function scheduleChatInputFocusEndBurst() {
-  [0, 30, 80, 150, 250].forEach((delay) => {
-    window.setTimeout(() => {
-      focusChatInputAtEnd();
-    }, delay);
   });
 }
 
@@ -72,6 +57,41 @@ export function scheduleChatInputFocusEndSoft() {
 
     requestAnimationFrame(() => {
       focusChatInputAtEnd();
+    });
+  });
+}
+
+export function normalizeChatInputAfterEmote() {
+  const input = findChatInput();
+
+  if (!input) {
+    console.debug('[Emozzk Lite] chat input not found for normalize');
+    return false;
+  }
+
+  input.focus({
+    preventScroll: true,
+  });
+
+  if (input.isContentEditable) {
+    removeLeadingFillerBreak(input);
+  }
+
+  moveCaretToEnd(input);
+
+  return document.activeElement === input;
+}
+
+export function scheduleChatInputNormalizeAfterEmote() {
+  requestAnimationFrame(() => {
+    normalizeChatInputAfterEmote();
+  });
+}
+
+export function scheduleChatInputNormalizeAfterEmoteSettle() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      normalizeChatInputAfterEmote();
     });
   });
 }
@@ -136,58 +156,6 @@ function moveContentEditableCaretToEnd(element) {
   selection.addRange(range);
 }
 
-function isVisible(element) {
-  const rect = element.getBoundingClientRect();
-  const style = window.getComputedStyle(element);
-
-  return (
-    rect.width > 0 &&
-    rect.height > 0 &&
-    rect.bottom > 0 &&
-    rect.right > 0 &&
-    rect.top < window.innerHeight &&
-    rect.left < window.innerWidth &&
-    style.display !== 'none' &&
-    style.visibility !== 'hidden' &&
-    style.opacity !== '0'
-  );
-}
-
-export function normalizeChatInputAfterEmote() {
-  const input = findChatInput();
-
-  if (!input) {
-    console.debug('[Emozzk Lite] chat input not found for normalize');
-    return false;
-  }
-
-  input.focus({
-    preventScroll: true,
-  });
-
-  if (input.isContentEditable) {
-    removeLeadingFillerBreak(input);
-  }
-
-  moveCaretToEnd(input);
-
-  return document.activeElement === input;
-}
-
-export function scheduleChatInputNormalizeAfterEmote() {
-  requestAnimationFrame(() => {
-    normalizeChatInputAfterEmote();
-  });
-}
-
-export function scheduleChatInputNormalizeAfterEmoteBurst() {
-  [0, 30, 80, 150].forEach((delay) => {
-    window.setTimeout(() => {
-      normalizeChatInputAfterEmote();
-    }, delay);
-  });
-}
-
 function removeLeadingFillerBreak(root) {
   removeLeadingEmptyTextNodes(root);
 
@@ -249,4 +217,21 @@ function isEmptyText(value) {
     .replace(/\u200B/g, '')
     .replace(/\u00A0/g, ' ')
     .trim() === '';
+}
+
+function isVisible(element) {
+  const rect = element.getBoundingClientRect();
+  const style = window.getComputedStyle(element);
+
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.bottom > 0 &&
+    rect.right > 0 &&
+    rect.top < window.innerHeight &&
+    rect.left < window.innerWidth &&
+    style.display !== 'none' &&
+    style.visibility !== 'hidden' &&
+    style.opacity !== '0'
+  );
 }

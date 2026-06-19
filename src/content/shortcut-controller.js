@@ -15,12 +15,16 @@ import {
 } from './emote-buttons.js';
 
 import {
-  scheduleBadgeUpdateBurst,
+  scheduleBadgeUpdate,
 } from './badge-overlay.js';
 
 import {
-  scheduleChatInputFocusBurst,
+  scheduleChatInputFocus,
 } from './chat-input.js';
+
+import {
+  waitForEmotePanelReady,
+} from './emote-panel-ready.js';
 
 import {
   quickInsertEmoteByCode,
@@ -69,11 +73,22 @@ function handleKeyDown(event) {
     event.stopPropagation();
     event.stopImmediatePropagation();
 
-    const opened = openEmotePanel();
-
-    if (opened) {
-      scheduleChatInputFocusBurst();
-      scheduleBadgeUpdateBurst();
-    }
+    openPanelFromShortcut();
   }
+}
+
+function openPanelFromShortcut() {
+  const opened = openEmotePanel();
+
+  if (!opened) return;
+
+  scheduleChatInputFocus();
+
+  waitForEmotePanelReady()
+    .then((readyState) => {
+      if (!readyState) return;
+
+      scheduleChatInputFocus();
+      scheduleBadgeUpdate();
+    });
 }
