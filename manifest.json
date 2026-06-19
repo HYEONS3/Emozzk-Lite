@@ -3,7 +3,7 @@
   "name": "Emozzk Lite",
   "version": "0.1.0",
   "description": "치지직 이모티콘 패널을 키보드로 조작하는 입력 보조 확장 프로그램",
-  "permissions": [],
+  "permissions": ["storage"],
   "content_scripts": [
     {
       "matches": ["https://chzzk.naver.com/*"],

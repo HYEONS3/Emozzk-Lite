@@ -17,6 +17,7 @@ export function isSelectCode(code) {
 
 export function clickVisibleEmoteByCode(code, panel) {
   const index = SELECT_CODES.indexOf(code);
+
   if (index < 0) return false;
 
   const buttons = getVisibleEmoteButtons(panel);
@@ -27,7 +28,7 @@ export function clickVisibleEmoteByCode(code, panel) {
     index,
     count: buttons.length,
     target,
-    alt: target?.querySelector('img')?.getAttribute('alt') ?? null,
+    alt: target ? getEmoteAltFromButton(target) : null,
   });
 
   if (!target) return false;
@@ -53,17 +54,21 @@ export function getVisibleEmoteButtons(panel) {
     .sort(compareByGridPosition);
 }
 
-function isRealEmoteButton(button) {
+export function isRealEmoteButton(button) {
+  if (!button) return false;
+
   const image = button.querySelector('img');
+
   if (!image) return false;
 
-  const alt = image.getAttribute('alt') ?? '';
+  const alt = getEmoteAltFromButton(button);
 
-  if (!/^\{:[^:]+:\}$/.test(alt)) {
+  if (!isValidEmoteAlt(alt)) {
     return false;
   }
 
   const item = button.closest('li[id^="emoji_"]');
+
   if (!item) return false;
 
   const rect = button.getBoundingClientRect();
@@ -74,6 +79,28 @@ function isRealEmoteButton(button) {
     rect.height >= 20 &&
     rect.height <= 80
   );
+}
+
+export function getEmoteAltFromButton(button) {
+  const image = button?.querySelector?.('img');
+
+  return image?.getAttribute('alt') ?? '';
+}
+
+export function getEmoteLabelFromButton(button) {
+  const alt = getEmoteAltFromButton(button);
+
+  return getEmoteLabelFromAlt(alt);
+}
+
+export function getEmoteLabelFromAlt(alt) {
+  const match = String(alt ?? '').match(/^\{:([^:]+):\}$/);
+
+  return match?.[1] ?? '';
+}
+
+export function isValidEmoteAlt(alt) {
+  return /^\{:[^:]+:\}$/.test(String(alt ?? ''));
 }
 
 function isEnabledButton(button) {
