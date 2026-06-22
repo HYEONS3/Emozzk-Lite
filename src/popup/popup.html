@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Emozzk Lite</title>
+    <link rel="stylesheet" href="./popup.css" />
+    <script src="./popup.js" defer></script>
+  </head>
+  <body>
+    <main class="popup">
+      <header class="popup-header">
+        <strong class="popup-title">Emozzk Lite</strong>
+        <span class="popup-version">설정</span>
+      </header>
+
+      <section class="popup-section">
+        <button id="reloadButton" class="popup-button" type="button">
+          현재 치지직 탭 새로고침
+        </button>
+      </section>
+
+      <section class="popup-section">
+        <h2 class="popup-section-title">실험실</h2>
+
+        <label class="popup-check" for="experimentalKeyupEnabled">
+          <input id="experimentalKeyupEnabled" type="checkbox" />
+          <span>
+            KeyUp 단축키 허용
+            <small>키를 뗄 때 이모티콘 입력을 사용할 수 있게 합니다.</small>
+          </span>
+        </label>
+
+        <label class="popup-check" for="experimentalBothPhaseEnabled">
+          <input id="experimentalBothPhaseEnabled" type="checkbox" />
+          <span>
+            KeyDown+KeyUp 동시 지정 허용
+            <small>KeyUp 허용이 켜져 있을 때만 사용할 수 있습니다.</small>
+          </span>
+        </label>
+      </section>
+
+      <p id="statusText" class="popup-status" aria-live="polite"></p>
+    </main>
+  </body>
+</html>

@@ -1,9 +1,15 @@
 export function findChatInput() {
-  const candidates = Array.from(
-    document.querySelectorAll('textarea, input, [contenteditable="true"], [role="textbox"]')
-  );
+  const active = document.activeElement;
 
-  return candidates.find(isLikelyChatInput) ?? null;
+  if (isLikelyChatInput(active)) {
+    return active;
+  }
+
+  const candidates = getChatInputCandidates();
+
+  return candidates
+    .filter(isLikelyChatInput)
+    .sort(compareChatInputPriority)[0] ?? null;
 }
 
 export function focusChatInput() {
@@ -14,11 +20,9 @@ export function focusChatInput() {
     return false;
   }
 
-  input.focus({
-    preventScroll: true,
-  });
+  focusElement(input);
 
-  return document.activeElement === input;
+  return isFocused(input);
 }
 
 export function focusChatInputAtEnd() {
@@ -29,13 +33,10 @@ export function focusChatInputAtEnd() {
     return false;
   }
 
-  input.focus({
-    preventScroll: true,
-  });
-
+  focusElement(input);
   moveCaretToEnd(input);
 
-  return document.activeElement === input;
+  return isFocused(input);
 }
 
 export function scheduleChatInputFocus() {
@@ -43,7 +44,6 @@ export function scheduleChatInputFocus() {
     focusChatInput();
   });
 }
-
 
 export function scheduleChatInputFocusEnd() {
   requestAnimationFrame(() => {
@@ -69,17 +69,15 @@ export function normalizeChatInputAfterEmote() {
     return false;
   }
 
-  input.focus({
-    preventScroll: true,
-  });
+  focusElement(input);
 
-  if (input.isContentEditable) {
+  if (isEditableElement(input)) {
     removeLeadingFillerBreak(input);
   }
 
   moveCaretToEnd(input);
 
-  return document.activeElement === input;
+  return isFocused(input);
 }
 
 export function scheduleChatInputNormalizeAfterEmote() {
@@ -96,26 +94,130 @@ export function scheduleChatInputNormalizeAfterEmoteSettle() {
   });
 }
 
+function getChatInputCandidates() {
+  return Array.from(
+    document.querySelectorAll([
+      'textarea',
+      'input',
+      '[contenteditable="true"]',
+      '[contenteditable="plaintext-only"]',
+      '[role="textbox"]',
+    ].join(', '))
+  );
+}
+
 function isLikelyChatInput(element) {
-  if (!element || !isVisible(element)) return false;
+  if (!(element instanceof HTMLElement)) return false;
+  if (!isVisible(element)) return false;
+  if (!isEditableInputLikeElement(element)) return false;
 
-  const name = [
-    element.getAttribute('placeholder'),
-    element.getAttribute('aria-label'),
-    element.getAttribute('title'),
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const name = getInputName(element);
 
-  if (!/채팅|chat/i.test(name)) {
-    return false;
+  if (/채팅|chat/i.test(name)) {
+    return true;
   }
 
+  /*
+   * CHZZK 입력창의 accessible name이 바뀌는 경우를 대비한 fallback.
+   * contenteditable/role=textbox이고, 실제로 포커스된 상태라면 채팅 입력창으로 본다.
+   */
+  if (
+    document.activeElement === element &&
+    (
+      isEditableElement(element) ||
+      element.getAttribute('role') === 'textbox'
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function isEditableInputLikeElement(element) {
   return (
     element instanceof HTMLTextAreaElement ||
     element instanceof HTMLInputElement ||
-    element.isContentEditable ||
+    isEditableElement(element) ||
     element.getAttribute('role') === 'textbox'
+  );
+}
+
+function isEditableElement(element) {
+  return (
+    element instanceof HTMLElement &&
+    element.isContentEditable
+  );
+}
+
+function getInputName(element) {
+  return [
+    element.getAttribute('placeholder'),
+    element.getAttribute('aria-label'),
+    element.getAttribute('title'),
+    element.getAttribute('data-placeholder'),
+    element.textContent,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function compareChatInputPriority(a, b) {
+  return getChatInputPriority(b) - getChatInputPriority(a);
+}
+
+function getChatInputPriority(element) {
+  let score = 0;
+
+  if (document.activeElement === element) {
+    score += 100;
+  }
+
+  if (isEditableElement(element)) {
+    score += 30;
+  }
+
+  if (element.getAttribute('role') === 'textbox') {
+    score += 20;
+  }
+
+  if (element instanceof HTMLTextAreaElement) {
+    score += 15;
+  }
+
+  if (/채팅|chat/i.test(getInputName(element))) {
+    score += 50;
+  }
+
+  const rect = element.getBoundingClientRect();
+
+  /*
+   * 채팅 입력창은 보통 화면 하단에 있으므로 약한 보정만 둔다.
+   * 절대 조건으로 쓰지 않는다.
+   */
+  if (rect.top > window.innerHeight * 0.4) {
+    score += 5;
+  }
+
+  return score;
+}
+
+function focusElement(element) {
+  try {
+    element.focus({
+      preventScroll: true,
+    });
+  } catch {
+    element.focus();
+  }
+}
+
+function isFocused(element) {
+  return (
+    document.activeElement === element ||
+    element.contains?.(document.activeElement)
   );
 }
 
@@ -125,7 +227,7 @@ function moveCaretToEnd(input) {
     return;
   }
 
-  if (input.isContentEditable) {
+  if (isEditableElement(input)) {
     moveContentEditableCaretToEnd(input);
   }
 }
@@ -138,7 +240,9 @@ function moveTextControlCaretToEnd(input) {
   try {
     input.setSelectionRange(length, length);
   } catch {
-    // 일부 input type은 setSelectionRange를 지원하지 않음.
+    /*
+     * 일부 input type은 setSelectionRange를 지원하지 않는다.
+     */
   }
 }
 
@@ -163,8 +267,10 @@ function removeLeadingFillerBreak(root) {
 
   if (!(first instanceof HTMLBRElement)) return;
 
-  // <br> 뒤에 실제 내용이 있을 때만 제거한다.
-  // 완전히 빈 contenteditable의 placeholder용 <br>은 건드리지 않음.
+  /*
+   * <br> 뒤에 실제 내용이 있을 때만 제거한다.
+   * 완전히 빈 contenteditable의 placeholder용 <br>은 건드리지 않는다.
+   */
   if (!hasMeaningfulContentAfter(first)) return;
 
   first.remove();
@@ -220,16 +326,26 @@ function isEmptyText(value) {
 }
 
 function isVisible(element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+
   const rect = element.getBoundingClientRect();
+
+  if (
+    rect.width <= 0 ||
+    rect.height <= 0 ||
+    rect.bottom <= 0 ||
+    rect.right <= 0 ||
+    rect.top >= window.innerHeight ||
+    rect.left >= window.innerWidth
+  ) {
+    return false;
+  }
+
   const style = window.getComputedStyle(element);
 
   return (
-    rect.width > 0 &&
-    rect.height > 0 &&
-    rect.bottom > 0 &&
-    rect.right > 0 &&
-    rect.top < window.innerHeight &&
-    rect.left < window.innerWidth &&
     style.display !== 'none' &&
     style.visibility !== 'hidden' &&
     style.opacity !== '0'

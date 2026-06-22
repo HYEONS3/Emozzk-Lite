@@ -1,14 +1,49 @@
 import {
   getEmoteAltFromButton,
-  getEmoteLabelFromAlt,
   isRealEmoteButton,
 } from './emote-buttons.js';
 
 import {
-  toggleFavoriteEmoteAlt,
-} from './emote-favorites-storage.js';
+  findEmotePanel,
+} from './emote-panel.js';
 
-const FAVORITES_CHANGED_EVENT = 'emozzk-lite:favorites-changed';
+import {
+  isElementInRecentEmoteSection,
+} from './emote-recent-section.js';
+
+import {
+  scheduleFavoriteEmoteSectionRender,
+} from './emote-favorites-render.js';
+
+import {
+  scheduleBadgeUpdate,
+} from './badge-overlay.js';
+
+import {
+  findRecentEmoteByAlt,
+  getRecentEmoteId,
+  getRecentEmoteIdFromAlt,
+  readRecentEmotes,
+  writeRecentEmotes,
+} from './recent-emote-storage.js';
+
+import {
+  toggleFavoriteRecentEmote,
+} from './favorite-recent-emote-storage.js';
+
+import {
+  mergeFavoriteAndRecentEmotes,
+} from './favorite-recent-merge.js';
+
+import {
+  dispatchFavoritesChanged,
+} from './emote-favorites-event-name.js';
+
+import {
+  isEmoteBindModeActive,
+} from './emote-bind-mode-state.js';
+
+const FAVORITES_SECTION_SELECTOR = '.emzk-lite-favorites-section';
 
 export function attachEmoteFavoriteEvents() {
   document.addEventListener('mousedown', handleFavoriteMouseDown, true);
@@ -16,50 +51,73 @@ export function attachEmoteFavoriteEvents() {
 }
 
 function handleFavoriteMouseDown(event) {
+  if (isEmoteBindModeActive()) return;
   if (!isFavoriteToggleEvent(event)) return;
 
   const button = getOriginalEmoteButtonFromEvent(event);
 
   if (!button) return;
 
-  // Alt+클릭은 즐겨찾기 토글 전용.
-  // 버튼 focus 이동과 일반 click 흐름을 막는다.
-  event.preventDefault();
-  event.stopPropagation();
-  event.stopImmediatePropagation();
+  blockEvent(event);
 }
 
 async function handleFavoriteClick(event) {
+  if (isEmoteBindModeActive()) return;
   if (!isFavoriteToggleEvent(event)) return;
 
   const button = getOriginalEmoteButtonFromEvent(event);
 
   if (!button) return;
 
-  // CHZZK 기본 이모티콘 입력 click이 실행되지 않게 차단.
-  event.preventDefault();
-  event.stopPropagation();
-  event.stopImmediatePropagation();
+  blockEvent(event);
+
+  const panel = findEmotePanel();
+
+  if (!panel) return;
+
+  const isRecentItem = isElementInRecentEmoteSection(button, panel);
+  const isFavoriteItem = isElementInFavoriteSection(button, panel);
+
+  if (!isRecentItem && !isFavoriteItem) {
+    return;
+  }
 
   const alt = getEmoteAltFromButton(button);
-  const label = getEmoteLabelFromAlt(alt);
+  const recentEmote = getRecentEmoteFromButton(button);
 
-  const result = await toggleFavoriteEmoteAlt(alt);
+  if (!recentEmote) {
+    return;
+  }
 
-  console.debug('[Emozzk Lite] favorite toggled:', {
-    alt,
-    label,
-    added: result.added,
-    changed: result.changed,
-    favorites: result.favorites,
-  });
+  try {
+    const result = await toggleFavoriteRecentEmote(recentEmote);
 
-  dispatchFavoritesChanged({
-    alt,
-    label,
-    added: result.added,
-    favorites: result.favorites,
-  });
+    if (!result.changed) {
+      return;
+    }
+
+    const emojiId = getRecentEmoteId(recentEmote);
+    const mergedRecentEmotes = syncRecentLocalStorageWithFavorites({
+      favorites: result.favorites,
+    });
+
+    const source = isFavoriteItem ? 'favorite' : 'recent';
+
+    dispatchFavoritesChanged({
+      emojiId,
+      alt,
+      added: result.added,
+      removed: result.removed,
+      source,
+      favorites: result.favorites,
+      mergedRecentEmotes,
+    });
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+  } catch (error) {
+    console.error('[Emozzk Lite] failed to toggle favorite recent emote:', error);
+  }
 }
 
 function isFavoriteToggleEvent(event) {
@@ -84,14 +142,60 @@ function getOriginalEmoteButtonFromEvent(event) {
   return button;
 }
 
-function dispatchFavoritesChanged(detail) {
-  document.dispatchEvent(
-    new CustomEvent(FAVORITES_CHANGED_EVENT, {
-      detail,
-    })
-  );
+function isElementInFavoriteSection(element, panel) {
+  if (!element || !panel) return false;
+
+  const section = element.closest(FAVORITES_SECTION_SELECTOR);
+
+  return Boolean(section && panel.contains(section));
 }
 
-export function getFavoritesChangedEventName() {
-  return FAVORITES_CHANGED_EVENT;
+function getRecentEmoteFromButton(button) {
+  const alt = getEmoteAltFromButton(button);
+  const recentEmotes = readRecentEmotes();
+  const recentEmote = findRecentEmoteByAlt(recentEmotes, alt);
+
+  if (recentEmote) {
+    return recentEmote;
+  }
+
+  return createFallbackRecentEmoteFromButton(button);
+}
+
+function createFallbackRecentEmoteFromButton(button) {
+  const alt = getEmoteAltFromButton(button);
+  const emojiId = getRecentEmoteIdFromAlt(alt);
+
+  if (!emojiId) {
+    return null;
+  }
+
+  const image = button.querySelector('img');
+  const imageUrl = image?.currentSrc || image?.src || '';
+
+  return {
+    emojiId,
+    imageUrl,
+  };
+}
+
+function syncRecentLocalStorageWithFavorites({
+  favorites,
+}) {
+  const recent = readRecentEmotes();
+
+  const merged = mergeFavoriteAndRecentEmotes({
+    favorites,
+    recent,
+  });
+
+  writeRecentEmotes(merged);
+
+  return merged;
+}
+
+function blockEvent(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
 }

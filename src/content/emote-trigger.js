@@ -22,6 +22,24 @@ export function openEmotePanel() {
   return true;
 }
 
+export function closeEmotePanel() {
+  const panel = findEmotePanel();
+
+  if (!panel) {
+    return false;
+  }
+
+  const trigger = findEmoteTriggerButton();
+
+  if (!trigger) {
+    console.debug('[Emozzk Lite] emote trigger not found for close');
+    return false;
+  }
+
+  trigger.click();
+  return true;
+}
+
 export function toggleEmotePanel() {
   const trigger = findEmoteTriggerButton();
 
@@ -42,9 +60,58 @@ export function findEmoteTriggerButton() {
     return null;
   }
 
-  const root = input.parentElement;
+  const roots = getSearchRoots(input);
 
-  if (!root) {
+  for (const root of roots) {
+    const trigger = findTriggerButtonInRoot({
+      root,
+      input,
+      preferAfterInput: true,
+    });
+
+    if (trigger) {
+      return trigger;
+    }
+  }
+
+  for (const root of roots) {
+    const trigger = findTriggerButtonInRoot({
+      root,
+      input,
+      preferAfterInput: false,
+    });
+
+    if (trigger) {
+      return trigger;
+    }
+  }
+
+  return null;
+}
+
+function getSearchRoots(input) {
+  const roots = [];
+  let current = input.parentElement;
+
+  while (current && current !== document.body) {
+    roots.push(current);
+
+    if (roots.length >= 8) {
+      break;
+    }
+
+    current = current.parentElement;
+  }
+
+  return roots;
+}
+
+function findTriggerButtonInRoot({
+  root,
+  input,
+  preferAfterInput,
+}) {
+  if (!(root instanceof Element)) {
     return null;
   }
 
@@ -52,21 +119,52 @@ export function findEmoteTriggerButton() {
     root.querySelectorAll('button[type="button"]')
   );
 
-  const inputIndex = getChildIndex(input);
-
   const candidates = buttons.filter((button) => {
-    return getChildIndex(button) > inputIndex;
+    if (!isEmoteTriggerButton(button)) return false;
+
+    if (!preferAfterInput) return true;
+
+    return isElementAfterInput({
+      input,
+      element: button,
+    });
   });
 
-  return candidates.find(isEmoteTriggerButton) ?? null;
+  return candidates[0] ?? null;
+}
+
+function isElementAfterInput({
+  input,
+  element,
+}) {
+  if (!(input instanceof Node)) return false;
+  if (!(element instanceof Node)) return false;
+
+  const position = input.compareDocumentPosition(element);
+
+  return Boolean(position & Node.DOCUMENT_POSITION_FOLLOWING);
 }
 
 function isEmoteTriggerButton(button) {
+  if (!(button instanceof HTMLButtonElement)) return false;
+  if (!isEnabledButton(button)) return false;
   if (!isVisible(button)) return false;
 
   const name = getElementName(button);
 
-  return name === '이모티콘';
+  return isEmoteTriggerName(name);
+}
+
+function isEmoteTriggerName(name) {
+  const normalized = normalizeName(name);
+
+  if (!normalized) return false;
+
+  return (
+    normalized === '이모티콘' ||
+    normalized === '이모티콘 열기' ||
+    normalized === '이모티콘 닫기'
+  );
 }
 
 function getElementName(element) {
@@ -76,30 +174,43 @@ function getElementName(element) {
     element.textContent,
   ]
     .filter(Boolean)
-    .join(' ')
+    .join(' ');
+}
+
+function normalizeName(value) {
+  return String(value ?? '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-function getChildIndex(element) {
-  if (!element?.parentElement) {
-    return -1;
-  }
-
-  return Array.from(element.parentElement.children).indexOf(element);
+function isEnabledButton(button) {
+  return (
+    !button.disabled &&
+    button.getAttribute('aria-disabled') !== 'true'
+  );
 }
 
 function isVisible(element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+
   const rect = element.getBoundingClientRect();
+
+  if (
+    rect.width <= 0 ||
+    rect.height <= 0 ||
+    rect.bottom <= 0 ||
+    rect.right <= 0 ||
+    rect.top >= window.innerHeight ||
+    rect.left >= window.innerWidth
+  ) {
+    return false;
+  }
+
   const style = window.getComputedStyle(element);
 
   return (
-    rect.width > 0 &&
-    rect.height > 0 &&
-    rect.bottom > 0 &&
-    rect.right > 0 &&
-    rect.top < window.innerHeight &&
-    rect.left < window.innerWidth &&
     style.display !== 'none' &&
     style.visibility !== 'hidden' &&
     style.opacity !== '0'

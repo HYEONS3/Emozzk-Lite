@@ -1,34 +1,51 @@
 import {
-  focusChatInput,
   scheduleChatInputNormalizeAfterEmote,
 } from './chat-input.js';
 
+import {
+  isRealEmoteButton,
+} from './emote-buttons.js';
+
+import {
+  isEmoteBindModeActive,
+} from './emote-bind-mode-state.js';
+
+import {
+  isQuickEmoteInsertInProgress,
+} from './quick-emote-insert.js';
+
 export function attachEmoteClickFocusRestore() {
-  document.addEventListener('mousedown', handleEmoteMouseDown, true);
+  /*
+   * 사용자 직접 클릭에는 focus restore를 걸지 않는다.
+   *
+   * 이유:
+   * CHZZK 기본 동작은 이모티콘 패널 쪽 조작 흐름을 유지한다.
+   * 여기서 채팅창으로 focus를 보내면 사용자가 클릭 / Enter 등으로
+   * 이모티콘을 연속 입력하려던 흐름이 채팅 전송으로 바뀔 수 있다.
+   */
   document.addEventListener('click', handleEmoteClick, false);
 }
 
-function handleEmoteMouseDown(event) {
-  const button = getRealEmoteButtonFromEvent(event);
-
-  if (!button) return;
-
-  // 버튼으로 focus가 이동하는 것만 막는다.
-  // click 자체는 막지 않는다.
-  event.preventDefault();
-
-  // 여기서는 caret을 맨 뒤로 보내지 않는다.
-  // pre contenteditable에서 불필요한 <br> 생성 가능성을 줄이기 위함.
-  focusChatInput();
-}
-
 function handleEmoteClick(event) {
+  if (isEmoteBindModeActive()) return;
+  if (isFavoriteToggleEvent(event)) return;
+
   const button = getRealEmoteButtonFromEvent(event);
 
   if (!button) return;
 
-  // CHZZK의 기본 이모티콘 삽입 click handler가 먼저 실행되게 둔다.
-  // 그 직후 선두 filler <br> 정리 + caret 맨 뒤 이동.
+  /*
+   * 직접 마우스로 누른 이모티콘은 CHZZK 기본 UX를 그대로 둔다.
+   * 단축키 삽입 과정에서 발생한 programmatic click만 normalize한다.
+   */
+  if (!isQuickEmoteInsertInProgress()) {
+    return;
+  }
+
+  /*
+   * CHZZK의 기본 이모티콘 삽입 click handler가 먼저 실행되게 둔다.
+   * 그 직후 선두 filler <br> 정리 + caret 위치 보정.
+   */
   scheduleChatInputNormalizeAfterEmote();
 }
 
@@ -45,17 +62,11 @@ function getRealEmoteButtonFromEvent(event) {
   return button;
 }
 
-function isRealEmoteButton(button) {
-  const area = button.closest('#emoji_area');
-
-  if (!area) return false;
-
-  const item = button.closest('li[id^="emoji_"]');
-
-  if (!item) return false;
-
-  const image = button.querySelector('img');
-  const alt = image?.getAttribute('alt') ?? '';
-
-  return /^\{:[^:]+:\}$/.test(alt);
+function isFavoriteToggleEvent(event) {
+  return (
+    event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  );
 }

@@ -1,147 +1,139 @@
 import {
+  getAssignableEmoteButtons,
+} from './emote-buttons.js';
+
+import {
   findEmotePanel,
 } from './emote-panel.js';
 
-import {
-  getVisibleEmoteButtons,
-} from './emote-buttons.js';
+const DEFAULT_READY_TIMEOUT_MS = 1200;
+const DEFAULT_READY_POLL_INTERVAL_MS = 16;
 
-const DEFAULT_TIMEOUT_MS = 1200;
+let pendingReadyPromise = null;
 
 export function getReadyEmotePanelState() {
   const panel = findEmotePanel();
 
-  if (!panel) {
-    return null;
+  if (!isUsablePanel(panel)) {
+    return {
+      panel: null,
+      buttons: [],
+      ready: false,
+    };
   }
 
-  const area = panel.querySelector('#emoji_area');
-
-  if (!area || !isVisibleElement(area)) {
-    return null;
-  }
-
-  const buttons = getVisibleEmoteButtons(panel);
-
-  if (!buttons.length) {
-    return null;
-  }
+  const buttons = getReadyEmoteButtons(panel);
 
   return {
     panel,
-    area,
     buttons,
+    ready: buttons.length > 0,
   };
 }
 
 export function waitForEmotePanelReady({
-  timeoutMs = DEFAULT_TIMEOUT_MS,
+  timeoutMs = DEFAULT_READY_TIMEOUT_MS,
+  pollIntervalMs = DEFAULT_READY_POLL_INTERVAL_MS,
 } = {}) {
-  const ready = getReadyEmotePanelState();
-
-  if (ready) {
-    return waitForLayoutSettle().then(() => {
-      return getReadyEmotePanelState();
-    });
+  if (pendingReadyPromise) {
+    return pendingReadyPromise;
   }
 
-  return new Promise((resolve) => {
-    let done = false;
-    let rafId = 0;
-    let timeoutId = 0;
-    let observer = null;
-
-    const finish = (result) => {
-      if (done) return;
-
-      done = true;
-
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-        rafId = 0;
-      }
-
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
-        timeoutId = 0;
-      }
-
-      if (observer) {
-        observer.disconnect();
-        observer = null;
-      }
-
-      resolve(result);
-    };
-
-    const check = () => {
-      if (done) return;
-
-      const state = getReadyEmotePanelState();
-
-      if (!state) return;
-
-      waitForLayoutSettle().then(() => {
-        if (done) return;
-
-        finish(getReadyEmotePanelState());
-      });
-    };
-
-    const scheduleCheck = () => {
-      if (done || rafId) return;
-
-      rafId = requestAnimationFrame(() => {
-        rafId = 0;
-        check();
-      });
-    };
-
-    observer = new MutationObserver(() => {
-      scheduleCheck();
+  pendingReadyPromise = waitForReadyState({
+    timeoutMs,
+    pollIntervalMs,
+  })
+    .finally(() => {
+      pendingReadyPromise = null;
     });
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: [
-        'class',
-        'style',
-        'aria-hidden',
-        'aria-modal',
-      ],
-    });
-
-    timeoutId = window.setTimeout(() => {
-      finish(null);
-    }, timeoutMs);
-
-    scheduleCheck();
-  });
+  return pendingReadyPromise;
 }
 
-function waitForLayoutSettle() {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(resolve);
-    });
-  });
+async function waitForReadyState({
+  timeoutMs,
+  pollIntervalMs,
+}) {
+  const startedAt = performance.now();
+
+  while (performance.now() - startedAt <= timeoutMs) {
+    const readyState = getReadyEmotePanelState();
+
+    if (readyState.ready) {
+      return readyState;
+    }
+
+    await waitDelay(pollIntervalMs);
+  }
+
+  return getReadyEmotePanelState();
 }
 
-function isVisibleElement(element) {
-  const rect = element.getBoundingClientRect();
-  const style = window.getComputedStyle(element);
+function getReadyEmoteButtons(panel) {
+  if (!isUsablePanel(panel)) {
+    return [];
+  }
 
-  return (
-    rect.width > 0 &&
-    rect.height > 0 &&
-    rect.bottom > 0 &&
-    rect.right > 0 &&
-    rect.top < window.innerHeight &&
-    rect.left < window.innerWidth &&
-    style.display !== 'none' &&
-    style.visibility !== 'hidden' &&
-    style.opacity !== '0'
-  );
+  return getAssignableEmoteButtons(panel)
+    .filter(isReadyEmoteButton);
+}
+
+function isReadyEmoteButton(button) {
+  if (!(button instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (!button.isConnected) {
+    return false;
+  }
+
+  if (button.disabled) {
+    return false;
+  }
+
+  const rect = button.getBoundingClientRect();
+
+  if (
+    rect.width <= 0 ||
+    rect.height <= 0
+  ) {
+    return false;
+  }
+
+  const image = button.querySelector('img');
+
+  if (!(image instanceof HTMLImageElement)) {
+    return false;
+  }
+
+  const alt = String(image.getAttribute('alt') || '').trim();
+
+  return alt.startsWith('{:') && alt.endsWith(':}');
+}
+
+function isUsablePanel(panel) {
+  if (!(panel instanceof Element)) {
+    return false;
+  }
+
+  if (!panel.isConnected) {
+    return false;
+  }
+
+  if (
+    panel.hidden ||
+    panel.getAttribute('aria-hidden') === 'true'
+  ) {
+    return false;
+  }
+
+  const rect = panel.getBoundingClientRect();
+
+  return rect.width > 0 && rect.height > 0;
+}
+
+function waitDelay(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
