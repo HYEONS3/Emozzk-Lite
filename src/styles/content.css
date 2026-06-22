@@ -309,6 +309,123 @@ button[data-emzk-lite-badge-target="true"] {
 }
 
 /* ========================================================================== */
+/* Shortcut binding set switch                                                */
+/* ========================================================================== */
+
+.emzk-lite-shortcut-set-switch {
+  --emzk-lite-shortcut-set-button-size: var(--emzk-lite-bind-control-height);
+
+  position: relative;
+
+  flex: 0 0 auto;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+
+  width: calc(var(--emzk-lite-shortcut-set-button-size) * 2);
+  min-width: calc(var(--emzk-lite-shortcut-set-button-size) * 2);
+  height: var(--emzk-lite-shortcut-set-button-size);
+  padding: 0;
+
+  color: var(--emzk-lite-bind-text);
+  background: transparent;
+  border: 0;
+  border-radius: var(--emzk-lite-bind-radius);
+
+  box-sizing: border-box;
+  overflow: hidden;
+
+  user-select: none;
+}
+
+.emzk-lite-shortcut-set-switch::before {
+  content: "";
+
+  position: absolute;
+  z-index: 0;
+
+  top: 0;
+  left: 0;
+
+  width: var(--emzk-lite-shortcut-set-button-size);
+  height: var(--emzk-lite-shortcut-set-button-size);
+
+  background: var(--emzk-lite-bind-active-bg);
+  border-radius: var(--emzk-lite-bind-radius);
+
+  transform: translate3d(0, 0, 0);
+
+  transition:
+    transform var(--emzk-lite-motion-normal),
+    background-color var(--emzk-lite-motion-fast),
+    opacity var(--emzk-lite-motion-fast);
+}
+
+.emzk-lite-shortcut-set-switch[data-emzk-lite-active-shortcut-set="2"]::before {
+  transform: translate3d(var(--emzk-lite-shortcut-set-button-size), 0, 0);
+}
+
+.emzk-lite-shortcut-set-button {
+  position: relative;
+  z-index: 1;
+
+  flex: 0 0 var(--emzk-lite-shortcut-set-button-size);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: var(--emzk-lite-shortcut-set-button-size);
+  min-width: var(--emzk-lite-shortcut-set-button-size);
+  height: var(--emzk-lite-shortcut-set-button-size);
+  padding: 0;
+
+  color: var(--emzk-lite-bind-text);
+  background: transparent;
+  border: 0;
+  border-radius: var(--emzk-lite-bind-radius);
+
+  font-family: var(--emzk-lite-font-family);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.2px;
+
+  cursor: pointer;
+  user-select: none;
+
+  transition:
+    color var(--emzk-lite-motion-fast),
+    opacity var(--emzk-lite-motion-fast),
+    transform var(--emzk-lite-motion-fast);
+}
+
+.emzk-lite-shortcut-set-button:hover {
+  color: var(--emzk-lite-bind-active-text);
+}
+
+.emzk-lite-shortcut-set-button:active {
+  transform: scale(var(--emzk-lite-press-scale));
+}
+
+.emzk-lite-shortcut-set-button-active {
+  color: var(--emzk-lite-bind-active-text);
+}
+
+.emzk-lite-shortcut-set-button-active:hover {
+  color: var(--emzk-lite-bind-active-text);
+}
+
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"]
+  .emzk-lite-shortcut-set-switch,
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"]
+  .emzk-lite-shortcut-set-switch {
+  display: none;
+}
+
+/* ========================================================================== */
 /* Header icon buttons                                                        */
 /* ========================================================================== */
 
@@ -935,6 +1052,18 @@ button[data-emzk-lite-badge-target="true"] {
   .emzk-lite-favorites-dragging-item {
     filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
   }
+  .emzk-lite-shortcut-set-switch {
+    border-color: rgba(0, 0, 0, 0.12);
+    background-color: rgba(0, 0, 0, 0.04);
+  }
+
+  .emzk-lite-shortcut-set-switch::before {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .emzk-lite-shortcut-set-button-active {
+    color: var(--emzk-lite-bind-active-text);
+  }
 }
 
 /* ========================================================================== */
@@ -961,9 +1090,23 @@ button[data-emzk-lite-badge-target="true"] {
   .emzk-lite-bind-keycap-button,
   .emzk-lite-bind-phase-button,
   .emzk-lite-bind-emote-preview,
+  .emzk-lite-shortcut-set-button,
   .emzk-lite-favorites-dragging-item,
-  .emzk-lite-favorites-drag-placeholder {
+  .emzk-lite-favorites-drag-placeholder,
+  .emzk-lite-shortcut-set-switch::before,
+  .emzk-lite-shortcut-set-button {
     animation: none;
     transition: none;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  .emzk-lite-shortcut-set-switch {
+    background: transparent;
+    border: 0;
+  }
+
+  .emzk-lite-shortcut-set-switch::before {
+    background-color: rgba(0, 0, 0, 0.1);
   }
 }

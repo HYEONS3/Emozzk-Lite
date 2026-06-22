@@ -39,6 +39,8 @@ import {
 } from './shortcut-actions.js';
 
 import {
+  getCachedActiveShortcutBindingSetId,
+  getCachedShortcutBindings,
   SHORTCUT_BINDINGS_CHANGED_EVENT,
   SHORTCUT_PHASE_DOWN,
   SHORTCUT_PHASE_UP,
@@ -48,20 +50,25 @@ import {
   isEmoteBindModeActive,
 } from './emote-bind-mode-state.js';
 
+import {
+  isChatInputEmoteLimitReached,
+} from './chat-input-emote-limit.js';
+
 const EVENT_PHASE_KEYDOWN = 'keydown';
 const EVENT_PHASE_KEYUP = 'keyup';
-
-const MAX_CHAT_INPUT_EMOTE_COUNT = 10;
 
 const activePresses = new Map();
 
 let attached = false;
 let shortcutBindings = getDefaultShortcutBindings();
+let activeShortcutBindingSetId = '';
 
 export function attachShortcutController() {
   if (attached) return;
 
   attached = true;
+
+  syncShortcutBindingsFromStorage();
 
   document.addEventListener(EVENT_PHASE_KEYDOWN, handleShortcutEvent, true);
   document.addEventListener(EVENT_PHASE_KEYUP, handleShortcutEvent, true);
@@ -88,7 +95,9 @@ export function detachShortcutController() {
   clearActivePresses();
 }
 
-export function setShortcutBindings(bindings) {
+export function setShortcutBindings(bindings, {
+  activeSetId = activeShortcutBindingSetId,
+} = {}) {
   /*
    * 주의:
    * normalizeShortcutBindings([])를 쓰면 빈 배열이 기본 F1~F10으로 되돌아갈 수 있다.
@@ -104,7 +113,18 @@ export function setShortcutBindings(bindings) {
       .filter(Boolean);
   }
 
+  activeShortcutBindingSetId = normalizeText(activeSetId);
+
+  /*
+   * 세트 전환 중 키를 누른 상태였다면 이전 세트의 keyup action이 이어지면 안 된다.
+   */
   clearActivePresses();
+}
+
+function syncShortcutBindingsFromStorage() {
+  setShortcutBindings(getCachedShortcutBindings(), {
+    activeSetId: getCachedActiveShortcutBindingSetId(),
+  });
 }
 
 function handleShortcutEvent(event) {
@@ -194,8 +214,8 @@ function handleShortcutKeyDown({
   }
 
   /*
-   * 입력창 이모티콘이 이미 최대치면 shortcut action을 실행하지 않는다.
-   * 단축키 자체는 조용히 차단해서 브라우저/페이지 기본 동작으로 새지 않게 한다.
+   * 채팅 입력창에 이미 이모티콘이 10개 있으면 추가 단축키 입력은 조용히 차단한다.
+   * 브라우저 기본 동작이나 실제 키 입력이 새지 않도록 이벤트는 막는다.
    */
   if (isChatInputEmoteLimitReached()) {
     blockKeyboardEvent({
@@ -309,6 +329,15 @@ function handleActiveShortcutKeyUp({
     return;
   }
 
+  if (isChatInputEmoteLimitReached()) {
+    blockKeyboardEvent({
+      event,
+      binding: upBinding,
+    });
+
+    return;
+  }
+
   if (shouldBlockBindingPhase({
     binding: upBinding,
     phase: EVENT_PHASE_KEYUP,
@@ -317,14 +346,6 @@ function handleActiveShortcutKeyUp({
       event,
       binding: upBinding,
     });
-  }
-
-  /*
-   * keyup 실행 직전에도 개수를 다시 검사한다.
-   * down action으로 10개가 된 경우 both/up action이 추가로 들어가는 것을 막는다.
-   */
-  if (isChatInputEmoteLimitReached()) {
-    return;
   }
 
   /*
@@ -367,6 +388,15 @@ function handleLooseShortcutKeyUp({
     return false;
   }
 
+  if (isChatInputEmoteLimitReached()) {
+    blockKeyboardEvent({
+      event,
+      binding: upBinding,
+    });
+
+    return true;
+  }
+
   if (shouldBlockBindingPhase({
     binding: upBinding,
     phase: EVENT_PHASE_KEYUP,
@@ -375,10 +405,6 @@ function handleLooseShortcutKeyUp({
       event,
       binding: upBinding,
     });
-  }
-
-  if (isChatInputEmoteLimitReached()) {
-    return true;
   }
 
   executeShortcutAction({
@@ -707,7 +733,10 @@ function handleShortcutBindingsChanged(event) {
     return;
   }
 
-  setShortcutBindings(bindings);
+  setShortcutBindings(bindings, {
+    activeSetId: event?.detail?.activeSetId,
+  });
+
   scheduleBadgeUpdate();
 }
 
@@ -756,36 +785,6 @@ function normalizeCode(value) {
   return String(value ?? '').trim();
 }
 
-function isChatInputEmoteLimitReached() {
-  const chatInput = findChatInput();
-
-  if (!chatInput) {
-    return false;
-  }
-
-  return countChatInputEmotes(chatInput) >= MAX_CHAT_INPUT_EMOTE_COUNT;
-}
-
-function countChatInputEmotes(chatInput) {
-  if (!(chatInput instanceof Element)) {
-    return 0;
-  }
-
-  return getChatInputEmoteImages(chatInput).length;
-}
-
-function getChatInputEmoteImages(chatInput) {
-  return Array.from(
-    chatInput.querySelectorAll('img')
-  ).filter(isChatInputEmoteImage);
-}
-
-function isChatInputEmoteImage(image) {
-  if (!(image instanceof HTMLImageElement)) {
-    return false;
-  }
-
-  const alt = String(image.getAttribute('alt') || '').trim();
-
-  return /^\{:([^:]+):\}$/.test(alt);
+function normalizeText(value) {
+  return String(value ?? '').trim();
 }

@@ -29,11 +29,19 @@ export function getShortcutBadgeAssignmentsFromBindings({
   bindings,
   panel,
 }) {
+  if (!panel) {
+    return [];
+  }
+
   if (!Array.isArray(bindings)) {
     return [];
   }
 
   const buttons = getAssignableEmoteButtons(panel);
+
+  if (!Array.isArray(buttons) || !buttons.length) {
+    return [];
+  }
 
   const rawAssignments = [];
 
@@ -302,11 +310,19 @@ function createGroupedBadgeAssignment(group) {
   return {
     emojiId: group.emojiId,
     label,
+    title: getShortcutBadgeTitle(items),
     code: primaryItem.code,
     phase: primaryItem.phase,
     source: primaryItem.source,
     items,
   };
+}
+
+function getShortcutBadgeTitle(items) {
+  return items
+    .map((item) => item.label)
+    .filter(Boolean)
+    .join(', ');
 }
 
 function mergePhaseItems(items) {

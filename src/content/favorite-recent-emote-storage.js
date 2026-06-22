@@ -4,7 +4,7 @@ import {
 } from './recent-emote-storage.js';
 
 const FAVORITE_RECENT_EMOTES_STORAGE_KEY = 'emozzk_lite_favorite_recent_emotes_v1';
-const MAX_FAVORITE_RECENT_EMOTE_COUNT = 50;
+const MAX_FAVORITE_RECENT_EMOTE_COUNT = 200;
 
 let favoriteEmotesCache = [];
 let initialized = false;

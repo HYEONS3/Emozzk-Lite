@@ -170,6 +170,10 @@ function createAssignmentMap(assignments) {
       return;
     }
 
+    /*
+     * 같은 emojiId가 중복되면 먼저 들어온 값을 유지한다.
+     * 보통 assignment 생성 단계에서 이미 down/up/both가 병합된다.
+     */
     if (map.has(emojiId)) return;
 
     map.set(emojiId, {
@@ -245,8 +249,13 @@ function ensureBadge({
   }
 
   button.setAttribute(BADGE_TARGET_ATTR, 'true');
-  button.setAttribute(BADGE_LABEL_ATTR, normalizedTitle);
   button.setAttribute(BADGE_TYPE_ATTR, normalizedBadgeType);
+
+  if (normalizedTitle) {
+    button.setAttribute(BADGE_LABEL_ATTR, normalizedTitle);
+  } else {
+    button.removeAttribute(BADGE_LABEL_ATTR);
+  }
 
   let badge = getDirectBadge(button);
 

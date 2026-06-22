@@ -3,7 +3,7 @@ import {
   normalizeRecentEmotes,
 } from './recent-emote-storage.js';
 
-const DEFAULT_MAX_RECENT_EMOTE_COUNT = 50;
+const DEFAULT_MAX_RECENT_EMOTE_COUNT = 60;
 
 export function mergeFavoriteAndRecentEmotes({
   favorites,

@@ -9,6 +9,9 @@ const DIST_DIR = 'dist';
 const CONTENT_ENTRY = 'src/content/index.js';
 const CONTENT_OUTFILE = path.join(DIST_DIR, 'content.js');
 
+const INJECT_ENTRY = 'src/inject.js';
+const INJECT_OUTFILE = path.join(DIST_DIR, 'inject.js');
+
 const CONTENT_CSS_SOURCE = 'src/styles/content.css';
 const CONTENT_CSS_OUTFILE = path.join(DIST_DIR, 'content.css');
 
@@ -27,6 +30,7 @@ const ICONS_OUT_DIR = path.join(DIST_DIR, 'icons');
 
 cleanDist();
 await buildContentScript();
+await buildInjectScript();
 copyStaticFiles();
 
 function cleanDist() {
@@ -47,6 +51,24 @@ async function buildContentScript() {
     format: 'iife',
     target: ['chrome114'],
     outfile: CONTENT_OUTFILE,
+    sourcemap: !isProd,
+    minify: isProd,
+    legalComments: 'none',
+  });
+}
+
+async function buildInjectScript() {
+  if (!fs.existsSync(INJECT_ENTRY)) {
+    console.warn(`[build] skipped missing inject entry: ${INJECT_ENTRY}`);
+    return;
+  }
+
+  await esbuild.build({
+    entryPoints: [INJECT_ENTRY],
+    bundle: true,
+    format: 'iife',
+    target: ['chrome114'],
+    outfile: INJECT_OUTFILE,
     sourcemap: !isProd,
     minify: isProd,
     legalComments: 'none',

@@ -59,6 +59,19 @@ body {
   border-top: 0;
 }
 
+.popup-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  margin-bottom: 10px;
+}
+
+.popup-section-heading {
+  min-width: 0;
+}
+
 .popup-section-title {
   margin: 0 0 10px;
 
@@ -67,6 +80,20 @@ body {
   font-size: 12px;
   font-weight: 800;
   line-height: 1.2;
+}
+
+.popup-section-header .popup-section-title {
+  margin-bottom: 4px;
+}
+
+.popup-section-description {
+  margin: 0;
+
+  color: #bdc1c6;
+
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
 }
 
 .popup-button {
@@ -104,9 +131,45 @@ body {
 }
 
 .popup-button:focus-visible,
-.popup-check input:focus-visible {
+.popup-check input:focus-visible,
+.popup-range:focus-visible {
   outline: 2px solid #8ab4f8;
   outline-offset: 2px;
+}
+
+.popup-range-value {
+  flex: 0 0 auto;
+
+  min-width: 44px;
+  padding-top: 1px;
+
+  color: #8ab4f8;
+
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.popup-range {
+  width: 100%;
+  margin: 0;
+
+  accent-color: #8ab4f8;
+  cursor: pointer;
+}
+
+.popup-range-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-top: 6px;
+
+  color: #bdc1c6;
+
+  font-size: 11px;
+  line-height: 1;
 }
 
 .popup-check {

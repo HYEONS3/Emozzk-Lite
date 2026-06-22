@@ -11,16 +11,33 @@ export const SHORTCUT_PHASE_DOWN = 'down';
 export const SHORTCUT_PHASE_UP = 'up';
 export const SHORTCUT_PHASE_BOTH = 'both';
 
+export const SHORTCUT_BINDING_SET_1 = 'set_1';
+export const SHORTCUT_BINDING_SET_2 = 'set_2';
+
+const SHORTCUT_BINDING_SETS_VERSION = 2;
+
 const USER_BINDING_SOURCE = 'user';
 
-let cachedShortcutBindings = [];
+const DEFAULT_SHORTCUT_BINDING_SETS = [
+  {
+    id: SHORTCUT_BINDING_SET_1,
+    label: '1',
+  },
+  {
+    id: SHORTCUT_BINDING_SET_2,
+    label: '2',
+  },
+];
+
+let cachedShortcutBindingSetState = createDefaultShortcutBindingSetState();
 
 export async function initShortcutBindingsStorage() {
   const storageEntry = await readShortcutBindingsStorageEntry();
 
-  cachedShortcutBindings = storageEntry.hasStoredValue
-    ? normalizeShortcutBindings(storageEntry.bindings)
-    : normalizeShortcutBindings(getDefaultShortcutBindings());
+  cachedShortcutBindingSetState = normalizeShortcutBindingSetState({
+    storedValue: storageEntry.value,
+    hasStoredValue: storageEntry.hasStoredValue,
+  });
 
   dispatchShortcutBindingsChanged();
 
@@ -28,15 +45,52 @@ export async function initShortcutBindingsStorage() {
 }
 
 export function getCachedShortcutBindings() {
-  return [...cachedShortcutBindings];
+  return getShortcutBindingsForSet(
+    cachedShortcutBindingSetState,
+    cachedShortcutBindingSetState.activeSetId
+  );
+}
+
+export function getCachedShortcutBindingSetState() {
+  return cloneShortcutBindingSetState(cachedShortcutBindingSetState);
+}
+
+export function getCachedActiveShortcutBindingSetId() {
+  return cachedShortcutBindingSetState.activeSetId;
+}
+
+export async function setActiveShortcutBindingSet(setId) {
+  const normalizedSetId = normalizeShortcutBindingSetId(setId);
+
+  if (!normalizedSetId) {
+    return getCachedShortcutBindings();
+  }
+
+  if (cachedShortcutBindingSetState.activeSetId === normalizedSetId) {
+    return getCachedShortcutBindings();
+  }
+
+  cachedShortcutBindingSetState = {
+    ...cachedShortcutBindingSetState,
+    activeSetId: normalizedSetId,
+  };
+
+  await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
+
+  dispatchShortcutBindingsChanged();
+
+  return getCachedShortcutBindings();
 }
 
 export async function setShortcutBindings(bindings) {
   const normalizedBindings = normalizeShortcutBindings(bindings);
 
-  cachedShortcutBindings = normalizedBindings;
+  cachedShortcutBindingSetState = setShortcutBindingsForActiveSet({
+    state: cachedShortcutBindingSetState,
+    bindings: normalizedBindings,
+  });
 
-  await writeShortcutBindingsToStorage(normalizedBindings);
+  await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
 
   dispatchShortcutBindingsChanged();
 
@@ -44,7 +98,7 @@ export async function setShortcutBindings(bindings) {
 }
 
 export async function resetShortcutBindingsToDefault() {
-  cachedShortcutBindings = normalizeShortcutBindings(getDefaultShortcutBindings());
+  cachedShortcutBindingSetState = createDefaultShortcutBindingSetState();
 
   await removeShortcutBindingsFromStorage();
 
@@ -54,9 +108,12 @@ export async function resetShortcutBindingsToDefault() {
 }
 
 export async function clearShortcutBindings() {
-  cachedShortcutBindings = [];
+  cachedShortcutBindingSetState = setShortcutBindingsForActiveSet({
+    state: cachedShortcutBindingSetState,
+    bindings: [],
+  });
 
-  await writeShortcutBindingsToStorage([]);
+  await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
 
   dispatchShortcutBindingsChanged();
 
@@ -81,7 +138,7 @@ export async function assignShortcutBindingTarget({
   }
 
   const phasesToAssign = getStoragePhasesFromPhase(normalizedPhase);
-  const baseBindings = getEditableShortcutBindings(cachedShortcutBindings);
+  const baseBindings = getEditableShortcutBindings(getCachedShortcutBindings());
 
   /*
    * 저장 정책:
@@ -89,10 +146,9 @@ export async function assignShortcutBindingTarget({
    * - 같은 code + phase 조합은 하나만 유지한다.
    * - 같은 code + 같은 emojiId의 기존 down/up은 새 phase로 교체한다.
    *
-   * 예:
-   * - F1 both → F1 down 저장 시 기존 F1 up도 제거
-   * - F1 both → F1 up 저장 시 기존 F1 down도 제거
-   * - F1 down → F1 both 저장 시 기존 F1 down 제거 후 down/up 저장
+   * 세트 정책:
+   * - assign은 현재 active set에만 적용한다.
+   * - set_1의 F1과 set_2의 F1은 서로 독립이다.
    */
   const nextBindings = baseBindings.filter((binding) => {
     const bindingCode = normalizeShortcutCode(binding.code);
@@ -140,7 +196,7 @@ export async function clearShortcutBindingTarget({
   }
 
   const phasesToClear = getStoragePhasesFromPhase(normalizedPhase);
-  const baseBindings = getEditableShortcutBindings(cachedShortcutBindings);
+  const baseBindings = getEditableShortcutBindings(getCachedShortcutBindings());
 
   const nextBindings = baseBindings.filter((binding) => {
     const bindingCode = normalizeShortcutCode(binding.code);
@@ -165,7 +221,7 @@ export async function clearShortcutBindingsByEmojiId({
     return getCachedShortcutBindings();
   }
 
-  const baseBindings = getEditableShortcutBindings(cachedShortcutBindings);
+  const baseBindings = getEditableShortcutBindings(getCachedShortcutBindings());
 
   const nextBindings = baseBindings.filter((binding) => {
     return getBindingEmojiId(binding) !== normalizedEmojiId;
@@ -226,6 +282,161 @@ export function getBindingEmojiId(binding) {
 
 export function isUserDefinedShortcutBinding(binding) {
   return binding?.source === USER_BINDING_SOURCE;
+}
+
+function createDefaultShortcutBindingSetState() {
+  return {
+    version: SHORTCUT_BINDING_SETS_VERSION,
+    activeSetId: SHORTCUT_BINDING_SET_1,
+    sets: DEFAULT_SHORTCUT_BINDING_SETS.map((set) => {
+      return {
+        ...set,
+        bindings: set.id === SHORTCUT_BINDING_SET_1
+          ? normalizeShortcutBindings(getDefaultShortcutBindings())
+          : [],
+      };
+    }),
+  };
+}
+
+function normalizeShortcutBindingSetState({
+  storedValue,
+  hasStoredValue,
+}) {
+  if (!hasStoredValue) {
+    return createDefaultShortcutBindingSetState();
+  }
+
+  /*
+   * v1 호환:
+   * 기존 저장값이 배열이면 set_1로 마이그레이션한다.
+   */
+  if (Array.isArray(storedValue)) {
+    return createShortcutBindingSetState({
+      activeSetId: SHORTCUT_BINDING_SET_1,
+      set1Bindings: storedValue,
+      set2Bindings: [],
+    });
+  }
+
+  if (!storedValue || typeof storedValue !== 'object') {
+    return createDefaultShortcutBindingSetState();
+  }
+
+  const sets = normalizeShortcutBindingSets(storedValue.sets);
+  const activeSetId = normalizeShortcutBindingSetId(storedValue.activeSetId);
+
+  return {
+    version: SHORTCUT_BINDING_SETS_VERSION,
+    activeSetId: activeSetId || SHORTCUT_BINDING_SET_1,
+    sets,
+  };
+}
+
+function createShortcutBindingSetState({
+  activeSetId,
+  set1Bindings,
+  set2Bindings,
+}) {
+  return {
+    version: SHORTCUT_BINDING_SETS_VERSION,
+    activeSetId: normalizeShortcutBindingSetId(activeSetId) || SHORTCUT_BINDING_SET_1,
+    sets: [
+      {
+        id: SHORTCUT_BINDING_SET_1,
+        label: '1',
+        bindings: normalizeShortcutBindings(set1Bindings),
+      },
+      {
+        id: SHORTCUT_BINDING_SET_2,
+        label: '2',
+        bindings: normalizeShortcutBindings(set2Bindings),
+      },
+    ],
+  };
+}
+
+function normalizeShortcutBindingSets(sets) {
+  const storedSets = Array.isArray(sets) ? sets : [];
+
+  return DEFAULT_SHORTCUT_BINDING_SETS.map((defaultSet) => {
+    const storedSet = storedSets.find((set) => {
+      return set?.id === defaultSet.id;
+    });
+
+    return {
+      id: defaultSet.id,
+      label: normalizeShortcutBindingSetLabel(storedSet?.label) || defaultSet.label,
+      bindings: normalizeShortcutBindings(storedSet?.bindings),
+    };
+  });
+}
+
+function normalizeShortcutBindingSetId(setId) {
+  const normalizedSetId = String(setId ?? '').trim();
+
+  if (
+    normalizedSetId === SHORTCUT_BINDING_SET_1 ||
+    normalizedSetId === SHORTCUT_BINDING_SET_2
+  ) {
+    return normalizedSetId;
+  }
+
+  return '';
+}
+
+function normalizeShortcutBindingSetLabel(label) {
+  return String(label ?? '').trim();
+}
+
+function getShortcutBindingsForSet(state, setId) {
+  const normalizedSetId = normalizeShortcutBindingSetId(setId);
+
+  const set = state.sets.find((candidate) => {
+    return candidate.id === normalizedSetId;
+  });
+
+  return normalizeShortcutBindings(set?.bindings);
+}
+
+function setShortcutBindingsForActiveSet({
+  state,
+  bindings,
+}) {
+  const activeSetId = normalizeShortcutBindingSetId(state.activeSetId) ||
+    SHORTCUT_BINDING_SET_1;
+
+  return {
+    ...state,
+    activeSetId,
+    sets: state.sets.map((set) => {
+      if (set.id !== activeSetId) {
+        return {
+          ...set,
+          bindings: normalizeShortcutBindings(set.bindings),
+        };
+      }
+
+      return {
+        ...set,
+        bindings: normalizeShortcutBindings(bindings),
+      };
+    }),
+  };
+}
+
+function cloneShortcutBindingSetState(state) {
+  return {
+    version: SHORTCUT_BINDING_SETS_VERSION,
+    activeSetId: state.activeSetId,
+    sets: state.sets.map((set) => {
+      return {
+        id: set.id,
+        label: set.label,
+        bindings: normalizeShortcutBindings(set.bindings),
+      };
+    }),
+  };
 }
 
 function createEmojiShortcutBinding({
@@ -428,23 +639,36 @@ async function readShortcutBindingsStorageEntry() {
 
   return {
     hasStoredValue,
-    bindings: Array.isArray(result?.[SHORTCUT_BINDINGS_STORAGE_KEY])
-      ? result[SHORTCUT_BINDINGS_STORAGE_KEY]
-      : [],
+    value: result?.[SHORTCUT_BINDINGS_STORAGE_KEY],
   };
 }
 
-async function writeShortcutBindingsToStorage(bindings) {
-  const userBindings = getUserDefinedShortcutBindings(bindings);
+async function writeShortcutBindingSetStateToStorage(state) {
+  const storageValue = createShortcutBindingSetStorageValue(state);
 
   if (!isChromeStorageAvailable()) {
-    writeShortcutBindingsToLocalStorage(userBindings);
+    writeShortcutBindingsToLocalStorage(storageValue);
     return;
   }
 
   await chrome.storage.local.set({
-    [SHORTCUT_BINDINGS_STORAGE_KEY]: userBindings,
+    [SHORTCUT_BINDINGS_STORAGE_KEY]: storageValue,
   });
+}
+
+function createShortcutBindingSetStorageValue(state) {
+  return {
+    version: SHORTCUT_BINDING_SETS_VERSION,
+    activeSetId: normalizeShortcutBindingSetId(state.activeSetId) ||
+      SHORTCUT_BINDING_SET_1,
+    sets: state.sets.map((set) => {
+      return {
+        id: set.id,
+        label: set.label,
+        bindings: getUserDefinedShortcutBindings(set.bindings),
+      };
+    }),
+  };
 }
 
 async function removeShortcutBindingsFromStorage() {
@@ -463,31 +687,29 @@ function readShortcutBindingsStorageEntryFromLocalStorage() {
     if (raw === null) {
       return {
         hasStoredValue: false,
-        bindings: [],
+        value: null,
       };
     }
 
-    const parsed = JSON.parse(raw);
-
     return {
       hasStoredValue: true,
-      bindings: Array.isArray(parsed) ? parsed : [],
+      value: JSON.parse(raw),
     };
   } catch (error) {
     console.warn('[Emozzk Lite] failed to read shortcut bindings:', error);
 
     return {
       hasStoredValue: false,
-      bindings: [],
+      value: null,
     };
   }
 }
 
-function writeShortcutBindingsToLocalStorage(bindings) {
+function writeShortcutBindingsToLocalStorage(value) {
   try {
     window.localStorage.setItem(
       SHORTCUT_BINDINGS_STORAGE_KEY,
-      JSON.stringify(bindings)
+      JSON.stringify(value)
     );
   } catch (error) {
     console.warn('[Emozzk Lite] failed to write shortcut bindings:', error);
@@ -515,6 +737,8 @@ function dispatchShortcutBindingsChanged() {
     new CustomEvent(SHORTCUT_BINDINGS_CHANGED_EVENT, {
       detail: {
         bindings: getCachedShortcutBindings(),
+        activeSetId: getCachedActiveShortcutBindingSetId(),
+        setState: getCachedShortcutBindingSetState(),
       },
     })
   );

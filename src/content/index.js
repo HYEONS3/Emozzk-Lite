@@ -24,6 +24,10 @@ import {
 } from './emote-favorites-render.js';
 
 import {
+  startRecentEmoteStorageLimitBridge,
+} from './recent-emote-storage-limit-bridge.js';
+
+import {
   getRecentEmoteStorageKey,
   readRecentEmotes,
 } from './recent-emote-storage.js';
@@ -49,6 +53,13 @@ startContentScript();
 
 function startContentScript() {
   console.log('[Emozzk Lite] content script loaded');
+
+  /*
+   * page context inject는 최대한 빨리 넣는다.
+   * CHZZK가 livechat-emoticon#... 을 저장하기 전에
+   * localStorage.setItem patch가 설치되어야 한다.
+   */
+  startRecentEmoteStorageLimitBridge();
 
   startBadgeOverlay();
 
