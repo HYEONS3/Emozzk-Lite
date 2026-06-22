@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "build": "node scripts/build.js",
-    "build:prod": "node scripts/build.js --prod"
+    "build:prod": "node scripts/build.js --prod",
+    "build:beta": "node scripts/build.js --prod --beta"
   },
   "repository": {
     "type": "git",
@@ -25,6 +26,7 @@
   },
   "homepage": "https://github.com/HYEONS3/Emozzk-Lite#readme",
   "devDependencies": {
+    "archiver": "^8.0.0",
     "esbuild": "^0.28.1"
   }
 }

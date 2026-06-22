@@ -1,0 +1,231 @@
+:root {
+  color-scheme: dark;
+
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Malgun Gothic",
+    "맑은 고딕",
+    "Apple SD Gothic Neo",
+    Roboto,
+    Arial,
+    sans-serif;
+}
+
+body {
+  width: 280px;
+  margin: 0;
+
+  background: #202124;
+  color: #f1f3f4;
+}
+
+.popup {
+  box-sizing: border-box;
+  padding: 14px;
+}
+
+.popup-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+
+  margin-bottom: 12px;
+}
+
+.popup-title {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.popup-version {
+  color: #bdc1c6;
+
+  font-size: 11px;
+  line-height: 1;
+}
+
+.popup-section {
+  padding: 12px 0;
+
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.popup-section:first-of-type {
+  padding-top: 0;
+
+  border-top: 0;
+}
+
+.popup-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  margin-bottom: 10px;
+}
+
+.popup-section-heading {
+  min-width: 0;
+}
+
+.popup-section-title {
+  margin: 0 0 10px;
+
+  color: #e8eaed;
+
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.popup-section-header .popup-section-title {
+  margin-bottom: 4px;
+}
+
+.popup-section-description {
+  margin: 0;
+
+  color: #bdc1c6;
+
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.popup-button {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  box-sizing: border-box;
+
+  border: 0;
+  border-radius: 8px;
+
+  background: #3c4043;
+  color: #f1f3f4;
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+
+  cursor: pointer;
+  user-select: none;
+
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.popup-button:hover {
+  background: #4b4f52;
+}
+
+.popup-button:active {
+  transform: translateY(1px);
+}
+
+.popup-button:focus-visible,
+.popup-check input:focus-visible,
+.popup-range:focus-visible {
+  outline: 2px solid #8ab4f8;
+  outline-offset: 2px;
+}
+
+.popup-range-value {
+  flex: 0 0 auto;
+
+  min-width: 44px;
+  padding-top: 1px;
+
+  color: #8ab4f8;
+
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.popup-range {
+  width: 100%;
+  margin: 0;
+
+  accent-color: #8ab4f8;
+  cursor: pointer;
+}
+
+.popup-range-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-top: 6px;
+
+  color: #bdc1c6;
+
+  font-size: 11px;
+  line-height: 1;
+}
+
+.popup-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+
+  padding: 8px 0;
+
+  cursor: pointer;
+  user-select: none;
+}
+
+.popup-check input {
+  flex: 0 0 auto;
+
+  margin: 2px 0 0;
+
+  cursor: pointer;
+}
+
+.popup-check span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  min-width: 0;
+
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.popup-check small {
+  color: #bdc1c6;
+
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.popup-check:has(input:disabled) {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.popup-check:has(input:disabled) input {
+  cursor: not-allowed;
+}
+
+.popup-status {
+  min-height: 14px;
+  margin: 4px 0 0;
+
+  color: #8ab4f8;
+
+  font-size: 11px;
+  line-height: 1.3;
+}

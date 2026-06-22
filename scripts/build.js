@@ -3,8 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const isProd = process.argv.includes('--prod');
+const isBeta = process.argv.includes('--beta');
 
-const DIST_DIR = 'dist';
+const DIST_DIR = isBeta ? 'dist-beta' : 'dist';
 
 const CONTENT_ENTRY = 'src/content/index.js';
 const CONTENT_OUTFILE = path.join(DIST_DIR, 'content.js');
@@ -32,6 +33,8 @@ cleanDist();
 await buildContentScript();
 await buildInjectScript();
 copyStaticFiles();
+
+console.log(`[build] created ${DIST_DIR}`);
 
 function cleanDist() {
   fs.rmSync(DIST_DIR, {
@@ -81,13 +84,78 @@ function copyStaticFiles() {
     to: CONTENT_CSS_OUTFILE,
   });
 
-  copyFile({
-    from: MANIFEST_SOURCE,
-    to: MANIFEST_OUTFILE,
-  });
+  copyManifest();
 
   copyPopupFiles();
   copyIcons();
+}
+
+function copyManifest() {
+  const manifest = JSON.parse(
+    fs.readFileSync(MANIFEST_SOURCE, 'utf8')
+  );
+
+  const nextManifest = normalizeManifestForBuild(manifest);
+
+  fs.mkdirSync(path.dirname(MANIFEST_OUTFILE), {
+    recursive: true,
+  });
+
+  fs.writeFileSync(
+    MANIFEST_OUTFILE,
+    `${JSON.stringify(nextManifest, null, 2)}\n`,
+    'utf8'
+  );
+}
+
+function normalizeManifestForBuild(manifest) {
+  const nextManifest = structuredClone(manifest);
+
+  ensureInjectWebAccessibleResource(nextManifest);
+
+  if (isBeta) {
+    nextManifest.name = `${nextManifest.name} Beta`;
+    nextManifest.description = `${nextManifest.description} - beta test build`;
+    nextManifest.version_name = `${nextManifest.version}-beta.${getBuildDateStamp()}`;
+  }
+
+  return nextManifest;
+}
+
+function ensureInjectWebAccessibleResource(manifest) {
+  const resources = Array.isArray(manifest.web_accessible_resources)
+    ? manifest.web_accessible_resources
+    : [];
+
+  let chzzkResource = resources.find((entry) => {
+    return Array.isArray(entry?.matches) &&
+      entry.matches.includes('https://chzzk.naver.com/*');
+  });
+
+  if (!chzzkResource) {
+    chzzkResource = {
+      resources: [],
+      matches: [
+        'https://chzzk.naver.com/*',
+      ],
+    };
+
+    resources.push(chzzkResource);
+  }
+
+  if (!Array.isArray(chzzkResource.resources)) {
+    chzzkResource.resources = [];
+  }
+
+  if (!chzzkResource.resources.includes('icons/*')) {
+    chzzkResource.resources.unshift('icons/*');
+  }
+
+  if (!chzzkResource.resources.includes('inject.js')) {
+    chzzkResource.resources.push('inject.js');
+  }
+
+  manifest.web_accessible_resources = resources;
 }
 
 function copyPopupFiles() {
@@ -159,4 +227,16 @@ function copyFile({
   });
 
   fs.copyFileSync(from, to);
+}
+
+function getBuildDateStamp() {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const date = String(now.getDate()).padStart(2, '0');
+  const hour = String(now.getHours()).padStart(2, '0');
+  const minute = String(now.getMinutes()).padStart(2, '0');
+
+  return `${year}${month}${date}-${hour}${minute}`;
 }
