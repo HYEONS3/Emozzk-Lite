@@ -1,30 +1,969 @@
-.emzk-lite-badge-root {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483647;
-  pointer-events: none;
+/* ========================================================================== */
+/* Emozzk Lite - CHZZK Emote Panel UI                                         */
+/* ========================================================================== */
+
+:root {
+  /* ------------------------------------------------------------------------ */
+  /* Font                                                                     */
+  /* ------------------------------------------------------------------------ */
+
+  --emzk-lite-font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Malgun Gothic",
+    "맑은 고딕",
+    "Apple SD Gothic Neo",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+
+  /* ------------------------------------------------------------------------ */
+  /* Motion                                                                   */
+  /* ------------------------------------------------------------------------ */
+
+  --emzk-lite-motion-mask: 60ms ease-out;
+  --emzk-lite-motion-fast: 120ms ease;
+  --emzk-lite-motion-normal: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  --emzk-lite-press-scale: 0.96;
+  --emzk-lite-keylike-press-scale: 0.98;
+  --emzk-lite-header-enter-y: -2px;
+
+  /* ------------------------------------------------------------------------ */
+  /* Badge                                                                    */
+  /* ------------------------------------------------------------------------ */
+
+  --emzk-lite-badge-offset: 0;
+  --emzk-lite-badge-height: 16px;
+  --emzk-lite-badge-min-width: 18px;
+  --emzk-lite-badge-max-width: 62px;
+  --emzk-lite-badge-padding-x: 3px;
+  --emzk-lite-badge-radius: 4px;
+  --emzk-lite-badge-font-size: 10px;
+  --emzk-lite-badge-letter-spacing: 0;
+
+  --emzk-lite-unlink-badge-size: 20px;
+  --emzk-lite-unlink-badge-icon-size: 14px;
+  --emzk-lite-unlink-badge-bg: rgba(255, 95, 95, 0.68);
+  --emzk-lite-unlink-badge-text: #fff;
+  --emzk-lite-unlink-badge-shadow: rgba(0, 0, 0, 0.28);
+
+  /* ------------------------------------------------------------------------ */
+  /* Bind layout                                                              */
+  /* ------------------------------------------------------------------------ */
+
+  --emzk-lite-bind-height: 26px;
+  --emzk-lite-bind-gap: 5px;
+  --emzk-lite-bind-radius: 8px;
+  --emzk-lite-bind-font-size: 11px;
+  --emzk-lite-bind-control-height: 20px;
+
+  --emzk-lite-bind-assign-height: 44px;
+  --emzk-lite-bind-assign-control-height: 40px;
+  --emzk-lite-bind-assign-emote-size: 32px;
+
+  --emzk-lite-bind-title-padding-y: 3px;
+  --emzk-lite-bind-title-padding-left: 5px;
+
+  --emzk-lite-bind-header-action-gap: 4px;
+  --emzk-lite-bind-action-gap: 5px;
+
+  --emzk-lite-bind-keycap-min-width: 40px;
+  --emzk-lite-bind-keycap-max-width: 88px;
+  --emzk-lite-bind-keycap-padding-x: 12px;
+  --emzk-lite-bind-keycap-label-max-width: 56px;
+
+  --emzk-lite-bind-inner-inset: 3px;
+  --emzk-lite-bind-inner-radius: 6px;
+
+  /* ------------------------------------------------------------------------ */
+  /* Icon sizes                                                               */
+  /* ------------------------------------------------------------------------ */
+
+  --emzk-lite-bind-header-icon-size: 14px;
+  --emzk-lite-bind-action-icon-size: 17px;
+  --emzk-lite-bind-phase-icon-size: 18px;
+
+  /* ------------------------------------------------------------------------ */
+  /* Color                                                                    */
+  /* ------------------------------------------------------------------------ */
+
+  --emzk-lite-bind-text: currentColor;
+  --emzk-lite-bind-bg: rgba(var(--color-content-rgb, 255, 255, 255), 0.04);
+  --emzk-lite-bind-hover-bg: rgba(var(--color-content-rgb, 255, 255, 255), 0.08);
+  --emzk-lite-bind-border: rgba(var(--color-content-rgb, 255, 255, 255), 0.1);
+
+  --emzk-lite-bind-active-text: currentColor;
+  --emzk-lite-bind-active-bg: rgba(var(--color-content-rgb, 255, 255, 255), 0.13);
+  --emzk-lite-bind-active-border: rgba(var(--color-content-rgb, 255, 255, 255), 0.26);
+
+  --emzk-lite-keylike-bg-start: rgba(var(--color-content-rgb, 255, 255, 255), 0.09);
+  --emzk-lite-keylike-bg-end: rgba(var(--color-content-rgb, 255, 255, 255), 0.035);
+  --emzk-lite-keylike-hover-bg-start: rgba(var(--color-content-rgb, 255, 255, 255), 0.13);
+  --emzk-lite-keylike-hover-bg-end: rgba(var(--color-content-rgb, 255, 255, 255), 0.055);
+  --emzk-lite-keylike-inner-border: rgba(var(--color-content-rgb, 255, 255, 255), 0.08);
+  --emzk-lite-keylike-top-highlight: rgba(var(--color-content-rgb, 255, 255, 255), 0.12);
+  --emzk-lite-keylike-bottom-shadow: rgba(0, 0, 0, 0.12);
+  --emzk-lite-keylike-pressed-shadow: rgba(0, 0, 0, 0.18);
+  --emzk-lite-keylike-pressed-highlight: rgba(var(--color-content-rgb, 255, 255, 255), 0.06);
+
+  --emzk-lite-bind-save-bg: rgba(36, 196, 126, 0.14);
+  --emzk-lite-bind-save-border: rgba(36, 196, 126, 0.34);
+  --emzk-lite-bind-save-hover-bg-start: rgba(36, 196, 126, 0.22);
+  --emzk-lite-bind-save-hover-bg-end: rgba(36, 196, 126, 0.12);
+  --emzk-lite-bind-save-text: rgb(80, 220, 150);
+
+  --emzk-lite-bind-cancel-bg: rgba(255, 95, 95, 0.12);
+  --emzk-lite-bind-cancel-border: rgba(255, 95, 95, 0.3);
+  --emzk-lite-bind-cancel-hover-bg-start: rgba(255, 95, 95, 0.2);
+  --emzk-lite-bind-cancel-hover-bg-end: rgba(255, 95, 95, 0.1);
+  --emzk-lite-bind-cancel-text: rgb(255, 130, 130);
+
+  --emzk-lite-bind-empty-bg-start: rgba(var(--color-content-rgb, 255, 255, 255), 0.05);
+  --emzk-lite-bind-empty-bg-end: rgba(var(--color-content-rgb, 255, 255, 255), 0.025);
+  --emzk-lite-bind-empty-inner-border: rgba(var(--color-content-rgb, 255, 255, 255), 0.22);
+
+  --emzk-lite-bind-disabled-opacity: 0.38;
+
+  --emzk-lite-drag-placeholder-bg-start: rgba(var(--color-content-rgb, 255, 255, 255), 0.08);
+  --emzk-lite-drag-placeholder-bg-end: rgba(var(--color-content-rgb, 255, 255, 255), 0.03);
+  --emzk-lite-drag-placeholder-outline: rgba(var(--color-content-rgb, 255, 255, 255), 0.18);
+}
+
+/* ========================================================================== */
+/* Emoji area render masking                                                  */
+/* ========================================================================== */
+
+#emoji_area[data-emzk-lite-favorites-state="preparing"] {
+  opacity: 0.001;
+  transition: none;
+}
+
+#emoji_area[data-emzk-lite-favorites-state="ready"] {
+  opacity: 1;
+  transition: opacity var(--emzk-lite-motion-mask);
+}
+
+button[data-emzk-lite-badge-target="true"] {
+  position: relative;
 }
 
 .emzk-lite-badge {
-  position: fixed;
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  z-index: 3;
+
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 1px;
 
-  min-width: 22px;
+  min-width: 18px;
   height: 16px;
-  padding: 0 5px;
+  padding: 0 3px;
   box-sizing: border-box;
 
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.78);
-  color: #fff;
+  border: 0;
+  border-radius: 4px;
 
+  background-color: rgba(var(--color-bg-black-fixed-rgb, 0, 0, 0), 0.72);
+  color: var(--color-bg-white-fixed, #fff);
+
+  font-family: var(--emzk-lite-font-family);
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.2px;
+  text-align: center;
+  white-space: nowrap;
 
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.32);
+  pointer-events: none;
   user-select: none;
+}
+
+.emzk-lite-badge-code,
+.emzk-lite-badge-extra {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.emzk-lite-badge-extra {
+  margin-left: 1px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.emzk-lite-badge-phase-icon {
+  flex: 0 0 auto;
+  display: block;
+
+  width: 8px;
+  height: 8px;
+  margin-left: 1px;
+
+  color: currentColor;
+
+  pointer-events: none;
+  user-select: none;
+}
+
+.emzk-lite-badge-phase-icon-both {
+  width: 12px;
+  height: 8px;
+}
+
+.emzk-lite-badge-unlink {
+  width: var(--emzk-lite-unlink-badge-size);
+  min-width: var(--emzk-lite-unlink-badge-size);
+  max-width: var(--emzk-lite-unlink-badge-size);
+  height: var(--emzk-lite-unlink-badge-size);
+  padding: 0;
+
+  border-radius: 999px;
+
+  background-color: var(--emzk-lite-unlink-badge-bg);
+  color: var(--emzk-lite-unlink-badge-text);
+
+  box-shadow:
+    0 2px 8px var(--emzk-lite-unlink-badge-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+
+  transform: translate(-1px, -1px);
+}
+
+.emzk-lite-badge-unlink-icon {
+  display: block;
+
+  width: var(--emzk-lite-unlink-badge-icon-size);
+  height: var(--emzk-lite-unlink-badge-icon-size);
+
+  color: currentColor;
+
+  pointer-events: none;
+  user-select: none;
+}
+/* ========================================================================== */
+/* Favorite section                                                           */
+/* ========================================================================== */
+
+.emzk-lite-favorites-section {
+  box-sizing: border-box;
+}
+
+.emzk-lite-favorites-section[hidden] {
+  display: none !important;
+}
+
+.emzk-lite-favorites-section[data-emzk-pending="true"] {
+  visibility: hidden;
+}
+
+.emzk-lite-favorites-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--emzk-lite-bind-gap);
+
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--emzk-lite-bind-height);
+  padding: 0;
+
+  font-family: inherit;
+
+  overflow: hidden;
+
+  transition:
+    min-height var(--emzk-lite-motion-normal),
+    padding var(--emzk-lite-motion-normal),
+    opacity var(--emzk-lite-motion-fast),
+    transform var(--emzk-lite-motion-fast);
+}
+
+/* ========================================================================== */
+/* Favorite title - default mode                                              */
+/* ========================================================================== */
+
+.emzk-lite-favorites-label {
+  flex: 1 1 auto;
+  min-width: 0;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emzk-lite-favorites-actions {
+  flex: 0 0 auto;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--emzk-lite-bind-header-action-gap);
+}
+
+/* ========================================================================== */
+/* Header icon buttons                                                        */
+/* ========================================================================== */
+
+.emzk-lite-bind-button {
+  flex: 0 0 auto;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: var(--emzk-lite-bind-control-height);
+  min-width: var(--emzk-lite-bind-control-height);
+  height: var(--emzk-lite-bind-control-height);
+  padding: 0;
+
+  color: var(--emzk-lite-bind-text);
+  background: var(--emzk-lite-bind-bg);
+  border: 1px solid transparent;
+  border-radius: var(--emzk-lite-bind-radius);
+
+  font: inherit;
+  line-height: 1;
+
+  cursor: pointer;
+  user-select: none;
+
+  transition:
+    color var(--emzk-lite-motion-fast),
+    background-color var(--emzk-lite-motion-fast),
+    border-color var(--emzk-lite-motion-fast),
+    opacity var(--emzk-lite-motion-fast),
+    box-shadow var(--emzk-lite-motion-fast),
+    transform var(--emzk-lite-motion-fast),
+    filter var(--emzk-lite-motion-fast);
+}
+
+.emzk-lite-bind-button:hover {
+  color: var(--emzk-lite-bind-active-text);
+  background: var(--emzk-lite-bind-hover-bg);
+  border-color: var(--emzk-lite-bind-active-border);
+}
+
+.emzk-lite-bind-button:active {
+  transform: scale(var(--emzk-lite-press-scale));
+}
+
+.emzk-lite-bind-button-active {
+  color: var(--emzk-lite-bind-active-text);
+  background: var(--emzk-lite-bind-active-bg);
+  border-color: var(--emzk-lite-bind-active-border);
+}
+
+.emzk-lite-bind-button-disabled,
+.emzk-lite-bind-button:disabled {
+  opacity: var(--emzk-lite-bind-disabled-opacity);
+  cursor: not-allowed;
+  filter: grayscale(0.35);
+}
+
+.emzk-lite-bind-button-disabled:hover,
+.emzk-lite-bind-button:disabled:hover {
+  color: var(--emzk-lite-bind-text);
+  background: var(--emzk-lite-bind-bg);
+  border-color: var(--emzk-lite-bind-border);
+}
+
+.emzk-lite-bind-button-disabled:active,
+.emzk-lite-bind-button:disabled:active {
+  transform: none;
+}
+
+.emzk-lite-bind-icon {
+  display: block;
+
+  width: var(--emzk-lite-bind-action-icon-size);
+  height: var(--emzk-lite-bind-action-icon-size);
+
+  flex: 0 0 auto;
+
+  color: currentColor;
+
+  pointer-events: none;
+}
+
+.emzk-lite-favorites-actions .emzk-lite-bind-icon {
+  width: var(--emzk-lite-bind-header-icon-size);
+  height: var(--emzk-lite-bind-header-icon-size);
+}
+
+/* ========================================================================== */
+/* Expanded bind headers - assign / clear                                     */
+/* ========================================================================== */
+
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"],
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"] {
+  justify-content: flex-start;
+  align-items: center;
+
+  min-height: var(--emzk-lite-bind-assign-height);
+  padding:
+    var(--emzk-lite-bind-title-padding-y)
+    var(--emzk-lite-bind-title-padding-left)
+    var(--emzk-lite-bind-title-padding-y)
+    var(--emzk-lite-bind-title-padding-left);
+
+  animation: emzk-lite-bind-header-expand var(--emzk-lite-motion-normal);
+}
+
+@keyframes emzk-lite-bind-header-expand {
+  from {
+    min-height: var(--emzk-lite-bind-height);
+    opacity: 0.86;
+    transform: translateY(var(--emzk-lite-header-enter-y));
+  }
+
+  to {
+    min-height: var(--emzk-lite-bind-assign-height);
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.emzk-lite-bind-bar {
+  flex: 1 1 auto;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--emzk-lite-bind-gap);
+
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+
+  overflow: hidden;
+
+  white-space: nowrap;
+}
+
+.emzk-lite-bind-clear-bar {
+  justify-content: flex-end;
+}
+
+.emzk-lite-bind-left {
+  flex: 1 1 auto;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--emzk-lite-bind-gap);
+
+  min-width: 0;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.emzk-lite-bind-left::-webkit-scrollbar {
+  display: none;
+}
+
+/* ========================================================================== */
+/* Keylike controls                                                           */
+/* ========================================================================== */
+
+.emzk-lite-bind-keycap-button,
+.emzk-lite-bind-phase-button,
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"] .emzk-lite-bind-button,
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"] .emzk-lite-bind-button {
+  flex: 0 0 auto;
+
+  position: relative;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  height: var(--emzk-lite-bind-assign-control-height);
+  padding: 0;
+
+  color: var(--emzk-lite-bind-text);
+  background:
+    linear-gradient(
+      180deg,
+      var(--emzk-lite-keylike-bg-start),
+      var(--emzk-lite-keylike-bg-end)
+    );
+  border: 1px solid var(--emzk-lite-bind-border);
+  border-radius: var(--emzk-lite-bind-radius);
+
+  box-shadow:
+    inset 0 1px 0 var(--emzk-lite-keylike-top-highlight),
+    inset 0 -1px 0 var(--emzk-lite-keylike-bottom-shadow);
+
+  font: inherit;
+  line-height: 1;
+
+  cursor: pointer;
+  user-select: none;
+
+  transition:
+    color var(--emzk-lite-motion-fast),
+    background-color var(--emzk-lite-motion-fast),
+    border-color var(--emzk-lite-motion-fast),
+    box-shadow var(--emzk-lite-motion-fast),
+    opacity var(--emzk-lite-motion-fast),
+    transform var(--emzk-lite-motion-fast),
+    filter var(--emzk-lite-motion-fast);
+}
+
+.emzk-lite-bind-keycap-button::before,
+.emzk-lite-bind-phase-button::before,
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"] .emzk-lite-bind-button::before,
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"] .emzk-lite-bind-button::before {
+  content: "";
+
+  position: absolute;
+  inset: var(--emzk-lite-bind-inner-inset);
+
+  border: 1px solid var(--emzk-lite-keylike-inner-border);
+  border-radius: var(--emzk-lite-bind-inner-radius);
+
+  pointer-events: none;
+}
+
+.emzk-lite-bind-keycap-button:hover,
+.emzk-lite-bind-phase-button:hover,
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"] .emzk-lite-bind-button:hover,
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"] .emzk-lite-bind-button:hover {
+  background:
+    linear-gradient(
+      180deg,
+      var(--emzk-lite-keylike-hover-bg-start),
+      var(--emzk-lite-keylike-hover-bg-end)
+    );
+  border-color: var(--emzk-lite-bind-active-border);
+}
+
+.emzk-lite-bind-keycap-button:active,
+.emzk-lite-bind-phase-button:active,
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"] .emzk-lite-bind-button:active,
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"] .emzk-lite-bind-button:active {
+  transform: translateY(1px) scale(var(--emzk-lite-keylike-press-scale));
+  box-shadow:
+    inset 0 1px 2px var(--emzk-lite-keylike-pressed-shadow),
+    inset 0 -1px 0 var(--emzk-lite-keylike-pressed-highlight);
+}
+
+.emzk-lite-bind-keycap-button-listening,
+.emzk-lite-bind-phase-button-active {
+  color: var(--emzk-lite-bind-active-text);
+  background: var(--emzk-lite-bind-active-bg);
+  border-color: var(--emzk-lite-bind-active-border);
+  filter:
+    brightness(1.08)
+    drop-shadow(0 0 4px rgba(var(--color-content-rgb, 255, 255, 255), 0.14));
+}
+
+/* ========================================================================== */
+/* Selected emote placeholder / preview                                       */
+/* ========================================================================== */
+
+.emzk-lite-bind-value {
+  flex: 0 0 auto;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: var(--emzk-lite-bind-control-height);
+  height: var(--emzk-lite-bind-control-height);
+  padding: 0 7px;
+
+  color: var(--emzk-lite-bind-text);
+  background: var(--emzk-lite-bind-bg);
+  border: 1px solid var(--emzk-lite-bind-border);
+  border-radius: var(--emzk-lite-bind-radius);
+
+  font-size: var(--emzk-lite-bind-font-size);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.emzk-lite-bind-emote-preview {
+  justify-content: center;
+
+  width: var(--emzk-lite-bind-assign-control-height);
+  min-width: var(--emzk-lite-bind-assign-control-height);
+  max-width: var(--emzk-lite-bind-assign-control-height);
+  height: var(--emzk-lite-bind-assign-control-height);
+  padding: 0;
+
+  overflow: hidden;
+
+  transition:
+    background-color var(--emzk-lite-motion-fast),
+    border-color var(--emzk-lite-motion-fast),
+    opacity var(--emzk-lite-motion-fast),
+    transform var(--emzk-lite-motion-fast);
+}
+
+.emzk-lite-bind-emote-empty {
+  background:
+    linear-gradient(
+      135deg,
+      var(--emzk-lite-bind-empty-bg-start),
+      var(--emzk-lite-bind-empty-bg-end)
+    );
+
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+.emzk-lite-bind-emote-empty::before {
+  content: "";
+
+  display: block;
+
+  width: var(--emzk-lite-bind-assign-emote-size);
+  height: var(--emzk-lite-bind-assign-emote-size);
+
+  border: 1px solid var(--emzk-lite-bind-empty-inner-border);
+  border-radius: 4px;
+
+  opacity: 0.7;
+}
+
+.emzk-lite-bind-emote-image {
+  display: block;
+
+  width: var(--emzk-lite-bind-assign-emote-size);
+  height: var(--emzk-lite-bind-assign-emote-size);
+  object-fit: contain;
+
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ========================================================================== */
+/* Key binding button                                                         */
+/* ========================================================================== */
+
+.emzk-lite-bind-keycap-button {
+  width: auto;
+  min-width: var(--emzk-lite-bind-keycap-min-width);
+  max-width: var(--emzk-lite-bind-keycap-max-width);
+  padding: 0 var(--emzk-lite-bind-keycap-padding-x);
+}
+
+.emzk-lite-bind-keycap-text {
+  position: relative;
+  z-index: 1;
+
+  flex: 0 1 auto;
+
+  min-width: 0;
+  max-width: var(--emzk-lite-bind-keycap-label-max-width);
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: currentColor;
+
+  font-family: var(--emzk-lite-font-family);
+  font-size: var(--emzk-lite-bind-font-size);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.2px;
+
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ========================================================================== */
+/* Phase toggle button                                                        */
+/* ========================================================================== */
+
+.emzk-lite-bind-phase-button {
+  width: var(--emzk-lite-bind-assign-control-height);
+  min-width: var(--emzk-lite-bind-assign-control-height);
+}
+
+.emzk-lite-bind-phase-icon {
+  position: relative;
+  z-index: 1;
+
+  display: block;
+
+  width: var(--emzk-lite-bind-phase-icon-size);
+  height: var(--emzk-lite-bind-phase-icon-size);
+
+  color: currentColor;
+
+  pointer-events: none;
+}
+
+/* ========================================================================== */
+/* Clear mode                                                                 */
+/* ========================================================================== */
+
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"] .emzk-lite-bind-actions {
+  margin-left: auto;
+}
+
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"]) {
+  user-select: none;
+}
+
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"])
+  button[type="button"],
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"])
+  .emzk-lite-favorites-list > li,
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"])
+  .emzk-lite-favorites-list > li button[type="button"] {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"])
+  .emzk-lite-favorites-drag-placeholder,
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"])
+  .emzk-lite-favorites-dragging-item {
+  display: none !important;
+}
+
+/* ========================================================================== */
+/* Assign / clear action buttons - save / cancel                              */
+/* ========================================================================== */
+
+.emzk-lite-bind-actions {
+  flex: 0 0 auto;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--emzk-lite-bind-action-gap);
+
+  height: var(--emzk-lite-bind-assign-control-height);
+  margin-left: auto;
+}
+
+.emzk-lite-bind-save-button,
+.emzk-lite-bind-cancel-button {
+  width: var(--emzk-lite-bind-assign-control-height);
+  min-width: var(--emzk-lite-bind-assign-control-height);
+}
+
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"] .emzk-lite-bind-button svg,
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"] .emzk-lite-bind-phase-button svg,
+.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"] .emzk-lite-bind-button svg {
+  position: relative;
+  z-index: 1;
+
+  transform: translateY(0);
+}
+
+.emzk-lite-bind-save-button {
+  color: var(--emzk-lite-bind-save-text);
+  background: var(--emzk-lite-bind-save-bg);
+  border-color: var(--emzk-lite-bind-save-border);
+}
+
+.emzk-lite-bind-save-button:hover {
+  color: var(--emzk-lite-bind-save-text);
+  background:
+    linear-gradient(
+      180deg,
+      var(--emzk-lite-bind-save-hover-bg-start),
+      var(--emzk-lite-bind-save-hover-bg-end)
+    );
+  border-color: var(--emzk-lite-bind-save-border);
+}
+
+.emzk-lite-bind-save-button:disabled,
+.emzk-lite-bind-save-button.emzk-lite-bind-button-disabled {
+  color: var(--emzk-lite-bind-text);
+  background: var(--emzk-lite-bind-bg);
+  border-color: var(--emzk-lite-bind-border);
+}
+
+.emzk-lite-bind-cancel-button {
+  color: var(--emzk-lite-bind-cancel-text);
+  background: var(--emzk-lite-bind-cancel-bg);
+  border-color: var(--emzk-lite-bind-cancel-border);
+}
+
+.emzk-lite-bind-cancel-button:hover {
+  color: var(--emzk-lite-bind-cancel-text);
+  background:
+    linear-gradient(
+      180deg,
+      var(--emzk-lite-bind-cancel-hover-bg-start),
+      var(--emzk-lite-bind-cancel-hover-bg-end)
+    );
+  border-color: var(--emzk-lite-bind-cancel-border);
+}
+
+/* ========================================================================== */
+/* Favorite list                                                              */
+/* ========================================================================== */
+
+.emzk-lite-favorites-list {
+  box-sizing: border-box;
+}
+
+.emzk-lite-favorites-empty {
+  display: none !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* ========================================================================== */
+/* Favorite drag                                                              */
+/* ========================================================================== */
+
+.emzk-lite-favorites-section .emzk-lite-favorites-list > li {
+  touch-action: none;
+  will-change: transform;
+}
+
+.emzk-lite-favorites-section .emzk-lite-favorites-list > li button[type="button"] {
+  cursor: grab;
+}
+
+.emzk-lite-favorites-drag-active {
+  user-select: none;
+}
+
+.emzk-lite-favorites-drag-active .emzk-lite-favorites-list > li button[type="button"] {
+  cursor: grabbing;
+}
+
+.emzk-lite-favorites-drag-active .emzk-lite-badge {
+  opacity: 0;
+  transform: scale(0.85);
+  transition:
+    opacity 80ms ease-out,
+    transform 80ms ease-out;
+}
+
+.emzk-lite-favorites-dragging-item {
+  opacity: 0.86;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.28));
+  will-change: transform;
+}
+
+.emzk-lite-favorites-dragging-item button[type="button"] {
+  pointer-events: none;
+}
+
+.emzk-lite-favorites-drag-placeholder {
+  box-sizing: border-box;
+  border-radius: var(--emzk-lite-bind-radius);
+
+  opacity: 0.42;
+  background:
+    linear-gradient(
+      135deg,
+      var(--emzk-lite-drag-placeholder-bg-start),
+      var(--emzk-lite-drag-placeholder-bg-end)
+    );
+
+  outline: 1px dashed var(--emzk-lite-drag-placeholder-outline);
+  outline-offset: -2px;
+
+  pointer-events: none;
+}
+
+/* ========================================================================== */
+/* Light theme fallback                                                       */
+/* ========================================================================== */
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --emzk-lite-bind-bg: rgba(0, 0, 0, 0.04);
+    --emzk-lite-bind-hover-bg: rgba(0, 0, 0, 0.07);
+    --emzk-lite-bind-border: rgba(0, 0, 0, 0.12);
+    --emzk-lite-bind-active-bg: rgba(0, 0, 0, 0.1);
+    --emzk-lite-bind-active-border: rgba(0, 0, 0, 0.2);
+
+    --emzk-lite-keylike-bg-start: rgba(0, 0, 0, 0.045);
+    --emzk-lite-keylike-bg-end: rgba(0, 0, 0, 0.018);
+    --emzk-lite-keylike-hover-bg-start: rgba(0, 0, 0, 0.065);
+    --emzk-lite-keylike-hover-bg-end: rgba(0, 0, 0, 0.028);
+    --emzk-lite-keylike-inner-border: rgba(0, 0, 0, 0.05);
+    --emzk-lite-keylike-top-highlight: rgba(255, 255, 255, 0.35);
+    --emzk-lite-keylike-bottom-shadow: rgba(0, 0, 0, 0.08);
+
+    --emzk-lite-bind-save-bg: rgba(20, 160, 95, 0.11);
+    --emzk-lite-bind-save-border: rgba(20, 160, 95, 0.28);
+    --emzk-lite-bind-save-hover-bg-start: rgba(20, 160, 95, 0.18);
+    --emzk-lite-bind-save-hover-bg-end: rgba(20, 160, 95, 0.09);
+    --emzk-lite-bind-save-text: rgb(24, 145, 92);
+
+    --emzk-lite-bind-cancel-bg: rgba(225, 55, 55, 0.09);
+    --emzk-lite-bind-cancel-border: rgba(225, 55, 55, 0.24);
+    --emzk-lite-bind-cancel-hover-bg-start: rgba(225, 55, 55, 0.15);
+    --emzk-lite-bind-cancel-hover-bg-end: rgba(225, 55, 55, 0.075);
+    --emzk-lite-bind-cancel-text: rgb(205, 58, 58);
+
+    --emzk-lite-bind-empty-bg-start: rgba(0, 0, 0, 0.045);
+    --emzk-lite-bind-empty-bg-end: rgba(0, 0, 0, 0.018);
+    --emzk-lite-bind-empty-inner-border: rgba(0, 0, 0, 0.22);
+
+    --emzk-lite-drag-placeholder-bg-start: rgba(0, 0, 0, 0.05);
+    --emzk-lite-drag-placeholder-bg-end: rgba(0, 0, 0, 0.02);
+    --emzk-lite-drag-placeholder-outline: rgba(0, 0, 0, 0.14);
+
+    --emzk-lite-unlink-badge-bg: rgba(225, 55, 55, 0.9);
+    --emzk-lite-unlink-badge-shadow: rgba(0, 0, 0, 0.18);
+  }
+
+  .emzk-lite-bind-keycap-button-listening {
+    filter:
+      brightness(1.08)
+      drop-shadow(0 0 4px rgba(0, 0, 0, 0.12));
+  }
+
+  .emzk-lite-favorites-dragging-item {
+    filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
+  }
+}
+
+/* ========================================================================== */
+/* Spacing adjustment                                                         */
+/* ========================================================================== */
+
+#emoji_area > .emzk-lite-favorites-section {
+  margin-bottom: 0;
+}
+
+#emoji_area > .emzk-lite-favorites-section > .emzk-lite-favorites-list {
+  margin-bottom: 0;
+}
+
+/* ========================================================================== */
+/* Reduced motion                                                             */
+/* ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  #emoji_area[data-emzk-lite-favorites-state="ready"],
+  .emzk-lite-favorites-title,
+  .emzk-lite-badge,
+  .emzk-lite-bind-button,
+  .emzk-lite-bind-keycap-button,
+  .emzk-lite-bind-phase-button,
+  .emzk-lite-bind-emote-preview,
+  .emzk-lite-favorites-dragging-item,
+  .emzk-lite-favorites-drag-placeholder {
+    animation: none;
+    transition: none;
+  }
 }

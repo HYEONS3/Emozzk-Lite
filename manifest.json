@@ -2,14 +2,45 @@
   "manifest_version": 3,
   "name": "Emozzk Lite",
   "version": "0.1.0",
-  "description": "치지직 이모티콘 패널을 키보드로 조작하는 입력 보조 확장 프로그램",
-  "permissions": [],
+  "description": "CHZZK emote shortcut helper",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://chzzk.naver.com/*"
+  ],
+  "action": {
+    "default_title": "Emozzk Lite",
+    "default_popup": "popup.html"
+  },
   "content_scripts": [
     {
-      "matches": ["https://chzzk.naver.com/*"],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "matches": [
+        "https://chzzk.naver.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*"
+      ],
+      "matches": [
+        "https://chzzk.naver.com/*"
+      ]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
 }
