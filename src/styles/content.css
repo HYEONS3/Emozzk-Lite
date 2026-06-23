@@ -936,10 +936,11 @@ button[data-emzk-lite-badge-target="true"] {
 }
 
 .emzk-lite-favorites-empty {
-  display: none !important;
-  min-height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
+  margin: 6px 0 0;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.65;
 }
 
 /* ========================================================================== */

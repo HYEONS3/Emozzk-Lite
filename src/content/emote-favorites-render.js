@@ -65,6 +65,7 @@ import {
 const FAVORITES_SECTION_CLASS = 'emzk-lite-favorites-section';
 const FAVORITES_TITLE_CLASS = 'emzk-lite-favorites-title';
 const FAVORITES_LIST_CLASS = 'emzk-lite-favorites-list';
+const FAVORITES_EMPTY_CLASS = 'emzk-lite-favorites-empty';
 
 const FAVORITES_LABEL_CLASS = 'emzk-lite-favorites-label';
 const FAVORITES_ACTIONS_CLASS = 'emzk-lite-favorites-actions';
@@ -275,14 +276,17 @@ export function renderFavoriteEmoteSection() {
       normalItems: partition.normalItems,
     });
 
-    if (!partition.favoriteItems.length) {
-      favoriteSection.remove();
-      return;
+    syncFavoriteEmptyState({
+    section: favoriteSection,
+    hasFavorites: partition.favoriteItems.length > 0,
+    });
+
+    if (partition.favoriteItems.length) {
+    attachFavoriteEmoteDrag(favoriteSection);
     }
 
-    attachFavoriteEmoteDrag(favoriteSection);
-
     favoriteSection.hidden = false;
+
   } finally {
     markFavoriteAreaReady(area);
     isRendering = false;
@@ -1463,6 +1467,33 @@ function removeLegacyEmptyElements(section) {
     .forEach((element) => {
       element.remove();
     });
+}
+
+function syncFavoriteEmptyState({
+  section,
+  hasFavorites,
+}) {
+  let empty = section.querySelector(`:scope > .${FAVORITES_EMPTY_CLASS}`);
+
+  if (hasFavorites) {
+    empty?.remove();
+    return;
+  }
+
+  if (!empty) {
+    empty = document.createElement('p');
+    empty.className = FAVORITES_EMPTY_CLASS;
+  }
+
+  empty.textContent = '최근 이모티콘을 Alt+클릭하면 즐겨찾기에 고정됩니다.';
+
+  const list = section.querySelector(`:scope > .${FAVORITES_LIST_CLASS}`);
+
+  if (list) {
+    list.insertAdjacentElement('afterend', empty);
+  } else {
+    section.appendChild(empty);
+  }
 }
 
 function partitionRecentItems({
