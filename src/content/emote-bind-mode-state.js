@@ -10,6 +10,10 @@ import {
   isExperimentalKeyupEnabled,
 } from './extension-settings-storage.js';
 
+import {
+  getShortcutCodeLabel,
+} from './shortcut-key-code.js';
+
 export const EMOTE_BIND_MODE_NONE = 'none';
 export const EMOTE_BIND_MODE_ASSIGN = 'assign';
 export const EMOTE_BIND_MODE_CLEAR = 'clear';
@@ -387,89 +391,13 @@ export function getEmoteBindPhaseDescription(phase) {
 }
 
 export function getEmoteBindCodeLabel(code) {
-  const normalizedCode = String(code ?? '').trim();
+  const label = getShortcutCodeLabel(code);
 
-  if (!normalizedCode) {
+  if (!label) {
     return 'KEY';
   }
 
-  if (normalizedCode.startsWith('Key')) {
-    return normalizedCode.slice(3).toUpperCase();
-  }
-
-  if (normalizedCode.startsWith('Digit')) {
-    return normalizedCode.slice(5);
-  }
-
-  if (normalizedCode.startsWith('Numpad')) {
-    return `Num ${normalizedCode.slice(6)}`;
-  }
-
-  if (normalizedCode === 'Space') {
-    return 'Space';
-  }
-
-  if (normalizedCode === 'Backquote') {
-    return '`';
-  }
-
-  if (normalizedCode === 'Minus') {
-    return '-';
-  }
-
-  if (normalizedCode === 'Equal') {
-    return '=';
-  }
-
-  if (normalizedCode === 'BracketLeft') {
-    return '[';
-  }
-
-  if (normalizedCode === 'BracketRight') {
-    return ']';
-  }
-
-  if (normalizedCode === 'Backslash') {
-    return '\\';
-  }
-
-  if (normalizedCode === 'Semicolon') {
-    return ';';
-  }
-
-  if (normalizedCode === 'Quote') {
-    return "'";
-  }
-
-  if (normalizedCode === 'Comma') {
-    return ',';
-  }
-
-  if (normalizedCode === 'Period') {
-    return '.';
-  }
-
-  if (normalizedCode === 'Slash') {
-    return '/';
-  }
-
-  if (normalizedCode === 'ArrowUp') {
-    return '↑';
-  }
-
-  if (normalizedCode === 'ArrowDown') {
-    return '↓';
-  }
-
-  if (normalizedCode === 'ArrowLeft') {
-    return '←';
-  }
-
-  if (normalizedCode === 'ArrowRight') {
-    return '→';
-  }
-
-  return normalizedCode;
+  return label;
 }
 
 function normalizeBindModeState(state) {

@@ -54,6 +54,10 @@ import {
   isChatInputEmoteLimitReached,
 } from './chat-input-emote-limit.js';
 
+import {
+  getShortcutCodeFromKeyboardEvent,
+} from './shortcut-key-code.js';
+
 const EVENT_PHASE_KEYDOWN = 'keydown';
 const EVENT_PHASE_KEYUP = 'keyup';
 
@@ -510,19 +514,17 @@ function isModernShortcutBindingMatched({
   event,
   storagePhase,
 }) {
-  if (binding.code !== event.code) {
+  const eventCode = getShortcutCodeFromKeyboardEvent(event);
+
+  if (!eventCode) {
+    return false;
+  }
+
+  if (binding.code !== eventCode) {
     return false;
   }
 
   if (normalizeStoragePhase(binding.phase) !== storagePhase) {
-    return false;
-  }
-
-  /*
-   * 현재 새 저장 구조는 modifier를 저장하지 않는다.
-   * 따라서 ctrl/alt/meta/shift 조합 상태에서는 매칭하지 않는다.
-   */
-  if (hasAnyModifier(event)) {
     return false;
   }
 

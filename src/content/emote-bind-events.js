@@ -34,6 +34,10 @@ import {
   findShortcutBadgeAssignmentByEmojiId,
 } from './shortcut-badge-map.js';
 
+import {
+  getShortcutCodeFromKeyboardEvent,
+} from './shortcut-key-code.js';
+
 const BADGE_CLASS = 'emzk-lite-badge';
 
 let attached = false;
@@ -170,14 +174,20 @@ function handleKeyListeningKeyDown(event) {
     return;
   }
 
-  if (isIgnoredListeningCode(event.code)) {
-    return;
-  }
+	if (isIgnoredListeningCode(event.code)) {
+		return;
+	}
 
-  setEmoteBindCode(event.code);
+	const shortcutCode = getShortcutCodeFromKeyboardEvent(event);
 
-  scheduleFavoriteEmoteSectionRender();
-  scheduleBadgeUpdate();
+	if (!shortcutCode) {
+		return;
+	}
+
+	setEmoteBindCode(shortcutCode);
+
+	scheduleFavoriteEmoteSectionRender();
+	scheduleBadgeUpdate();
 }
 
 function handleBindModeEmoteButtonClick(button) {

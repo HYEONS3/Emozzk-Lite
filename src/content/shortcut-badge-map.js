@@ -16,6 +16,10 @@ import {
   SHORTCUT_PHASE_UP,
 } from './shortcut-storage.js';
 
+import {
+  getShortcutCodeLabel,
+} from './shortcut-key-code.js';
+
 export function getShortcutBadgeAssignments(panel) {
   const bindings = getCachedShortcutBindings();
 
@@ -62,18 +66,19 @@ export function getShortcutBadgeLabel({
 }) {
   const normalizedCode = normalizeCode(code);
   const normalizedPhase = normalizePhase(phase);
+  const codeLabel = getShortcutCodeLabel(normalizedCode);
 
-  if (!normalizedCode) return '';
+  if (!codeLabel) return '';
 
   if (normalizedPhase === SHORTCUT_PHASE_BOTH) {
-    return `${normalizedCode}↓↑`;
+    return `${codeLabel}↓↑`;
   }
 
   if (normalizedPhase === SHORTCUT_PHASE_UP) {
-    return `${normalizedCode}↑`;
+    return `${codeLabel}↑`;
   }
 
-  return `${normalizedCode}↓`;
+  return `${codeLabel}↓`;
 }
 
 export function findShortcutBadgeAssignmentByEmojiId({
