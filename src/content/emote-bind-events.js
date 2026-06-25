@@ -26,6 +26,7 @@ import {
   isEmoteBindModeActive,
   selectEmoteBindTarget,
   setEmoteBindCode,
+  stopEmoteBindKeyListening,
   toggleEmoteBindClearSelection,
 } from './emote-bind-mode-state.js';
 
@@ -157,8 +158,15 @@ function handleBindModeKeyDown(event) {
 function handleKeyListeningKeyDown(event) {
   blockEvent(event);
 
-  if (event.code === 'Escape') {
-    exitCurrentBindMode();
+  if (
+    event.code === 'Escape' &&
+    !hasAnyModifier(event)
+  ) {
+    stopEmoteBindKeyListening();
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+
     return;
   }
 
@@ -169,6 +177,7 @@ function handleKeyListeningKeyDown(event) {
   setEmoteBindCode(event.code);
 
   scheduleFavoriteEmoteSectionRender();
+  scheduleBadgeUpdate();
 }
 
 function handleBindModeEmoteButtonClick(button) {
