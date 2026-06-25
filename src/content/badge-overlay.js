@@ -19,11 +19,15 @@ import {
 import {
   EMOTE_BIND_MODE_CHANGED_EVENT,
   getEmoteBindModeState,
+  isEmoteBindAssignMode,
   isEmoteBindClearMode,
 } from './emote-bind-mode-state.js';
 
 import {
   SHORTCUT_BINDINGS_CHANGED_EVENT,
+  SHORTCUT_PHASE_BOTH,
+  SHORTCUT_PHASE_DOWN,
+  SHORTCUT_PHASE_UP,
 } from './shortcut-storage.js';
 
 const BADGE_CLASS = 'emzk-lite-badge';
@@ -120,12 +124,19 @@ export function updateBadgeOverlay() {
   lastHadPanel = true;
 
   const shortcutAssignments = getShortcutBadgeAssignments(panel);
-  const assignments = isEmoteBindClearMode()
-    ? applyClearModeSelectionBadges({
+
+  let assignments = shortcutAssignments;
+
+  if (isEmoteBindClearMode()) {
+    assignments = applyClearModeSelectionBadges({
       panel,
       shortcutAssignments,
-    })
-    : shortcutAssignments;
+    });
+  } else if (isEmoteBindAssignMode()) {
+    assignments = applyAssignModeConflictBadges({
+      shortcutAssignments,
+    });
+  }
 
   renderEmoteBadges({
     panel,
@@ -188,6 +199,104 @@ function applyClearModeSelectionBadges({
   });
 
   return result;
+}
+
+function applyAssignModeConflictBadges({
+  shortcutAssignments,
+}) {
+  const bindState = getEmoteBindModeState();
+
+  const selectedEmojiId = normalizeText(bindState?.selectedEmojiId);
+  const selectedCode = normalizeText(bindState?.selectedCode);
+  const selectedPhase = normalizeText(bindState?.selectedPhase);
+
+  if (
+    !selectedEmojiId ||
+    !selectedCode ||
+    !selectedPhase
+  ) {
+    return shortcutAssignments;
+  }
+
+  return shortcutAssignments.map((assignment) => {
+    const emojiId = normalizeText(assignment?.emojiId);
+
+    if (!emojiId) {
+      return assignment;
+    }
+
+    /*
+     * 같은 이모티콘에 같은 키를 다시 지정하는 경우는 충돌로 보지 않는다.
+     */
+    if (emojiId === selectedEmojiId) {
+      return assignment;
+    }
+
+    if (!hasShortcutAssignmentConflict({
+      assignment,
+      selectedCode,
+      selectedPhase,
+    })) {
+      return assignment;
+    }
+
+    return {
+      ...assignment,
+      badgeState: 'conflict',
+      title: `${assignment.title || assignment.label || selectedCode} · 교체 대상`,
+    };
+  });
+}
+
+function hasShortcutAssignmentConflict({
+  assignment,
+  selectedCode,
+  selectedPhase,
+}) {
+  const items = Array.isArray(assignment?.items) && assignment.items.length
+    ? assignment.items
+    : [assignment];
+
+  return items.some((item) => {
+    const itemCode = normalizeText(item?.code);
+    const itemPhase = normalizeText(item?.phase);
+
+    if (itemCode !== selectedCode) {
+      return false;
+    }
+
+    return hasPhaseOverlap({
+      leftPhase: itemPhase,
+      rightPhase: selectedPhase,
+    });
+  });
+}
+
+function hasPhaseOverlap({
+  leftPhase,
+  rightPhase,
+}) {
+  const leftPhases = getComparableShortcutPhases(leftPhase);
+  const rightPhases = getComparableShortcutPhases(rightPhase);
+
+  return leftPhases.some((phase) => {
+    return rightPhases.includes(phase);
+  });
+}
+
+function getComparableShortcutPhases(phase) {
+  if (phase === SHORTCUT_PHASE_BOTH) {
+    return [
+      SHORTCUT_PHASE_DOWN,
+      SHORTCUT_PHASE_UP,
+    ];
+  }
+
+  if (phase === SHORTCUT_PHASE_UP) {
+    return [SHORTCUT_PHASE_UP];
+  }
+
+  return [SHORTCUT_PHASE_DOWN];
 }
 
 function getSelectedClearEmojiIdSet() {

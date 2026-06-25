@@ -1,6 +1,7 @@
 const BADGE_CLASS = 'emzk-lite-badge';
 const BADGE_SHORTCUT_CLASS = 'emzk-lite-badge-shortcut';
 const BADGE_UNLINK_CLASS = 'emzk-lite-badge-unlink';
+const BADGE_CONFLICT_CLASS = 'emzk-lite-badge-conflict';
 
 const BADGE_TARGET_ATTR = 'data-emzk-lite-badge-target';
 const BADGE_LABEL_ATTR = 'data-emzk-lite-badge-label';
@@ -99,12 +100,13 @@ function renderAssignmentBadges({
   removeStaleBadges(targetButtonSet);
 
   badgeTargets.forEach((target) => {
-    ensureBadge({
-      button: target.button,
-      label: target.label,
-      title: target.title,
-      badgeType: target.badgeType,
-    });
+ensureBadge({
+  button: target.button,
+  label: target.label,
+  title: target.title,
+  badgeType: target.badgeType,
+  badgeState: target.badgeState,
+});
   });
 }
 
@@ -136,13 +138,14 @@ function getBadgeTargetsFromAssignments({
 
     usedEmojiIds.add(emojiId);
 
-    result.push({
-      button,
-      emojiId,
-      label: assignment.label,
-      title: assignment.title,
-      badgeType: assignment.badgeType,
-    });
+		result.push({
+			button,
+			emojiId,
+			label: assignment.label,
+			title: assignment.title,
+			badgeType: assignment.badgeType,
+			badgeState: assignment.badgeState,
+		});
   });
 
   return result;
@@ -233,6 +236,7 @@ function ensureBadge({
   label = '',
   title = '',
   badgeType = BADGE_TYPE_SHORTCUT,
+  badgeState = '',
 }) {
   if (!(button instanceof HTMLElement)) return;
 
@@ -272,10 +276,15 @@ function ensureBadge({
     normalizedBadgeType === BADGE_TYPE_SHORTCUT
   );
 
-  badge.classList.toggle(
-    BADGE_UNLINK_CLASS,
-    normalizedBadgeType === BADGE_TYPE_UNLINK
-  );
+	badge.classList.toggle(
+		BADGE_UNLINK_CLASS,
+		normalizedBadgeType === BADGE_TYPE_UNLINK
+	);
+
+	badge.classList.toggle(
+		BADGE_CONFLICT_CLASS,
+		normalizeBadgeState(badgeState) === 'conflict'
+	);
 
   if (normalizedTitle) {
     badge.setAttribute('title', normalizedTitle);
@@ -612,6 +621,16 @@ function normalizeBadgeType(value) {
   }
 
   return BADGE_TYPE_SHORTCUT;
+}
+
+function normalizeBadgeState(value) {
+  const normalizedValue = String(value ?? '').trim();
+
+  if (normalizedValue === 'conflict') {
+    return 'conflict';
+  }
+
+  return '';
 }
 
 function createBadgeRenderKey({

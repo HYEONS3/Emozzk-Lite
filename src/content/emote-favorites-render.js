@@ -936,9 +936,48 @@ function createClearTitleContent(bindState) {
   bar.className = BIND_BAR_CLASS;
   bar.classList.add(BIND_CLEAR_BAR_CLASS);
 
-  bar.appendChild(createClearActionButtons(bindState));
+  const left = document.createElement('span');
+  left.className = BIND_LEFT_CLASS;
+
+  left.appendChild(createClearHint(bindState));
+
+  bar.append(
+    left,
+    createClearActionButtons(bindState)
+  );
 
   return bar;
+}
+
+function createClearHint(bindState) {
+  const hint = document.createElement('span');
+
+  hint.className = BIND_HINT_CLASS;
+  hint.textContent = getClearHintText(bindState);
+  hint.setAttribute('title', getClearHintDescription(bindState));
+  hint.setAttribute('aria-label', getClearHintDescription(bindState));
+
+  return hint;
+}
+
+function getClearHintText(bindState) {
+  const selectedCount = getSelectedClearEmojiIds(bindState).length;
+
+  if (selectedCount <= 0) {
+    return '해제 선택';
+  }
+
+  return `${selectedCount}개 선택`;
+}
+
+function getClearHintDescription(bindState) {
+  const selectedCount = getSelectedClearEmojiIds(bindState).length;
+
+  if (selectedCount <= 0) {
+    return '단축키를 해제할 이모티콘을 선택하세요.';
+  }
+
+  return `${selectedCount}개의 이모티콘이 해제 대상으로 선택되었습니다.`;
 }
 
 function createSelectedEmotePreview(bindState) {
@@ -1218,10 +1257,14 @@ function createClearSaveButton(bindState) {
   button.type = 'button';
   button.className = BIND_BUTTON_CLASS;
   button.classList.add(BIND_SAVE_BUTTON_CLASS);
-  button.setAttribute('aria-label', '해제 저장');
-  button.setAttribute('title', '해제 저장');
-
+  const selectedCount = getSelectedClearEmojiIds(bindState).length;
   const canSave = canSaveClearState(bindState);
+  const saveLabel = canSave
+    ? `${selectedCount}개 해제 저장`
+    : '해제할 이모티콘을 선택하세요';
+
+  button.setAttribute('aria-label', saveLabel);
+  button.setAttribute('title', saveLabel);
 
   if (!canSave) {
     button.disabled = true;
