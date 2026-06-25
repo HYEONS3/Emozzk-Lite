@@ -1,3 +1,11 @@
+import {
+  getFavoritesChangedEventName,
+} from './emote-favorites-event-name.js';
+
+import {
+  getFavoriteRecentEmoteIds,
+} from './favorite-recent-emote-storage.js';
+
 const EXTENSION_SETTINGS_STORAGE_KEY = 'emzk_lite_extension_settings_v1';
 
 const RECENT_STORAGE_LIMIT_MESSAGE =
@@ -21,6 +29,11 @@ export function startRecentEmoteStorageLimitBridge() {
   injectPageScript();
 
   void syncRecentStorageLimitFromSettings();
+
+  document.addEventListener(
+    getFavoritesChangedEventName(),
+    handleFavoritesChanged
+  );
 
   chrome.runtime.onMessage.addListener(handleRuntimeMessage);
   chrome.storage.onChanged.addListener(handleStorageChanged);
@@ -114,6 +127,7 @@ function postRecentStorageLimitToPage(limit) {
   window.postMessage({
     type: RECENT_STORAGE_LIMIT_MESSAGE,
     limit: normalizeRecentStorageLimit(limit),
+    favoriteIds: getFavoriteRecentEmoteIds(),
   }, '*');
 }
 
@@ -128,4 +142,12 @@ function normalizeRecentStorageLimit(value) {
     MAX_RECENT_STORAGE_LIMIT,
     Math.max(MIN_RECENT_STORAGE_LIMIT, Math.round(number))
   );
+}
+
+export function syncRecentStorageLimitBridgeState() {
+  postRecentStorageLimitToPage(cachedRecentStorageLimit);
+}
+
+function handleFavoritesChanged() {
+  postRecentStorageLimitToPage(cachedRecentStorageLimit);
 }

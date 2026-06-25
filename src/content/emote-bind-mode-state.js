@@ -23,7 +23,7 @@ const DEFAULT_BIND_MODE_STATE = {
   selectedEmojiLabel: '',
   selectedEmojiImageUrl: '',
 
-  selectedCode: 'F1',
+  selectedCode: '',
   selectedPhase: SHORTCUT_PHASE_DOWN,
 
   /*
@@ -387,7 +387,7 @@ export function getEmoteBindPhaseDescription(phase) {
 }
 
 export function getEmoteBindCodeLabel(code) {
-  const normalizedCode = normalizeText(code);
+  const normalizedCode = String(code ?? '').trim();
 
   if (!normalizedCode) {
     return 'KEY';

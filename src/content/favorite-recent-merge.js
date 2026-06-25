@@ -12,20 +12,17 @@ export function mergeFavoriteAndRecentEmotes({
 }) {
   const maxCount = normalizeMaxCount(maxRecentEmoteCount);
 
-  const normalizedFavorites = normalizeRecentEmotes(favorites)
-    .slice(0, maxCount);
-
+  /*
+   * 즐겨찾기는 최근 이모티콘 limit에 포함하지 않는다.
+   * maxRecentEmoteCount는 "즐겨찾기를 제외한 일반 최근 이모티콘 수"로만 적용한다.
+   */
+  const normalizedFavorites = normalizeRecentEmotes(favorites);
   const normalizedRecent = normalizeRecentEmotes(recent);
 
   const favoriteIds = new Set(
     normalizedFavorites
       .map(getRecentEmoteId)
       .filter(Boolean)
-  );
-
-  const remainingCount = Math.max(
-    0,
-    maxCount - normalizedFavorites.length
   );
 
   const normalRecent = normalizedRecent
@@ -36,7 +33,7 @@ export function mergeFavoriteAndRecentEmotes({
 
       return !favoriteIds.has(id);
     })
-    .slice(0, remainingCount);
+    .slice(0, maxCount);
 
   return [
     ...normalizedFavorites,

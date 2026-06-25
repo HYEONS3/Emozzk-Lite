@@ -25,6 +25,7 @@ import {
 
 import {
   startRecentEmoteStorageLimitBridge,
+  syncRecentStorageLimitBridgeState,
 } from './recent-emote-storage-limit-bridge.js';
 
 import {
@@ -69,6 +70,8 @@ function startContentScript() {
 
   initializeStorages()
     .finally(() => {
+      syncRecentStorageLimitBridgeState();
+
       setShortcutBindings(getCachedShortcutBindings());
       attachShortcutController();
 

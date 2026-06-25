@@ -83,6 +83,7 @@ const BIND_BAR_CLASS = 'emzk-lite-bind-bar';
 const BIND_CLEAR_BAR_CLASS = 'emzk-lite-bind-clear-bar';
 const BIND_LEFT_CLASS = 'emzk-lite-bind-left';
 const BIND_VALUE_CLASS = 'emzk-lite-bind-value';
+const BIND_HINT_CLASS = 'emzk-lite-bind-hint';
 
 const BIND_EMOTE_PREVIEW_CLASS = 'emzk-lite-bind-emote-preview';
 const BIND_EMOTE_IMAGE_CLASS = 'emzk-lite-bind-emote-image';
@@ -221,9 +222,52 @@ export function renderFavoriteEmoteSection() {
 
   const recentList = findRecentListFromSection(recentSection);
 
-  if (!recentList) {
+  let favoriteSection = findFavoriteSection(groupParent);
+
+  if (!favoriteSection) {
+    favoriteSection = createFavoriteSectionShell({
+      recentGroup,
+    });
+  } else {
+    copyClassList({
+      target: favoriteSection,
+      source: recentGroup,
+      hookClass: FAVORITES_SECTION_CLASS,
+    });
+  }
+
+  renderFavoriteTitle({
+    section: favoriteSection,
+    sourceHeading: recentSection.heading,
+  });
+
+  let favoriteList = null;
+
+  if (recentList) {
+    favoriteList = ensureFavoriteList({
+      section: favoriteSection,
+      sourceList: recentList,
+    });
+  }
+
+  /*
+   * recentList가 아직 없더라도 즐겨찾기 shell/header/empty 안내는 먼저 삽입한다.
+   * item 이동은 recentList가 준비된 뒤에만 수행한다.
+   */
+  if (!recentList || !favoriteList) {
+    syncFavoriteEmptyState({
+      section: favoriteSection,
+      hasFavorites: false,
+    });
+
+    insertFavoriteSectionBeforeRecent({
+      groupParent,
+      section: favoriteSection,
+      recentGroup,
+    });
+
+    favoriteSection.hidden = false;
     markFavoriteAreaReady(area);
-    removeFavoriteSection();
     return;
   }
 
@@ -245,21 +289,6 @@ export function renderFavoriteEmoteSection() {
   isRendering = true;
 
   try {
-    const favoriteSection = ensureFavoriteSection({
-      groupParent,
-      recentGroup,
-    });
-
-    renderFavoriteTitle({
-      section: favoriteSection,
-      sourceHeading: recentSection.heading,
-    });
-
-    const favoriteList = ensureFavoriteList({
-      section: favoriteSection,
-      sourceList: recentList,
-    });
-
     removeLegacyEmptyElements(favoriteSection);
 
     const partition = partitionRecentItems({
@@ -277,16 +306,21 @@ export function renderFavoriteEmoteSection() {
     });
 
     syncFavoriteEmptyState({
-    section: favoriteSection,
-    hasFavorites: partition.favoriteItems.length > 0,
+      section: favoriteSection,
+      hasFavorites: partition.favoriteItems.length > 0,
+    });
+
+    insertFavoriteSectionBeforeRecent({
+      groupParent,
+      section: favoriteSection,
+      recentGroup,
     });
 
     if (partition.favoriteItems.length) {
-    attachFavoriteEmoteDrag(favoriteSection);
+      attachFavoriteEmoteDrag(favoriteSection);
     }
 
     favoriteSection.hidden = false;
-
   } finally {
     markFavoriteAreaReady(area);
     isRendering = false;
@@ -370,15 +404,20 @@ function findRecentListFromSection(recentSection) {
   return heading.parentElement?.querySelector(':scope > ul') ?? null;
 }
 
-function ensureFavoriteSection({
-  groupParent,
+function findFavoriteSection(groupParent) {
+  if (!(groupParent instanceof Element)) return null;
+
+  const section = groupParent.querySelector(
+    `:scope > .${FAVORITES_SECTION_CLASS}`
+  );
+
+  return section instanceof HTMLElement ? section : null;
+}
+
+function createFavoriteSectionShell({
   recentGroup,
 }) {
-  let section = groupParent.querySelector(`:scope > .${FAVORITES_SECTION_CLASS}`);
-
-  if (!section) {
-    section = document.createElement('div');
-  }
+  const section = document.createElement('div');
 
   copyClassList({
     target: section,
@@ -386,13 +425,28 @@ function ensureFavoriteSection({
     hookClass: FAVORITES_SECTION_CLASS,
   });
 
-  if (section.parentElement !== groupParent) {
-    groupParent.insertBefore(section, recentGroup);
-  } else if (section.nextElementSibling !== recentGroup) {
-    groupParent.insertBefore(section, recentGroup);
-  }
+  section.hidden = true;
 
   return section;
+}
+
+function insertFavoriteSectionBeforeRecent({
+  groupParent,
+  section,
+  recentGroup,
+}) {
+  if (!(groupParent instanceof Element)) return;
+  if (!(section instanceof Element)) return;
+  if (!(recentGroup instanceof Element)) return;
+
+  if (section.parentElement !== groupParent) {
+    groupParent.insertBefore(section, recentGroup);
+    return;
+  }
+
+  if (section.nextElementSibling !== recentGroup) {
+    groupParent.insertBefore(section, recentGroup);
+  }
 }
 
 function renderFavoriteTitle({
@@ -808,12 +862,72 @@ function createAssignTitleContent(bindState) {
     left.appendChild(createPhaseToggleButton(bindState));
   }
 
+  left.appendChild(createAssignHint(bindState));
+
   bar.append(
     left,
     createAssignActionButtons(bindState)
   );
 
   return bar;
+}
+
+function createAssignHint(bindState) {
+  const hint = document.createElement('span');
+
+  hint.className = BIND_HINT_CLASS;
+  hint.textContent = getAssignHintText(bindState);
+  hint.setAttribute('title', getAssignHintDescription(bindState));
+
+  return hint;
+}
+
+function getAssignHintDescription(bindState) {
+  const hasSelectedEmote = Boolean(
+    normalizeText(bindState?.selectedEmojiId)
+  );
+
+  const hasSelectedCode = Boolean(
+    normalizeText(bindState?.selectedCode)
+  );
+
+  if (!hasSelectedEmote) {
+    return '단축키를 지정할 이모티콘을 선택하세요.';
+  }
+
+  if (bindState?.keyListening) {
+    return '등록할 키를 입력하세요.';
+  }
+
+  if (!hasSelectedCode) {
+    return 'KEY 버튼을 누른 뒤 등록할 키를 입력하세요.';
+  }
+
+  return '저장 버튼을 누르면 단축키가 적용됩니다.';
+}
+
+function getAssignHintText(bindState) {
+  const hasSelectedEmote = Boolean(
+    normalizeText(bindState?.selectedEmojiId)
+  );
+
+  const hasSelectedCode = Boolean(
+    normalizeText(bindState?.selectedCode)
+  );
+
+  if (!hasSelectedEmote) {
+    return '선택';
+  }
+
+  if (bindState?.keyListening) {
+    return '키 입력';
+  }
+
+  if (!hasSelectedCode) {
+    return 'KEY 클릭';
+  }
+
+  return '저장 가능';
 }
 
 function createClearTitleContent(bindState) {
@@ -866,15 +980,29 @@ function createSelectedEmotePreview(bindState) {
 function createKeycapButton(bindState) {
   const button = document.createElement('button');
 
+  const hasSelectedEmote = Boolean(
+    normalizeText(bindState?.selectedEmojiId)
+  );
+
   button.type = 'button';
   button.className = BIND_KEYCAP_BUTTON_CLASS;
-  button.setAttribute('aria-label', '키 입력 대기');
+  button.setAttribute(
+    'aria-label',
+    hasSelectedEmote ? '키 입력 대기' : '이모티콘을 먼저 선택하세요'
+  );
   button.setAttribute(
     'title',
-    bindState.keyListening
-      ? '키 입력 대기 중'
-      : '키 지정'
+    !hasSelectedEmote
+      ? '이모티콘을 먼저 선택하세요'
+      : bindState.keyListening
+        ? '키 입력 대기 중'
+        : '키 지정'
   );
+
+  if (!hasSelectedEmote) {
+    button.disabled = true;
+    button.classList.add(BIND_BUTTON_DISABLED_CLASS);
+  }
 
   if (bindState.keyListening) {
     button.classList.add(BIND_KEYCAP_BUTTON_LISTENING_CLASS);
@@ -893,6 +1021,9 @@ function createKeycapButton(bindState) {
 
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
+
+    if (!hasSelectedEmote) return;
+
     startEmoteBindKeyListening();
   });
 
@@ -905,6 +1036,9 @@ function createKeycapButton(bindState) {
     }
 
     stopControlEvent(event);
+
+    if (!hasSelectedEmote) return;
+
     startEmoteBindKeyListening();
   });
 
@@ -1463,7 +1597,7 @@ function copyClassList({
 
 function removeLegacyEmptyElements(section) {
   section
-    .querySelectorAll(':scope > .emzk-lite-favorites-empty')
+    .querySelectorAll(`:scope > .${FAVORITES_EMPTY_CLASS}`)
     .forEach((element) => {
       element.remove();
     });

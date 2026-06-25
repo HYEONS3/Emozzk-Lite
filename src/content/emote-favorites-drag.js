@@ -18,6 +18,10 @@ import {
 } from './favorite-recent-merge.js';
 
 import {
+  getCachedRecentStorageLimit,
+} from './recent-emote-storage-limit-bridge.js';
+
+import {
   dispatchFavoritesChanged,
 } from './emote-favorites-event-name.js';
 
@@ -1032,6 +1036,7 @@ function syncRecentLocalStorageWithFavorites({
   const merged = mergeFavoriteAndRecentEmotes({
     favorites,
     recent,
+    maxRecentEmoteCount: getCachedRecentStorageLimit(),
   });
 
   writeRecentEmotes(merged);

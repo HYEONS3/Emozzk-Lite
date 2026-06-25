@@ -590,6 +590,21 @@ button[data-emzk-lite-badge-target="true"] {
   display: none;
 }
 
+.emzk-lite-bind-hint {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 120px;
+  margin-left: 4px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.68;
+  pointer-events: none;
+}
+
 /* ========================================================================== */
 /* Keylike controls                                                           */
 /* ========================================================================== */

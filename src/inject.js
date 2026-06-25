@@ -8,6 +8,7 @@ const MIN_RECENT_STORAGE_LIMIT = 50;
 const MAX_RECENT_STORAGE_LIMIT = 200;
 
 let recentStorageLimit = DEFAULT_RECENT_STORAGE_LIMIT;
+let favoriteRecentEmoteIds = new Set();
 let patched = false;
 
 installRecentEmoteStorageLimitPatch();
@@ -35,6 +36,9 @@ function installRecentEmoteStorageLimitPatch() {
     }
 
     recentStorageLimit = normalizeRecentStorageLimit(event.data.limit);
+    favoriteRecentEmoteIds = normalizeFavoriteRecentEmoteIds(
+      event.data.favoriteIds
+    );
   });
 
   window.localStorage.setItem = function patchedSetItem(key, value) {
@@ -53,7 +57,11 @@ function installRecentEmoteStorageLimitPatch() {
         ...currentStored,
       ]);
 
-      const limited = merged.slice(0, recentStorageLimit);
+      const limited = limitRecentEmotesWithFavorites({
+        emotes: merged,
+        maxNormalRecentCount: recentStorageLimit,
+        favoriteIds: favoriteRecentEmoteIds,
+      });
 
       return originalSetItem.call(
         this,
@@ -109,6 +117,56 @@ function mergeRecentEmotes(emotes) {
   });
 
   return result;
+}
+
+function limitRecentEmotesWithFavorites({
+  emotes,
+  maxNormalRecentCount,
+  favoriteIds,
+}) {
+  const normalRecentLimit = normalizeRecentStorageLimit(maxNormalRecentCount);
+  const favoriteIdSet = favoriteIds instanceof Set
+    ? favoriteIds
+    : new Set();
+
+  const seen = new Set();
+  const favorites = [];
+  const normalRecent = [];
+
+  emotes.forEach((emote) => {
+    const id = getRecentEmoteId(emote);
+
+    if (!id) return;
+    if (seen.has(id)) return;
+
+    seen.add(id);
+
+    if (favoriteIdSet.has(id)) {
+      favorites.push(emote);
+      return;
+    }
+
+    if (normalRecent.length < normalRecentLimit) {
+      normalRecent.push(emote);
+    }
+  });
+
+  return [
+    ...favorites,
+    ...normalRecent,
+  ];
+}
+
+function normalizeFavoriteRecentEmoteIds(ids) {
+  if (!Array.isArray(ids)) {
+    return new Set();
+  }
+
+  return new Set(
+    ids
+      .map(normalizeText)
+      .filter(Boolean)
+  );
 }
 
 function isValidRecentEmoteObject(emote) {
