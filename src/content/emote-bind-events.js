@@ -6,6 +6,10 @@ import {
 } from './emote-buttons.js';
 
 import {
+  isTypingTarget,
+} from './shortcut-guard.js';
+
+import {
   findEmotePanel,
 } from './emote-panel.js';
 
@@ -91,6 +95,18 @@ export function detachEmoteBindEvents() {
 }
 
 function handleBindModePointerDown(event) {
+  if (
+    isEmoteBindModeActive() &&
+    isTypingTarget(event.target)
+  ) {
+    exitCurrentBindMode();
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+
+    return;
+  }
+
   if (!isEmoteBindClearMode()) {
     return;
   }
@@ -124,12 +140,11 @@ function handleBindModeClick(event) {
     return;
   }
 
-  if (isEmoteBindKeyListening()) {
-    blockEvent(event);
-    return;
-  }
-
   blockEvent(event);
+
+  if (isEmoteBindKeyListening()) {
+    stopEmoteBindKeyListening();
+  }
 
   handleBindModeEmoteButtonClick(button);
 }
