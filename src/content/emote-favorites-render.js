@@ -129,6 +129,130 @@ let rafId = 0;
 let observer = null;
 let isRendering = false;
 
+
+
+
+const FAVORITES_DEBUG = true;
+const FAVORITES_DEBUG_STACK = true;
+
+let favoritesDebugSeq = 0;
+let pendingFavoriteRenderReason = 'initial';
+
+function debugFavoriteLog(label, payload = {}) {
+  if (!FAVORITES_DEBUG) return;
+
+  const entry = {
+    time: new Date().toISOString(),
+    label,
+    ...payload,
+  };
+
+  window.__EMZK_FAV_LOGS__ ||= [];
+  window.__EMZK_FAV_LOGS__.push(entry);
+
+  if (window.__EMZK_FAV_LOGS__.length > 300) {
+    window.__EMZK_FAV_LOGS__.shift();
+  }
+
+  console.log('[Emozzk Lite][favorites]', label, entry);
+}
+
+function debugFavoriteWarn(label, payload = {}) {
+  if (!FAVORITES_DEBUG) return;
+
+  const entry = {
+    time: new Date().toISOString(),
+    label,
+    ...payload,
+  };
+
+  window.__EMZK_FAV_LOGS__ ||= [];
+  window.__EMZK_FAV_LOGS__.push(entry);
+
+  console.warn('[Emozzk Lite][favorites]', label, entry);
+
+  if (FAVORITES_DEBUG_STACK) {
+    console.trace(`[Emozzk Lite][favorites] ${label}`);
+  }
+}
+
+function getDebugFavoriteSnapshot(panel = findEmotePanel()) {
+  const area = panel ? getEmojiArea(panel) : null;
+  const recentSection = panel ? findRecentEmoteSection(panel) : null;
+  const recentGroup = recentSection?.heading?.parentElement ?? null;
+  const groupParent = recentGroup?.parentElement ?? null;
+  const recentList = recentSection
+    ? findRecentListFromSection(recentSection)
+    : null;
+
+  const favoriteSections = Array.from(
+    document.querySelectorAll(`.${FAVORITES_SECTION_CLASS}`)
+  );
+
+  const favoriteSection = groupParent
+    ? findFavoriteSection(groupParent)
+    : favoriteSections[0] ?? null;
+
+  const favoriteList = favoriteSection?.querySelector?.(
+    `:scope > .${FAVORITES_LIST_CLASS}`
+  ) ?? null;
+
+  const storedFavoriteIds = getCachedFavoriteRecentEmotes()
+    .map(getRecentEmoteId)
+    .filter(Boolean);
+
+  return {
+    hasPanel: Boolean(panel),
+    hasArea: Boolean(area),
+    hasRecentSection: Boolean(recentSection),
+    hasRecentHeading: Boolean(recentSection?.heading),
+    hasRecentGroup: Boolean(recentGroup),
+    hasGroupParent: Boolean(groupParent),
+    hasRecentList: Boolean(recentList),
+    favoriteSectionCount: favoriteSections.length,
+    hasFavoriteSection: Boolean(favoriteSection),
+    hasFavoriteList: Boolean(favoriteList),
+    storedFavoriteCount: storedFavoriteIds.length,
+    storedFavoriteIds,
+    recentListLiCount: getDebugListItemCount(recentList),
+    favoriteListLiCount: getDebugListItemCount(favoriteList),
+    recentListIds: getDebugListItemIds(recentList),
+    favoriteListIds: getDebugListItemIds(favoriteList),
+  };
+}
+
+function getDebugListItemCount(list) {
+  if (!(list instanceof Element)) return 0;
+
+  return list.querySelectorAll(':scope > li').length;
+}
+
+function getDebugListItemIds(list) {
+  if (!(list instanceof Element)) return [];
+
+  return Array.from(list.querySelectorAll(':scope > li'))
+    .map(getEmoteItemId)
+    .filter(Boolean);
+}
+
+function getDebugTargetInfo(target) {
+  if (!(target instanceof Element)) {
+    return {
+      type: String(target),
+    };
+  }
+
+  return {
+    tag: target.tagName.toLowerCase(),
+    id: target.id || '',
+    className: String(target.className || ''),
+    inPanel: Boolean(findEmotePanel()?.contains(target)),
+    inFavorites: Boolean(target.closest(`.${FAVORITES_SECTION_CLASS}`)),
+    inRecentArea: Boolean(target.closest('#emoji_area')),
+  };
+}
+
+
 export function startFavoriteEmoteSectionRenderer() {
   if (started) return;
 
@@ -189,7 +313,22 @@ export function stopFavoriteEmoteSectionRenderer() {
   removeShortcutSetDragPreview();
 }
 
-export function scheduleFavoriteEmoteSectionRender() {
+export function scheduleFavoriteEmoteSectionRender(reason = 'unknown') {
+  const normalizedReason =
+    typeof reason === 'string'
+      ? reason
+      : reason?.type
+        ? `event:${reason.type}`
+        : 'unknown';
+
+  debugFavoriteLog('schedule', {
+    reason: normalizedReason,
+    hasPendingRaf: Boolean(rafId),
+    snapshot: getDebugFavoriteSnapshot(),
+  });
+
+  pendingFavoriteRenderReason = normalizedReason;
+
   if (rafId) return;
 
   rafId = requestAnimationFrame(() => {
@@ -199,41 +338,82 @@ export function scheduleFavoriteEmoteSectionRender() {
 }
 
 export function renderFavoriteEmoteSection() {
+  const seq = ++favoritesDebugSeq;
+  const reason = pendingFavoriteRenderReason || 'direct';
+
+  pendingFavoriteRenderReason = '';
+
+  debugFavoriteLog('render:start', {
+    seq,
+    reason,
+    snapshot: getDebugFavoriteSnapshot(),
+  });
+
   const panel = findEmotePanel();
 
   if (!panel) {
-    removeFavoriteSection();
+    debugFavoriteWarn('render:abort:no-panel', {
+      seq,
+      reason,
+      snapshot: getDebugFavoriteSnapshot(panel),
+    });
+
+    removeFavoriteSection('render:no-panel', seq);
     return;
   }
 
   const area = getEmojiArea(panel);
 
   if (!area) {
-    removeFavoriteSection();
+    debugFavoriteWarn('render:abort:no-area', {
+      seq,
+      reason,
+      snapshot: getDebugFavoriteSnapshot(panel),
+    });
+
+    removeFavoriteSection('render:no-area', seq);
     return;
   }
 
   const recentSection = findRecentEmoteSection(panel);
 
   if (!recentSection) {
+    debugFavoriteWarn('render:abort:no-recent-section', {
+      seq,
+      reason,
+      snapshot: getDebugFavoriteSnapshot(panel),
+    });
+
     markFavoriteAreaReady(area);
-    removeFavoriteSection();
+    removeFavoriteSection('render:no-recent-section', seq);
     return;
   }
 
   const recentGroup = recentSection.heading?.parentElement;
 
   if (!recentGroup) {
+    debugFavoriteWarn('render:abort:no-recent-group', {
+      seq,
+      reason,
+      snapshot: getDebugFavoriteSnapshot(panel),
+    });
+
     markFavoriteAreaReady(area);
-    removeFavoriteSection();
+    removeFavoriteSection('render:no-recent-group', seq);
     return;
   }
 
   const groupParent = recentGroup.parentElement;
 
   if (!groupParent) {
+    debugFavoriteWarn('render:abort:no-group-parent', {
+      seq,
+      reason,
+      snapshot: getDebugFavoriteSnapshot(panel),
+    });
+
     markFavoriteAreaReady(area);
-    removeFavoriteSection();
+    removeFavoriteSection('render:no-group-parent', seq);
     return;
   }
 
@@ -314,6 +494,21 @@ export function renderFavoriteEmoteSection() {
       favoriteIds,
       favoriteIdSet,
     });
+		
+		debugFavoriteLog('render:partition', {
+			seq,
+			reason,
+			favoriteIds,
+			favoriteItemCount: partition.favoriteItems.length,
+			normalItemCount: partition.normalItems.length,
+			favoriteItemIds: partition.favoriteItems
+				.map(getEmoteItemId)
+				.filter(Boolean),
+			normalItemIds: partition.normalItems
+				.map(getEmoteItemId)
+				.filter(Boolean),
+			beforeApplySnapshot: getDebugFavoriteSnapshot(panel),
+		});
 
     applyPartition({
       favoriteList,
@@ -321,6 +516,12 @@ export function renderFavoriteEmoteSection() {
       favoriteItems: partition.favoriteItems,
       normalItems: partition.normalItems,
     });
+
+		debugFavoriteLog('render:after-apply-partition', {
+			seq,
+			reason,
+			snapshot: getDebugFavoriteSnapshot(panel),
+		});
 
     syncFavoriteEmptyState({
       section: favoriteSection,
@@ -341,21 +542,61 @@ export function renderFavoriteEmoteSection() {
   } finally {
     markFavoriteAreaReady(area);
     isRendering = false;
+		debugFavoriteLog('render:end', {
+			seq,
+			reason,
+			snapshot: getDebugFavoriteSnapshot(panel),
+		});
   }
 }
 
 function handlePossibleFavoriteRender(event) {
   const target = event.target;
 
+  debugFavoriteLog('document-event', {
+    eventType: event.type,
+    target: getDebugTargetInfo(target),
+    snapshot: getDebugFavoriteSnapshot(),
+  });
+
   if (target instanceof Element) {
-    if (target.closest(`.${BADGE_CLASS}`)) return;
-    if (target.closest(`.${BIND_BUTTON_CLASS}`)) return;
-    if (target.closest(`.${BIND_KEYCAP_BUTTON_CLASS}`)) return;
-    if (target.closest(`.${BIND_PHASE_BUTTON_CLASS}`)) return;
-    if (target.closest(`.${SHORTCUT_SET_BUTTON_CLASS}`)) return;
+    if (target.closest(`.${BADGE_CLASS}`)) {
+      debugFavoriteLog('document-event:skip', {
+        reason: 'badge',
+      });
+      return;
+    }
+
+    if (target.closest(`.${BIND_BUTTON_CLASS}`)) {
+      debugFavoriteLog('document-event:skip', {
+        reason: 'bind-button',
+      });
+      return;
+    }
+
+    if (target.closest(`.${BIND_KEYCAP_BUTTON_CLASS}`)) {
+      debugFavoriteLog('document-event:skip', {
+        reason: 'bind-keycap-button',
+      });
+      return;
+    }
+
+    if (target.closest(`.${BIND_PHASE_BUTTON_CLASS}`)) {
+      debugFavoriteLog('document-event:skip', {
+        reason: 'bind-phase-button',
+      });
+      return;
+    }
+
+    if (target.closest(`.${SHORTCUT_SET_BUTTON_CLASS}`)) {
+      debugFavoriteLog('document-event:skip', {
+        reason: 'shortcut-set-button',
+      });
+      return;
+    }
   }
 
-  scheduleFavoriteEmoteSectionRender();
+  scheduleFavoriteEmoteSectionRender(`document:${event.type}`);
 }
 
 function handleShortcutBindingsChanged() {
@@ -1984,16 +2225,32 @@ async function saveClearState(bindState) {
 }
 
 function cancelAssignState() {
+  debugFavoriteLog('cancelAssignState:before', {
+    snapshot: getDebugFavoriteSnapshot(),
+  });
+
   exitEmoteBindMode();
 
-  scheduleFavoriteEmoteSectionRender();
+  debugFavoriteLog('cancelAssignState:after-exit', {
+    snapshot: getDebugFavoriteSnapshot(),
+  });
+
+  scheduleFavoriteEmoteSectionRender('cancel-assign');
   scheduleBadgeUpdate();
 }
 
 function cancelClearState() {
+  debugFavoriteLog('cancelClearState:before', {
+    snapshot: getDebugFavoriteSnapshot(),
+  });
+
   exitEmoteBindMode();
 
-  scheduleFavoriteEmoteSectionRender();
+  debugFavoriteLog('cancelClearState:after-exit', {
+    snapshot: getDebugFavoriteSnapshot(),
+  });
+
+  scheduleFavoriteEmoteSectionRender('cancel-clear');
   scheduleBadgeUpdate();
 }
 
@@ -2377,12 +2634,39 @@ function pruneChildren(parent, nextChildren) {
   });
 }
 
-function removeFavoriteSection() {
-  document
-    .querySelectorAll(`.${FAVORITES_SECTION_CLASS}`)
-    .forEach((section) => {
-      section.remove();
+function removeFavoriteSection(reason = 'unknown', seq = 0) {
+  const sections = Array.from(
+    document.querySelectorAll(`.${FAVORITES_SECTION_CLASS}`)
+  );
+
+  debugFavoriteWarn('removeFavoriteSection', {
+    seq,
+    reason,
+    sectionCount: sections.length,
+    beforeSnapshot: getDebugFavoriteSnapshot(),
+  });
+
+  sections.forEach((section, index) => {
+    const favoriteList = section.querySelector?.(
+      `:scope > .${FAVORITES_LIST_CLASS}`
+    );
+
+    debugFavoriteWarn('removeFavoriteSection:section', {
+      seq,
+      reason,
+      index,
+      liCount: getDebugListItemCount(favoriteList),
+      ids: getDebugListItemIds(favoriteList),
     });
+
+    section.remove();
+  });
+
+  debugFavoriteWarn('removeFavoriteSection:after', {
+    seq,
+    reason,
+    afterSnapshot: getDebugFavoriteSnapshot(),
+  });
 }
 
 function startFavoriteSectionMutationObserver() {
@@ -2397,7 +2681,22 @@ function startFavoriteSectionMutationObserver() {
 
     if (!hasRelevantMutation) return;
 
-    renderFavoriteEmoteSection();
+		debugFavoriteLog('mutation:render', {
+			mutationCount: mutations.length,
+			mutations: mutations.map((mutation) => {
+				return {
+					type: mutation.type,
+					target: getDebugTargetInfo(mutation.target),
+					added: mutation.addedNodes?.length ?? 0,
+					removed: mutation.removedNodes?.length ?? 0,
+					attributeName: mutation.attributeName ?? '',
+				};
+			}),
+			snapshot: getDebugFavoriteSnapshot(),
+		});
+
+		pendingFavoriteRenderReason = 'mutation';
+		renderFavoriteEmoteSection();
   });
 
   observer.observe(document.body, {

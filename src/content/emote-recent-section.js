@@ -2,6 +2,8 @@ import {
   isRealEmoteButton,
 } from './emote-buttons.js';
 
+const FAVORITES_SECTION_SELECTOR = '.emzk-lite-favorites-section';
+
 export function findRecentEmoteSection(panel) {
   const area = getEmojiArea(panel);
 
@@ -63,13 +65,35 @@ function getEmojiArea(panel) {
 }
 
 function getSectionHeadings(area) {
+  if (!(area instanceof Element)) {
+    return [];
+  }
+
   return Array.from(
     area.querySelectorAll('strong, h2, h3, [role="heading"]')
   )
     .filter((heading) => {
-      return !heading.closest('.emzk-lite-favorites-section');
+      return !heading.closest(FAVORITES_SECTION_SELECTOR);
     })
-    .filter(isVisibleElement);
+    .filter(isRenderedElement);
+}
+
+function isRenderedElement(element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+
+  const style = window.getComputedStyle(element);
+
+  if (
+    style.display === 'none' ||
+    style.visibility === 'hidden' ||
+    style.opacity === '0'
+  ) {
+    return false;
+  }
+
+  return element.getClientRects().length > 0;
 }
 
 function isRecentEmoteHeading(heading) {
@@ -113,21 +137,4 @@ function normalizeText(value) {
   return String(value ?? '')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-function isVisibleElement(element) {
-  const rect = element.getBoundingClientRect();
-  const style = window.getComputedStyle(element);
-
-  return (
-    rect.width > 0 &&
-    rect.height > 0 &&
-    rect.bottom > 0 &&
-    rect.right > 0 &&
-    rect.top < window.innerHeight &&
-    rect.left < window.innerWidth &&
-    style.display !== 'none' &&
-    style.visibility !== 'hidden' &&
-    style.opacity !== '0'
-  );
 }
