@@ -78,6 +78,7 @@ const FAVORITES_EMPTY_CLASS = 'emzk-lite-favorites-empty';
 const FAVORITES_LABEL_CLASS = 'emzk-lite-favorites-label';
 const FAVORITES_ACTIONS_CLASS = 'emzk-lite-favorites-actions';
 
+const SHORTCUT_SET_OFF_ICON_CLASS = 'emzk-lite-shortcut-set-off-icon';
 const SHORTCUT_SET_SWITCH_CLASS = 'emzk-lite-shortcut-set-switch';
 const SHORTCUT_SET_BUTTON_CLASS = 'emzk-lite-shortcut-set-button';
 const SHORTCUT_SET_BUTTON_ACTIVE_CLASS = 'emzk-lite-shortcut-set-button-active';
@@ -669,9 +670,15 @@ function updateShortcutSetSwitch(wrapper) {
     const label = normalizeText(set?.label) ||
       getShortcutSetFallbackLabel(setId);
 
-    const active = setId === activeSetId;
 
-    button.textContent = label;
+		const active = setId === activeSetId;
+
+		syncShortcutSetButtonContent({
+			button,
+			setId,
+			label,
+		});
+		
     button.setAttribute('aria-label', getShortcutSetButtonAriaLabel({
       setId,
       label,
@@ -922,7 +929,6 @@ function createShortcutSetButton({
 
   button.type = 'button';
   button.className = SHORTCUT_SET_BUTTON_CLASS;
-  button.textContent = label;
   button.setAttribute('data-emzk-lite-shortcut-set-id', setId);
   button.setAttribute('aria-label', getShortcutSetButtonAriaLabel({
     setId,
@@ -933,6 +939,13 @@ function createShortcutSetButton({
     label,
   }));
   button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  button.setAttribute('draggable', 'false');
+
+  syncShortcutSetButtonContent({
+    button,
+    setId,
+    label,
+  });
 
   if (active) {
     button.classList.add(SHORTCUT_SET_BUTTON_ACTIVE_CLASS);
@@ -940,24 +953,22 @@ function createShortcutSetButton({
 
   button.addEventListener('mousedown', stopControlEvent);
 
+  button.addEventListener('click', (event) => {
+    stopControlEvent(event);
 
-	button.addEventListener('click', (event) => {
-		stopControlEvent(event);
+    if (isShortcutSetClickSuppressed(button)) {
+      return;
+    }
 
-		if (isShortcutSetClickSuppressed(button)) {
-			return;
-		}
+    if (isShortcutSetButtonCurrentlyActive(setId)) {
+      return;
+    }
 
-		if (isShortcutSetButtonCurrentlyActive(setId)) {
-			return;
-		}
-
-		void switchShortcutSet(setId)
-			.catch((error) => {
-				console.error('[Emozzk Lite] failed to switch shortcut set:', error);
-			});
-	});
-
+    void switchShortcutSet(setId)
+      .catch((error) => {
+        console.error('[Emozzk Lite] failed to switch shortcut set:', error);
+      });
+  });
 
   button.addEventListener('keydown', (event) => {
     if (
@@ -980,6 +991,53 @@ function createShortcutSetButton({
   });
 
   return button;
+}
+function syncShortcutSetButtonContent({
+  button,
+  setId,
+  label,
+}) {
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  if (setId === SHORTCUT_BINDING_SET_OFF) {
+    const icon = button.querySelector(
+      `:scope > .${SHORTCUT_SET_OFF_ICON_CLASS}`
+    );
+
+    if (icon) {
+      button.replaceChildren(icon);
+      return;
+    }
+
+    button.replaceChildren(createShortcutSetOffIcon());
+    return;
+  }
+
+  button.textContent = label;
+}
+
+function createShortcutSetOffIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('width', '10');
+  svg.setAttribute('height', '10');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add(SHORTCUT_SET_OFF_ICON_CLASS);
+
+  circle.setAttribute('cx', '8');
+  circle.setAttribute('cy', '8');
+  circle.setAttribute('r', '5');
+  circle.setAttribute('fill', 'none');
+  circle.setAttribute('stroke', 'currentColor');
+  circle.setAttribute('stroke-width', '1.8');
+
+  svg.appendChild(circle);
+
+  return svg;
 }
 
 function attachShortcutSetSwitchPointerEvents(wrapper) {
