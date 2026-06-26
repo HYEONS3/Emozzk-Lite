@@ -22,6 +22,40 @@
       <section class="popup-section">
         <div class="popup-section-header">
           <div class="popup-section-heading">
+            <h2 class="popup-section-title">단축키 세트 수</h2>
+            <p class="popup-section-description">
+              이모티콘 패널 툴바에 표시할 단축키 세트 개수를 정합니다.
+            </p>
+          </div>
+
+          <strong
+            id="shortcutSetCountValue"
+            class="popup-range-value"
+            aria-live="polite"
+          >
+            3개
+          </strong>
+        </div>
+
+        <input
+          id="shortcutSetCountRange"
+          class="popup-range"
+          type="range"
+          min="1"
+          max="10"
+          step="1"
+          value="3"
+        />
+
+        <div class="popup-range-meta">
+          <span>1개</span>
+          <span>10개</span>
+        </div>
+      </section>
+
+      <section class="popup-section">
+        <div class="popup-section-header">
+          <div class="popup-section-heading">
             <h2 class="popup-section-title">최근 이모티콘 보존 개수</h2>
             <p class="popup-section-description">
               치지직 최근 이모티콘 목록을 확장해 최대 몇 개까지 유지할지 정합니다.

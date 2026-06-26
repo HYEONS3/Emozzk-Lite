@@ -49,14 +49,14 @@ import {
 import {
   assignShortcutBindingTarget,
   clearShortcutBindingsByEmojiId,
+  createShortcutBindingSetId,
   getCachedActiveShortcutBindingSetId,
   getCachedShortcutBindingSetState,
+  getShortcutBindingSetIndex,
+  normalizeShortcutBindingSetCount,
   setActiveShortcutBindingSet,
   SHORTCUT_BINDINGS_CHANGED_EVENT,
   SHORTCUT_BINDING_SET_OFF,
-  SHORTCUT_BINDING_SET_1,
-  SHORTCUT_BINDING_SET_2,
-  SHORTCUT_BINDING_SET_3,
   SHORTCUT_PHASE_BOTH,
   SHORTCUT_PHASE_DOWN,
   SHORTCUT_PHASE_UP,
@@ -116,20 +116,12 @@ const FAVORITES_RENDER_STATE_READY = 'ready';
 const BADGE_CLASS = 'emzk-lite-badge';
 const BADGE_TARGET_ATTR = 'data-emzk-lite-badge-target';
 
-const SHORTCUT_SET_DEFAULT_OPTIONS = [
-  {
-    id: SHORTCUT_BINDING_SET_1,
-    label: '1',
-  },
-  {
-    id: SHORTCUT_BINDING_SET_2,
-    label: '2',
-  },
-  {
-    id: SHORTCUT_BINDING_SET_3,
-    label: '3',
-  },
-];
+const SHORTCUT_SET_DRAG_SUPPRESS_CLICK_ATTR =
+  'data-emzk-lite-shortcut-set-suppress-click';
+const SHORTCUT_SET_DRAG_THRESHOLD = 3;
+
+const SHORTCUT_SET_DRAG_PREVIEW_CLASS =
+  'emzk-lite-shortcut-set-drag-preview';
 
 let started = false;
 let rafId = 0;
@@ -193,6 +185,7 @@ export function stopFavoriteEmoteSectionRenderer() {
 
   clearFavoriteRenderState();
   removeFavoriteSection();
+  removeShortcutSetDragPreview();
 }
 
 export function scheduleFavoriteEmoteSectionRender() {
@@ -614,10 +607,11 @@ function createShortcutSetSwitch() {
   const activeSetId = getCachedActiveShortcutBindingSetId();
   const sets = getShortcutSetSwitchOptions();
 
-  wrapper.setAttribute(
-    'data-emzk-lite-active-shortcut-set',
-    getShortcutSetActiveViewValue(activeSetId)
-  );
+  syncShortcutSetSwitchMetrics({
+    wrapper,
+    sets,
+    activeSetId,
+  });
 
   createShortcutSetButtons({
     sets,
@@ -626,31 +620,38 @@ function createShortcutSetSwitch() {
     wrapper.appendChild(button);
   });
 
+  attachShortcutSetSwitchPointerEvents(wrapper);
+
   return wrapper;
 }
+
 
 function updateShortcutSetSwitch(wrapper) {
   const activeSetId = getCachedActiveShortcutBindingSetId();
   const sets = getShortcutSetSwitchOptions();
 
-  wrapper.setAttribute(
-    'data-emzk-lite-active-shortcut-set',
-    getShortcutSetActiveViewValue(activeSetId)
-  );
-
-  if (shouldRebuildShortcutSetSwitch({
+  syncShortcutSetSwitchMetrics({
     wrapper,
     sets,
-  })) {
-    wrapper.replaceChildren(
-      ...createShortcutSetButtons({
-        sets,
-        activeSetId,
-      })
-    );
+    activeSetId,
+  });
 
-    return;
-  }
+
+	if (shouldRebuildShortcutSetSwitch({
+		wrapper,
+		sets,
+	})) {
+		wrapper.replaceChildren(
+			...createShortcutSetButtons({
+				sets,
+				activeSetId,
+			})
+		);
+
+
+		return;
+	}
+
 
   sets.forEach((set) => {
     const setId = normalizeShortcutSetId(set?.id);
@@ -684,8 +685,52 @@ function updateShortcutSetSwitch(wrapper) {
   });
 }
 
+function syncShortcutSetSwitchMetrics({
+  wrapper,
+  sets,
+  activeSetId,
+}) {
+  const activeIndex = getShortcutSetActiveIndex({
+    sets,
+    activeSetId,
+  });
+
+  wrapper.style.setProperty(
+    '--emzk-lite-shortcut-set-count',
+    String(sets.length)
+  );
+
+  wrapper.style.setProperty(
+    '--emzk-lite-shortcut-set-active-index',
+    String(activeIndex)
+  );
+
+  wrapper.setAttribute(
+    'data-emzk-lite-shortcut-set-count',
+    String(sets.length)
+  );
+
+  wrapper.setAttribute(
+    'data-emzk-lite-active-shortcut-set',
+    String(activeIndex)
+  );
+}
+
+function getShortcutSetActiveIndex({
+  sets,
+  activeSetId,
+}) {
+  const normalizedActiveSetId = normalizeShortcutSetId(activeSetId);
+  const activeIndex = sets.findIndex((set) => {
+    return normalizeShortcutSetId(set?.id) === normalizedActiveSetId;
+  });
+
+  return Math.max(0, activeIndex);
+}
+
 function getShortcutSetSwitchOptions() {
   const setState = getCachedShortcutBindingSetState();
+  const setCount = normalizeShortcutBindingSetCount(setState?.setCount);
   const storedSets = Array.isArray(setState?.sets)
     ? setState.sets
     : [];
@@ -702,12 +747,16 @@ function getShortcutSetSwitchOptions() {
     storedSetById.set(setId, set);
   });
 
-  const actualSets = SHORTCUT_SET_DEFAULT_OPTIONS.map((defaultSet) => {
-    const storedSet = storedSetById.get(defaultSet.id);
+  const visibleSets = Array.from({
+    length: setCount,
+  }, (_, index) => {
+    const setIndex = index + 1;
+    const setId = createShortcutBindingSetId(setIndex);
+    const storedSet = storedSetById.get(setId);
 
     return {
-      id: defaultSet.id,
-      label: normalizeText(storedSet?.label) || defaultSet.label,
+      id: setId,
+      label: normalizeText(storedSet?.label) || String(setIndex),
     };
   });
 
@@ -716,7 +765,7 @@ function getShortcutSetSwitchOptions() {
       id: SHORTCUT_BINDING_SET_OFF,
       label: 'OFF',
     },
-    ...actualSets,
+    ...visibleSets,
   ];
 }
 
@@ -891,18 +940,24 @@ function createShortcutSetButton({
 
   button.addEventListener('mousedown', stopControlEvent);
 
-  button.addEventListener('click', (event) => {
-    stopControlEvent(event);
 
-    if (isShortcutSetButtonCurrentlyActive(setId)) {
-      return;
-    }
+	button.addEventListener('click', (event) => {
+		stopControlEvent(event);
 
-    void switchShortcutSet(setId)
-      .catch((error) => {
-        console.error('[Emozzk Lite] failed to switch shortcut set:', error);
-      });
-  });
+		if (isShortcutSetClickSuppressed(button)) {
+			return;
+		}
+
+		if (isShortcutSetButtonCurrentlyActive(setId)) {
+			return;
+		}
+
+		void switchShortcutSet(setId)
+			.catch((error) => {
+				console.error('[Emozzk Lite] failed to switch shortcut set:', error);
+			});
+	});
+
 
   button.addEventListener('keydown', (event) => {
     if (
@@ -925,6 +980,241 @@ function createShortcutSetButton({
   });
 
   return button;
+}
+
+function attachShortcutSetSwitchPointerEvents(wrapper) {
+  let dragging = false;
+  let startClientX = 0;
+  let lastSetId = '';
+  let hasDragged = false;
+
+  wrapper.addEventListener('pointerdown', (event) => {
+    if (
+      event.pointerType === 'mouse' &&
+      event.button !== 0
+    ) {
+      return;
+    }
+
+    stopControlEvent(event);
+
+    dragging = true;
+    startClientX = event.clientX;
+    lastSetId = '';
+    hasDragged = false;
+
+    wrapper.setPointerCapture?.(event.pointerId);
+
+    switchShortcutSetByPointer({
+      wrapper,
+      clientX: event.clientX,
+      lastSetId,
+      onSetIdChange: (setId) => {
+        lastSetId = setId;
+      },
+    });
+  });
+
+  wrapper.addEventListener('pointermove', (event) => {
+    if (!dragging) {
+      return;
+    }
+
+    stopControlEvent(event);
+
+    if (
+      Math.abs(event.clientX - startClientX) >=
+      SHORTCUT_SET_DRAG_THRESHOLD
+    ) {
+      hasDragged = true;
+    }
+
+    switchShortcutSetByPointer({
+      wrapper,
+      clientX: event.clientX,
+      lastSetId,
+      onSetIdChange: (setId) => {
+        lastSetId = setId;
+      },
+    });
+  });
+
+  wrapper.addEventListener('pointerup', (event) => {
+    if (!dragging) {
+      return;
+    }
+
+    stopControlEvent(event);
+
+    dragging = false;
+    wrapper.releasePointerCapture?.(event.pointerId);
+    hideShortcutSetDragPreview();
+
+    if (hasDragged) {
+      suppressNextShortcutSetClick(wrapper);
+    }
+  });
+
+  wrapper.addEventListener('pointercancel', () => {
+    dragging = false;
+    hideShortcutSetDragPreview();
+  });
+}
+
+function switchShortcutSetByPointer({
+  wrapper,
+  clientX,
+  lastSetId,
+  onSetIdChange,
+}) {
+  const shortcutSet = getShortcutSetFromPointerPosition({
+    wrapper,
+    clientX,
+  });
+
+  if (!shortcutSet) {
+    return;
+  }
+
+  showShortcutSetDragPreview({
+    wrapper,
+    shortcutSet,
+  });
+
+  const setId = shortcutSet.setId;
+
+  if (!setId || setId === lastSetId) {
+    return;
+  }
+
+  onSetIdChange(setId);
+
+  if (isShortcutSetButtonCurrentlyActive(setId)) {
+    return;
+  }
+
+  void switchShortcutSet(setId)
+    .catch((error) => {
+      console.error('[Emozzk Lite] failed to switch shortcut set:', error);
+    });
+}
+
+function getShortcutSetFromPointerPosition({
+  wrapper,
+  clientX,
+}) {
+  const sets = getShortcutSetSwitchOptions();
+
+  if (!sets.length) {
+    return null;
+  }
+
+  const rect = wrapper.getBoundingClientRect();
+
+  if (!rect.width) {
+    return null;
+  }
+
+  const clampedClientX = Math.min(
+    rect.right - 0.1,
+    Math.max(rect.left, clientX)
+  );
+
+  const ratio = (clampedClientX - rect.left) / rect.width;
+
+  const index = Math.min(
+    sets.length - 1,
+    Math.max(0, Math.floor(ratio * sets.length))
+  );
+
+  const set = sets[index];
+  const setId = normalizeShortcutSetId(set?.id);
+
+  if (!setId) {
+    return null;
+  }
+
+  return {
+    setId,
+    label: normalizeText(set?.label) || getShortcutSetFallbackLabel(setId),
+    index,
+  };
+}
+
+function getShortcutSetDragPreview() {
+  let preview = document.querySelector(
+    `.${SHORTCUT_SET_DRAG_PREVIEW_CLASS}`
+  );
+
+  if (preview instanceof HTMLElement) {
+    return preview;
+  }
+
+  preview = document.createElement('span');
+  preview.className = SHORTCUT_SET_DRAG_PREVIEW_CLASS;
+  preview.hidden = true;
+  preview.setAttribute('aria-hidden', 'true');
+
+  document.body.appendChild(preview);
+
+  return preview;
+}
+
+function showShortcutSetDragPreview({
+  wrapper,
+  shortcutSet,
+}) {
+  const preview = getShortcutSetDragPreview();
+  const rect = wrapper.getBoundingClientRect();
+  const setCount = Math.max(1, getShortcutSetSwitchOptions().length);
+  const slotWidth = rect.width / setCount;
+
+  const label = shortcutSet?.setId === SHORTCUT_BINDING_SET_OFF
+    ? 'OFF'
+    : shortcutSet?.label;
+
+  const left = rect.left + slotWidth * shortcutSet.index + slotWidth / 2;
+  const top = rect.top - 7;
+
+  preview.textContent = label;
+  preview.hidden = false;
+
+  preview.style.left = `${left}px`;
+  preview.style.top = `${top}px`;
+}
+
+function hideShortcutSetDragPreview() {
+  const preview = document.querySelector(
+    `.${SHORTCUT_SET_DRAG_PREVIEW_CLASS}`
+  );
+
+  if (!(preview instanceof HTMLElement)) {
+    return;
+  }
+
+  preview.hidden = true;
+}
+
+function removeShortcutSetDragPreview() {
+  document
+    .querySelectorAll(`.${SHORTCUT_SET_DRAG_PREVIEW_CLASS}`)
+    .forEach((preview) => {
+      preview.remove();
+    });
+}
+
+function suppressNextShortcutSetClick(wrapper) {
+  wrapper.setAttribute(SHORTCUT_SET_DRAG_SUPPRESS_CLICK_ATTR, 'true');
+
+  window.setTimeout(() => {
+    wrapper.removeAttribute(SHORTCUT_SET_DRAG_SUPPRESS_CLICK_ATTR);
+  }, 80);
+}
+
+function isShortcutSetClickSuppressed(button) {
+  const wrapper = button.closest(`.${SHORTCUT_SET_SWITCH_CLASS}`);
+
+  return wrapper?.getAttribute(SHORTCUT_SET_DRAG_SUPPRESS_CLICK_ATTR) === 'true';
 }
 
 function isShortcutSetButtonCurrentlyActive(setId) {
@@ -951,16 +1241,13 @@ async function switchShortcutSet(setId) {
 function normalizeShortcutSetId(setId) {
   const normalizedSetId = normalizeText(setId);
 
-  if (
-    normalizedSetId === SHORTCUT_BINDING_SET_OFF ||
-    normalizedSetId === SHORTCUT_BINDING_SET_1 ||
-    normalizedSetId === SHORTCUT_BINDING_SET_2 ||
-    normalizedSetId === SHORTCUT_BINDING_SET_3
-  ) {
-    return normalizedSetId;
+  if (normalizedSetId === SHORTCUT_BINDING_SET_OFF) {
+    return SHORTCUT_BINDING_SET_OFF;
   }
 
-  return '';
+  const setIndex = getShortcutBindingSetIndex(normalizedSetId);
+
+  return createShortcutBindingSetId(setIndex);
 }
 
 function getShortcutSetFallbackLabel(setId) {
@@ -968,31 +1255,13 @@ function getShortcutSetFallbackLabel(setId) {
     return 'OFF';
   }
 
-  if (setId === SHORTCUT_BINDING_SET_2) {
-    return '2';
+  const setIndex = getShortcutBindingSetIndex(setId);
+
+  if (!setIndex) {
+    return '';
   }
 
-  if (setId === SHORTCUT_BINDING_SET_3) {
-    return '3';
-  }
-
-  return '1';
-}
-
-function getShortcutSetActiveViewValue(setId) {
-  if (setId === SHORTCUT_BINDING_SET_OFF) {
-    return 'off';
-  }
-
-  if (setId === SHORTCUT_BINDING_SET_2) {
-    return '2';
-  }
-
-  if (setId === SHORTCUT_BINDING_SET_3) {
-    return '3';
-  }
-
-  return '1';
+  return String(setIndex);
 }
 
 function getShortcutSetButtonAriaLabel({
@@ -1149,7 +1418,7 @@ function getClearHintText(bindState) {
   const selectedCount = getSelectedClearEmojiIds(bindState).length;
 
   if (selectedCount <= 0) {
-    return '해제 선택';
+    return '이모티콘 선택';
   }
 
   return `${selectedCount}개 선택`;
@@ -2210,3 +2479,4 @@ function normalizeText(value) {
 function normalizeShortcutCode(value) {
   return normalizeStoredShortcutCode(value);
 }
+

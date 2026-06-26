@@ -1,6 +1,5 @@
 import {
   createSelectEmoteIdAction,
-  getDefaultShortcutBindings,
   normalizeShortcutBinding,
 } from './shortcut-bindings.js';
 
@@ -16,30 +15,25 @@ export const SHORTCUT_PHASE_UP = 'up';
 export const SHORTCUT_PHASE_BOTH = 'both';
 
 export const SHORTCUT_BINDING_SET_OFF = 'off';
+
+export const SHORTCUT_BINDING_SET_MIN_COUNT = 1;
+export const SHORTCUT_BINDING_SET_MAX_COUNT = 10;
+export const SHORTCUT_BINDING_SET_DEFAULT_COUNT = 3;
+
+/*
+ * 기존 import 호환용.
+ * 신규 로직은 createShortcutBindingSetId(index)를 기준으로 처리한다.
+ */
 export const SHORTCUT_BINDING_SET_1 = 'set_1';
 export const SHORTCUT_BINDING_SET_2 = 'set_2';
 export const SHORTCUT_BINDING_SET_3 = 'set_3';
 
-const SHORTCUT_BINDING_SETS_VERSION = 3;
+const SHORTCUT_BINDING_SETS_VERSION = 4;
 
 const USER_BINDING_SOURCE = 'user';
 
-const DEFAULT_SHORTCUT_BINDING_SETS = [
-  {
-    id: SHORTCUT_BINDING_SET_1,
-    label: '1',
-  },
-  {
-    id: SHORTCUT_BINDING_SET_2,
-    label: '2',
-  },
-  {
-    id: SHORTCUT_BINDING_SET_3,
-    label: '3',
-  },
-];
-
 let cachedShortcutBindingSetState = createDefaultShortcutBindingSetState();
+let storageSyncStarted = false;
 
 export async function initShortcutBindingsStorage() {
   const storageEntry = await readShortcutBindingsStorageEntry();
@@ -49,9 +43,41 @@ export async function initShortcutBindingsStorage() {
     hasStoredValue: storageEntry.hasStoredValue,
   });
 
+  startShortcutBindingsStorageSync();
   dispatchShortcutBindingsChanged();
 
   return getCachedShortcutBindings();
+}
+
+export function startShortcutBindingsStorageSync() {
+  if (storageSyncStarted) {
+    return;
+  }
+
+  storageSyncStarted = true;
+
+  if (!globalThis.chrome?.storage?.onChanged?.addListener) {
+    return;
+  }
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local') {
+      return;
+    }
+
+    const change = changes[SHORTCUT_BINDINGS_STORAGE_KEY];
+
+    if (!change) {
+      return;
+    }
+
+    cachedShortcutBindingSetState = normalizeShortcutBindingSetState({
+      storedValue: change.newValue,
+      hasStoredValue: Boolean(change.newValue),
+    });
+
+    dispatchShortcutBindingsChanged();
+  });
 }
 
 export function getCachedShortcutBindings() {
@@ -74,7 +100,10 @@ export function getCachedActiveShortcutBindingSetId() {
 }
 
 export async function setActiveShortcutBindingSet(setId) {
-  const normalizedSetId = normalizeShortcutBindingSetId(setId);
+  const normalizedSetId = normalizeVisibleShortcutBindingSetId({
+    setId,
+    setCount: cachedShortcutBindingSetState.setCount,
+  });
 
   if (!normalizedSetId) {
     return getCachedShortcutBindings();
@@ -94,6 +123,25 @@ export async function setActiveShortcutBindingSet(setId) {
   dispatchShortcutBindingsChanged();
 
   return getCachedShortcutBindings();
+}
+
+export async function setShortcutBindingSetCount(count) {
+  const setCount = normalizeShortcutBindingSetCount(count);
+
+  cachedShortcutBindingSetState = normalizeShortcutBindingSetStateValue({
+    ...cachedShortcutBindingSetState,
+    setCount,
+    activeSetId: normalizeActiveShortcutBindingSetIdForCount({
+      activeSetId: cachedShortcutBindingSetState.activeSetId,
+      setCount,
+    }),
+  });
+
+  await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
+
+  dispatchShortcutBindingsChanged();
+
+  return getCachedShortcutBindingSetState();
 }
 
 export async function setShortcutBindings(bindings) {
@@ -244,6 +292,65 @@ export async function clearShortcutBindingsByEmojiId({
   return setShortcutBindings(nextBindings);
 }
 
+export function createShortcutBindingSetId(index) {
+  const normalizedIndex = Number(index);
+
+  if (
+    !Number.isInteger(normalizedIndex) ||
+    normalizedIndex < SHORTCUT_BINDING_SET_MIN_COUNT ||
+    normalizedIndex > SHORTCUT_BINDING_SET_MAX_COUNT
+  ) {
+    return '';
+  }
+
+  return `set_${normalizedIndex}`;
+}
+
+export function getShortcutBindingSetIndex(setId) {
+  const match = String(setId ?? '').trim().match(/^set_(\d+)$/);
+
+  if (!match) {
+    return 0;
+  }
+
+  return Number(match[1]) || 0;
+}
+
+export function normalizeShortcutBindingSetCount(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return SHORTCUT_BINDING_SET_DEFAULT_COUNT;
+  }
+
+  return Math.min(
+    SHORTCUT_BINDING_SET_MAX_COUNT,
+    Math.max(
+      SHORTCUT_BINDING_SET_MIN_COUNT,
+      Math.round(number)
+    )
+  );
+}
+
+export function normalizeShortcutBindingSetId(setId) {
+  const normalizedSetId = String(setId ?? '').trim();
+
+  if (normalizedSetId === SHORTCUT_BINDING_SET_OFF) {
+    return SHORTCUT_BINDING_SET_OFF;
+  }
+
+  const index = getShortcutBindingSetIndex(normalizedSetId);
+
+  if (
+    index >= SHORTCUT_BINDING_SET_MIN_COUNT &&
+    index <= SHORTCUT_BINDING_SET_MAX_COUNT
+  ) {
+    return createShortcutBindingSetId(index);
+  }
+
+  return '';
+}
+
 export function normalizeShortcutPhase(phase) {
   if (phase === SHORTCUT_PHASE_UP) {
     return SHORTCUT_PHASE_UP;
@@ -301,15 +408,9 @@ export function isUserDefinedShortcutBinding(binding) {
 function createDefaultShortcutBindingSetState() {
   return {
     version: SHORTCUT_BINDING_SETS_VERSION,
-    activeSetId: SHORTCUT_BINDING_SET_1,
-    sets: DEFAULT_SHORTCUT_BINDING_SETS.map((set) => {
-      return {
-        ...set,
-        bindings: set.id === SHORTCUT_BINDING_SET_1
-          ? normalizeShortcutBindings(getDefaultShortcutBindings())
-          : [],
-      };
-    }),
+    activeSetId: createShortcutBindingSetId(1),
+    setCount: SHORTCUT_BINDING_SET_DEFAULT_COUNT,
+    sets: [],
   };
 }
 
@@ -326,10 +427,16 @@ function normalizeShortcutBindingSetState({
    * 기존 저장값이 배열이면 set_1로 마이그레이션한다.
    */
   if (Array.isArray(storedValue)) {
-    return createShortcutBindingSetState({
-      activeSetId: SHORTCUT_BINDING_SET_1,
-      set1Bindings: storedValue,
-      set2Bindings: [],
+    return normalizeShortcutBindingSetStateValue({
+      activeSetId: createShortcutBindingSetId(1),
+      setCount: SHORTCUT_BINDING_SET_DEFAULT_COUNT,
+      sets: [
+        {
+          id: createShortcutBindingSetId(1),
+          label: '1',
+          bindings: storedValue,
+        },
+      ],
     });
   }
 
@@ -337,63 +444,62 @@ function normalizeShortcutBindingSetState({
     return createDefaultShortcutBindingSetState();
   }
 
-  const sets = normalizeShortcutBindingSets(storedValue.sets);
-  const activeSetId = normalizeShortcutBindingSetId(storedValue.activeSetId);
+  return normalizeShortcutBindingSetStateValue(storedValue);
+}
+
+function normalizeShortcutBindingSetStateValue(value) {
+  const setCount = normalizeShortcutBindingSetCount(value?.setCount);
+  const sets = normalizeShortcutBindingSets(value?.sets);
+  const activeSetId = normalizeActiveShortcutBindingSetIdForCount({
+    activeSetId: value?.activeSetId,
+    setCount,
+  });
 
   return {
     version: SHORTCUT_BINDING_SETS_VERSION,
-    activeSetId: activeSetId || SHORTCUT_BINDING_SET_1,
+    activeSetId,
+    setCount,
     sets,
   };
 }
 
-function createShortcutBindingSetState({
+function normalizeActiveShortcutBindingSetIdForCount({
   activeSetId,
-  set1Bindings,
-  set2Bindings,
+  setCount,
 }) {
-  return {
-    version: SHORTCUT_BINDING_SETS_VERSION,
-    activeSetId: normalizeShortcutBindingSetId(activeSetId) || SHORTCUT_BINDING_SET_1,
-    sets: [
-      {
-        id: SHORTCUT_BINDING_SET_1,
-        label: '1',
-        bindings: normalizeShortcutBindings(set1Bindings),
-      },
-      {
-        id: SHORTCUT_BINDING_SET_2,
-        label: '2',
-        bindings: normalizeShortcutBindings(set2Bindings),
-      },
-    ],
-  };
-}
+  const normalizedActiveSetId = normalizeShortcutBindingSetId(activeSetId);
 
-function normalizeShortcutBindingSets(sets) {
-  const storedSets = Array.isArray(sets) ? sets : [];
+  if (normalizedActiveSetId === SHORTCUT_BINDING_SET_OFF) {
+    return SHORTCUT_BINDING_SET_OFF;
+  }
 
-  return DEFAULT_SHORTCUT_BINDING_SETS.map((defaultSet) => {
-    const storedSet = storedSets.find((set) => {
-      return set?.id === defaultSet.id;
-    });
-
-    return {
-      id: defaultSet.id,
-      label: normalizeShortcutBindingSetLabel(storedSet?.label) || defaultSet.label,
-      bindings: normalizeShortcutBindings(storedSet?.bindings),
-    };
-  });
-}
-
-function normalizeShortcutBindingSetId(setId) {
-  const normalizedSetId = String(setId ?? '').trim();
+  const activeIndex = getShortcutBindingSetIndex(normalizedActiveSetId);
 
   if (
-    normalizedSetId === SHORTCUT_BINDING_SET_OFF ||
-    normalizedSetId === SHORTCUT_BINDING_SET_1 ||
-    normalizedSetId === SHORTCUT_BINDING_SET_2 ||
-    normalizedSetId === SHORTCUT_BINDING_SET_3
+    activeIndex >= SHORTCUT_BINDING_SET_MIN_COUNT &&
+    activeIndex <= setCount
+  ) {
+    return normalizedActiveSetId;
+  }
+
+  return createShortcutBindingSetId(1);
+}
+
+function normalizeVisibleShortcutBindingSetId({
+  setId,
+  setCount,
+}) {
+  const normalizedSetId = normalizeShortcutBindingSetId(setId);
+
+  if (normalizedSetId === SHORTCUT_BINDING_SET_OFF) {
+    return SHORTCUT_BINDING_SET_OFF;
+  }
+
+  const index = getShortcutBindingSetIndex(normalizedSetId);
+
+  if (
+    index >= SHORTCUT_BINDING_SET_MIN_COUNT &&
+    index <= setCount
   ) {
     return normalizedSetId;
   }
@@ -401,8 +507,40 @@ function normalizeShortcutBindingSetId(setId) {
   return '';
 }
 
+function normalizeShortcutBindingSets(sets) {
+  const storedSets = Array.isArray(sets) ? sets : [];
+  const setById = new Map();
+
+  storedSets.forEach((set) => {
+    const setId = normalizeShortcutBindingSetId(set?.id);
+
+    if (!setId || setId === SHORTCUT_BINDING_SET_OFF) {
+      return;
+    }
+
+    setById.set(setId, {
+      id: setId,
+      label: normalizeShortcutBindingSetLabel(set?.label) ||
+        getShortcutBindingSetDefaultLabel(setId),
+      bindings: normalizeShortcutBindings(set?.bindings),
+    });
+  });
+
+  return sortShortcutBindingSets(Array.from(setById.values()));
+}
+
 function normalizeShortcutBindingSetLabel(label) {
   return String(label ?? '').trim();
+}
+
+function getShortcutBindingSetDefaultLabel(setId) {
+  const index = getShortcutBindingSetIndex(setId);
+
+  if (!index) {
+    return '';
+  }
+
+  return String(index);
 }
 
 function getShortcutBindingsForSet(state, setId) {
@@ -419,45 +557,64 @@ function setShortcutBindingsForActiveSet({
   state,
   bindings,
 }) {
+  const setCount = normalizeShortcutBindingSetCount(state.setCount);
   const activeSetId = normalizeShortcutBindingSetId(state.activeSetId) ||
-    SHORTCUT_BINDING_SET_1;
+    createShortcutBindingSetId(1);
+
+  const sets = normalizeShortcutBindingSets(state.sets);
 
   if (activeSetId === SHORTCUT_BINDING_SET_OFF) {
     return {
       ...state,
+      setCount,
       activeSetId,
-      sets: state.sets.map((set) => {
-        return {
-          ...set,
-          bindings: normalizeShortcutBindings(set.bindings),
-        };
-      }),
+      sets,
     };
+  }
+
+  const normalizedBindings = normalizeShortcutBindings(bindings);
+  let found = false;
+
+  const nextSets = sets.map((set) => {
+    if (set.id !== activeSetId) {
+      return set;
+    }
+
+    found = true;
+
+    return {
+      ...set,
+      bindings: normalizedBindings,
+    };
+  });
+
+  if (!found) {
+    nextSets.push({
+      id: activeSetId,
+      label: getShortcutBindingSetDefaultLabel(activeSetId),
+      bindings: normalizedBindings,
+    });
   }
 
   return {
     ...state,
+    setCount,
     activeSetId,
-    sets: state.sets.map((set) => {
-      if (set.id !== activeSetId) {
-        return {
-          ...set,
-          bindings: normalizeShortcutBindings(set.bindings),
-        };
-      }
-
-      return {
-        ...set,
-        bindings: normalizeShortcutBindings(bindings),
-      };
-    }),
+    sets: sortShortcutBindingSets(nextSets),
   };
+}
+
+function sortShortcutBindingSets(sets) {
+  return [...sets].sort((a, b) => {
+    return getShortcutBindingSetIndex(a.id) - getShortcutBindingSetIndex(b.id);
+  });
 }
 
 function cloneShortcutBindingSetState(state) {
   return {
     version: SHORTCUT_BINDING_SETS_VERSION,
     activeSetId: state.activeSetId,
+    setCount: normalizeShortcutBindingSetCount(state.setCount),
     sets: state.sets.map((set) => {
       return {
         id: set.id,
@@ -559,13 +716,13 @@ function normalizeStoredShortcutBinding(binding) {
   const code = normalizeShortcutCode(normalizedBinding.code);
   const phase = normalizeStoredPhase(normalizedBinding.phase);
 
-	if (
-		!code ||
-		!phase ||
-		!normalizedBinding.actionConfig
-	) {
-		return null;
-	}
+  if (
+    !code ||
+    !phase ||
+    !normalizedBinding.actionConfig
+  ) {
+    return null;
+  }
 
   return {
     ...normalizedBinding,
@@ -656,18 +813,38 @@ async function writeShortcutBindingSetStateToStorage(state) {
 }
 
 function createShortcutBindingSetStorageValue(state) {
+  const normalizedState = normalizeShortcutBindingSetStateValue(state);
+
   return {
     version: SHORTCUT_BINDING_SETS_VERSION,
-    activeSetId: normalizeShortcutBindingSetId(state.activeSetId) ||
-      SHORTCUT_BINDING_SET_1,
-    sets: state.sets.map((set) => {
-      return {
-        id: set.id,
-        label: set.label,
-        bindings: getUserDefinedShortcutBindings(set.bindings),
-      };
+    activeSetId: normalizeActiveShortcutBindingSetIdForCount({
+      activeSetId: normalizedState.activeSetId,
+      setCount: normalizedState.setCount,
     }),
+    setCount: normalizedState.setCount,
+    sets: normalizedState.sets
+      .map((set) => {
+        return {
+          id: set.id,
+          label: set.label,
+          bindings: getUserDefinedShortcutBindings(set.bindings),
+        };
+      })
+      .filter(shouldPersistShortcutBindingSet),
   };
+}
+
+function shouldPersistShortcutBindingSet(set) {
+  if (!set?.id) {
+    return false;
+  }
+
+  if (getUserDefinedShortcutBindings(set.bindings).length > 0) {
+    return true;
+  }
+
+  return normalizeShortcutBindingSetLabel(set.label) !==
+    getShortcutBindingSetDefaultLabel(set.id);
 }
 
 async function removeShortcutBindingsFromStorage() {

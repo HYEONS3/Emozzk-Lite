@@ -259,6 +259,7 @@ button[data-emzk-lite-badge-target="true"] {
   pointer-events: none;
   user-select: none;
 }
+
 /* ========================================================================== */
 /* Favorite section                                                           */
 /* ========================================================================== */
@@ -319,12 +320,48 @@ button[data-emzk-lite-badge-target="true"] {
   gap: var(--emzk-lite-bind-header-action-gap);
 }
 
+.emzk-lite-favorites-title:not([data-emzk-lite-bind-mode="assign"]):not([data-emzk-lite-bind-mode="clear"]) {
+  justify-content: flex-start;
+
+  /*
+   * 세트 드래그 preview가 헤더 위로 떠야 하므로
+   * 기본 모드에서만 overflow를 열어둔다.
+   */
+  overflow: visible;
+}
+
+.emzk-lite-favorites-title:not([data-emzk-lite-bind-mode="assign"]):not([data-emzk-lite-bind-mode="clear"])
+  .emzk-lite-favorites-label {
+  display: none;
+}
+
+.emzk-lite-favorites-title:not([data-emzk-lite-bind-mode="assign"]):not([data-emzk-lite-bind-mode="clear"])
+  .emzk-lite-favorites-actions {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+
+  justify-content: flex-start;
+}
+
+.emzk-lite-favorites-title:not([data-emzk-lite-bind-mode="assign"]):not([data-emzk-lite-bind-mode="clear"])
+  .emzk-lite-shortcut-set-switch {
+  flex: 0 0 auto;
+}
+
+.emzk-lite-favorites-title:not([data-emzk-lite-bind-mode="assign"]):not([data-emzk-lite-bind-mode="clear"])
+  .emzk-lite-shortcut-set-switch + .emzk-lite-bind-button {
+  margin-left: auto;
+}
 /* ========================================================================== */
 /* Shortcut binding set switch                                                */
 /* ========================================================================== */
 
 .emzk-lite-shortcut-set-switch {
   --emzk-lite-shortcut-set-button-size: var(--emzk-lite-bind-control-height);
+  --emzk-lite-shortcut-set-count: 4;
+  --emzk-lite-shortcut-set-active-index: 0;
+  --emzk-lite-shortcut-set-preview-index: 0;
 
   position: relative;
 
@@ -335,8 +372,14 @@ button[data-emzk-lite-badge-target="true"] {
   justify-content: center;
   gap: 0;
 
-  width: calc(var(--emzk-lite-shortcut-set-button-size) * 4);
-  min-width: calc(var(--emzk-lite-shortcut-set-button-size) * 4);
+  width: calc(
+    var(--emzk-lite-shortcut-set-button-size) *
+    var(--emzk-lite-shortcut-set-count)
+  );
+  min-width: calc(
+    var(--emzk-lite-shortcut-set-button-size) *
+    var(--emzk-lite-shortcut-set-count)
+  );
   height: var(--emzk-lite-shortcut-set-button-size);
   padding: 0;
 
@@ -346,9 +389,15 @@ button[data-emzk-lite-badge-target="true"] {
   border-radius: var(--emzk-lite-bind-radius);
 
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
 
+  cursor: pointer;
+  touch-action: none;
   user-select: none;
+}
+
+.emzk-lite-shortcut-set-switch:active {
+  cursor: grabbing;
 }
 
 .emzk-lite-shortcut-set-switch::before {
@@ -366,7 +415,16 @@ button[data-emzk-lite-badge-target="true"] {
   background: var(--emzk-lite-bind-active-bg);
   border-radius: var(--emzk-lite-bind-radius);
 
-  transform: translate3d(0, 0, 0);
+  pointer-events: none;
+
+  transform: translate3d(
+    calc(
+      var(--emzk-lite-shortcut-set-button-size) *
+      var(--emzk-lite-shortcut-set-active-index)
+    ),
+    0,
+    0
+  );
 
   transition:
     transform var(--emzk-lite-motion-normal),
@@ -374,45 +432,16 @@ button[data-emzk-lite-badge-target="true"] {
     opacity var(--emzk-lite-motion-fast);
 }
 
-.emzk-lite-shortcut-set-switch[data-emzk-lite-active-shortcut-set="off"]::before {
-  transform: translate3d(0, 0, 0);
-}
-
-.emzk-lite-shortcut-set-switch[data-emzk-lite-active-shortcut-set="1"]::before {
-  transform: translate3d(
-    calc(var(--emzk-lite-shortcut-set-button-size) * 1),
-    0,
-    0
-  );
-}
-
-.emzk-lite-shortcut-set-switch[data-emzk-lite-active-shortcut-set="2"]::before {
-  transform: translate3d(
-    calc(var(--emzk-lite-shortcut-set-button-size) * 2),
-    0,
-    0
-  );
-}
-
-.emzk-lite-shortcut-set-switch[data-emzk-lite-active-shortcut-set="3"]::before {
-  transform: translate3d(
-    calc(var(--emzk-lite-shortcut-set-button-size) * 3),
-    0,
-    0
-  );
-}
-
 .emzk-lite-shortcut-set-button {
   position: relative;
   z-index: 1;
 
-  flex: 0 0 var(--emzk-lite-shortcut-set-button-size);
+  flex: 1 0 var(--emzk-lite-shortcut-set-button-size);
 
   display: inline-flex;
   align-items: center;
   justify-content: center;
 
-  width: var(--emzk-lite-shortcut-set-button-size);
   min-width: var(--emzk-lite-shortcut-set-button-size);
   height: var(--emzk-lite-shortcut-set-button-size);
   padding: 0;
@@ -423,7 +452,7 @@ button[data-emzk-lite-badge-target="true"] {
   border-radius: var(--emzk-lite-bind-radius);
 
   font-family: var(--emzk-lite-font-family);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.3px;
@@ -453,12 +482,49 @@ button[data-emzk-lite-badge-target="true"] {
   color: var(--emzk-lite-bind-active-text);
 }
 
+.emzk-lite-shortcut-set-drag-preview {
+  position: fixed;
+  z-index: 2147483647;
+
+  transform: translate(-50%, -100%);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  box-sizing: border-box;
+
+  color: rgba(var(--color-bg-white-fixed, #fff),0.7);
+  background: rgba(var(--color-bg-black-fixed-rgb, 0, 0, 0), 0.66);
+  border-radius: 9px;
+
+  font-family: var(--emzk-lite-font-family);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.34);
+
+  pointer-events: none;
+  user-select: none;
+}
+
+.emzk-lite-shortcut-set-drag-preview[hidden] {
+  display: none !important;
+}
+
 .emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"]
   .emzk-lite-shortcut-set-switch,
 .emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"]
   .emzk-lite-shortcut-set-switch {
   display: none;
 }
+
 /* ========================================================================== */
 /* Header icon buttons                                                        */
 /* ========================================================================== */
@@ -1102,9 +1168,10 @@ button[data-emzk-lite-badge-target="true"] {
   .emzk-lite-favorites-dragging-item {
     filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
   }
+
   .emzk-lite-shortcut-set-switch {
-    border-color: rgba(0, 0, 0, 0.12);
-    background-color: rgba(0, 0, 0, 0.04);
+    background: transparent;
+    border: 0;
   }
 
   .emzk-lite-shortcut-set-switch::before {
@@ -1143,20 +1210,8 @@ button[data-emzk-lite-badge-target="true"] {
   .emzk-lite-shortcut-set-button,
   .emzk-lite-favorites-dragging-item,
   .emzk-lite-favorites-drag-placeholder,
-  .emzk-lite-shortcut-set-switch::before,
-  .emzk-lite-shortcut-set-button {
+  .emzk-lite-shortcut-set-switch::before {
     animation: none;
     transition: none;
-  }
-}
-
-@media (prefers-color-scheme: light) {
-  .emzk-lite-shortcut-set-switch {
-    background: transparent;
-    border: 0;
-  }
-
-  .emzk-lite-shortcut-set-switch::before {
-    background-color: rgba(0, 0, 0, 0.1);
   }
 }
