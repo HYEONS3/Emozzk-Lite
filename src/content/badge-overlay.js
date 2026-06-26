@@ -24,6 +24,7 @@ import {
 } from './emote-bind-mode-state.js';
 
 import {
+	normalizeShortcutPhase,
   SHORTCUT_BINDINGS_CHANGED_EVENT,
   SHORTCUT_PHASE_BOTH,
   SHORTCUT_PHASE_DOWN,
@@ -212,7 +213,7 @@ function applyAssignModeConflictBadges({
 
   const selectedEmojiId = normalizeText(bindState?.selectedEmojiId);
   const selectedCode = normalizeShortcutCode(bindState?.selectedCode);
-  const selectedPhase = normalizePhase(bindState?.selectedPhase);
+  const selectedPhase = normalizeShortcutPhase(bindState?.selectedPhase);
 
   if (
     !selectedEmojiId ||
@@ -260,7 +261,7 @@ function hasShortcutAssignmentConflict({
 
   return items.some((item) => {
     const itemCode = normalizeShortcutCode(item?.code);
-    const itemPhase = normalizePhase(item?.phase);
+    const itemPhase = normalizeShortcutPhase(item?.phase);
 
     if (itemCode !== selectedCode) {
       return false;
