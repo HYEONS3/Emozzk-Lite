@@ -1,3 +1,7 @@
+import {
+  normalizeStoredShortcutCode,
+} from './shortcut-key-code.js';
+
 export const SHORTCUT_ACTION_SELECT_EMOTE = 'selectEmote';
 
 export const SHORTCUT_TARGET_TYPE_INDEX = 'index';
@@ -174,13 +178,11 @@ function createDefaultShortcutBinding({
   }
 
   return {
-    id: `default__${normalizedCode}`,
+    id: `default__${normalizedCode}__${SHORTCUT_PHASE_DOWN}`,
     source: 'default',
-    trigger: createShortcutTrigger({
-      code: normalizedCode,
-    }),
-    onDown: actionConfig,
-    onUp: null,
+    code: normalizedCode,
+    phase: SHORTCUT_PHASE_DOWN,
+    actionConfig,
     options: {
       ...DEFAULT_SHORTCUT_OPTIONS,
     },
@@ -418,7 +420,7 @@ function normalizeBindingId(binding, {
 
 function isModernShortcutBindingShape(binding) {
   return Boolean(
-    normalizeText(binding?.code) &&
+    normalizeStoredShortcutCode(binding?.code) &&
     'phase' in binding &&
     binding?.actionConfig
   );
@@ -433,38 +435,7 @@ function normalizeStoragePhase(phase) {
 }
 
 function normalizeShortcutCode(code) {
-  const normalizedCode = normalizeText(code);
-
-  if (!normalizedCode) {
-    return '';
-  }
-
-  if (isBlockedShortcutCode(normalizedCode)) {
-    return '';
-  }
-
-  return normalizedCode;
-}
-
-function isBlockedShortcutCode(code) {
-  return (
-    code === 'Escape' ||
-    code === 'Tab' ||
-    code === 'CapsLock' ||
-    code === 'ContextMenu' ||
-
-    code === 'ShiftLeft' ||
-    code === 'ShiftRight' ||
-
-    code === 'ControlLeft' ||
-    code === 'ControlRight' ||
-
-    code === 'AltLeft' ||
-    code === 'AltRight' ||
-
-    code === 'MetaLeft' ||
-    code === 'MetaRight'
-  );
+  return normalizeStoredShortcutCode(code);
 }
 
 function normalizeIndex(value) {

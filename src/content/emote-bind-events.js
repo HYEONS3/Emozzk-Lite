@@ -40,6 +40,7 @@ import {
 
 import {
   getShortcutCodeFromKeyboardEvent,
+  isImeKeyboardEvent,
 } from './shortcut-key-code.js';
 
 const BADGE_CLASS = 'emzk-lite-badge';
@@ -175,12 +176,12 @@ function handleBindModeKeyDown(event) {
 }
 
 function handleKeyListeningKeyDown(event) {
-  blockEvent(event);
-
   if (
     event.code === 'Escape' &&
     !hasAnyModifier(event)
   ) {
+    blockEvent(event);
+
     stopEmoteBindKeyListening();
 
     scheduleFavoriteEmoteSectionRender();
@@ -189,20 +190,18 @@ function handleKeyListeningKeyDown(event) {
     return;
   }
 
-	if (isIgnoredListeningCode(event.code)) {
-		return;
-	}
+  const shortcutCode = getShortcutCodeFromKeyboardEvent(event);
 
-	const shortcutCode = getShortcutCodeFromKeyboardEvent(event);
+  if (!shortcutCode) {
+    return;
+  }
 
-	if (!shortcutCode) {
-		return;
-	}
+  blockEvent(event);
 
-	setEmoteBindCode(shortcutCode);
+  setEmoteBindCode(shortcutCode);
 
-	scheduleFavoriteEmoteSectionRender();
-	scheduleBadgeUpdate();
+  scheduleFavoriteEmoteSectionRender();
+  scheduleBadgeUpdate();
 }
 
 function handleBindModeEmoteButtonClick(button) {
@@ -482,6 +481,10 @@ function isPanelVisible(panel) {
 }
 
 function shouldBlockBindModeKeyDown(event) {
+  if (isImeKeyboardEvent(event)) {
+    return false;
+  }
+
   if (
     event.ctrlKey ||
     event.altKey ||
@@ -512,25 +515,6 @@ function hasAnyModifier(event) {
   );
 }
 
-function isIgnoredListeningCode(code) {
-  return (
-    code === 'Tab' ||
-    code === 'CapsLock' ||
-    code === 'ContextMenu' ||
-
-    code === 'ShiftLeft' ||
-    code === 'ShiftRight' ||
-
-    code === 'ControlLeft' ||
-    code === 'ControlRight' ||
-
-    code === 'AltLeft' ||
-    code === 'AltRight' ||
-
-    code === 'MetaLeft' ||
-    code === 'MetaRight'
-  );
-}
 
 function isModifierOnlyCode(code) {
   return (

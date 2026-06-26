@@ -38,7 +38,9 @@ import {
   getEmoteBindPhaseDescription,
   getNextEmoteBindPhase,
   isEmoteBindExperimentalKeyupEnabled,
+  isEmoteBindSaving,
   setEmoteBindPhase,
+  setEmoteBindSaving,
   startEmoteBindKeyListening,
   toggleEmoteBindAssignMode,
   toggleEmoteBindClearMode,
@@ -61,6 +63,10 @@ import {
 import {
   scheduleBadgeUpdate,
 } from './badge-overlay.js';
+
+import {
+  normalizeStoredShortcutCode,
+} from './shortcut-key-code.js';
 
 const FAVORITES_SECTION_CLASS = 'emzk-lite-favorites-section';
 const FAVORITES_TITLE_CLASS = 'emzk-lite-favorites-title';
@@ -887,9 +893,9 @@ function getAssignHintDescription(bindState) {
     normalizeText(bindState?.selectedEmojiId)
   );
 
-  const hasSelectedCode = Boolean(
-    normalizeText(bindState?.selectedCode)
-  );
+	const hasSelectedCode = Boolean(
+		normalizeShortcutCode(bindState?.selectedCode)
+	);
 
   if (!hasSelectedEmote) {
     return '단축키를 지정할 이모티콘을 선택하세요.';
@@ -911,9 +917,9 @@ function getAssignHintText(bindState) {
     normalizeText(bindState?.selectedEmojiId)
   );
 
-  const hasSelectedCode = Boolean(
-    normalizeText(bindState?.selectedCode)
-  );
+	const hasSelectedCode = Boolean(
+		normalizeShortcutCode(bindState?.selectedCode)
+	);
 
   if (!hasSelectedEmote) {
     return '선택';
@@ -1180,7 +1186,7 @@ function createAssignActionButtons(bindState) {
 
   actions.append(
     createAssignSaveButton(bindState),
-    createAssignCancelButton()
+    createAssignCancelButton(bindState)
   );
 
   return actions;
@@ -1193,7 +1199,7 @@ function createClearActionButtons(bindState) {
 
   actions.append(
     createClearSaveButton(bindState),
-    createClearCancelButton()
+    createClearCancelButton(bindState)
   );
 
   return actions;
@@ -1202,15 +1208,17 @@ function createClearActionButtons(bindState) {
 function createAssignSaveButton(bindState) {
   const button = document.createElement('button');
 
+  const isSaving = Boolean(bindState?.isSaving);
+  const canSave = canSaveAssignState(bindState);
+  const saveLabel = isSaving ? '저장 중' : '저장';
+
   button.type = 'button';
   button.className = BIND_BUTTON_CLASS;
   button.classList.add(BIND_SAVE_BUTTON_CLASS);
-  button.setAttribute('aria-label', '저장');
-  button.setAttribute('title', '저장');
+  button.setAttribute('aria-label', saveLabel);
+  button.setAttribute('title', saveLabel);
 
-  const canSave = canSaveAssignState(bindState);
-
-  if (!canSave) {
+  if (!canSave || isSaving) {
     button.disabled = true;
     button.classList.add(BIND_BUTTON_DISABLED_CLASS);
   }
@@ -1222,7 +1230,7 @@ function createAssignSaveButton(bindState) {
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
 
-    if (!canSave) return;
+    if (!canSave || isSaving) return;
 
     void saveAssignState(bindState)
       .catch((error) => {
@@ -1240,7 +1248,7 @@ function createAssignSaveButton(bindState) {
 
     stopControlEvent(event);
 
-    if (!canSave) return;
+    if (!canSave || isSaving) return;
 
     void saveAssignState(bindState)
       .catch((error) => {
@@ -1254,19 +1262,23 @@ function createAssignSaveButton(bindState) {
 function createClearSaveButton(bindState) {
   const button = document.createElement('button');
 
+  const selectedCount = getSelectedClearEmojiIds(bindState).length;
+  const isSaving = Boolean(bindState?.isSaving);
+  const canSave = canSaveClearState(bindState);
+
+  const saveLabel = isSaving
+    ? '해제 저장 중'
+    : canSave
+      ? `${selectedCount}개 해제 저장`
+      : '해제할 이모티콘을 선택하세요';
+
   button.type = 'button';
   button.className = BIND_BUTTON_CLASS;
   button.classList.add(BIND_SAVE_BUTTON_CLASS);
-  const selectedCount = getSelectedClearEmojiIds(bindState).length;
-  const canSave = canSaveClearState(bindState);
-  const saveLabel = canSave
-    ? `${selectedCount}개 해제 저장`
-    : '해제할 이모티콘을 선택하세요';
-
   button.setAttribute('aria-label', saveLabel);
   button.setAttribute('title', saveLabel);
 
-  if (!canSave) {
+  if (!canSave || isSaving) {
     button.disabled = true;
     button.classList.add(BIND_BUTTON_DISABLED_CLASS);
   }
@@ -1278,7 +1290,7 @@ function createClearSaveButton(bindState) {
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
 
-    if (!canSave) return;
+    if (!canSave || isSaving) return;
 
     void saveClearState(bindState)
       .catch((error) => {
@@ -1296,7 +1308,7 @@ function createClearSaveButton(bindState) {
 
     stopControlEvent(event);
 
-    if (!canSave) return;
+    if (!canSave || isSaving) return;
 
     void saveClearState(bindState)
       .catch((error) => {
@@ -1307,14 +1319,20 @@ function createClearSaveButton(bindState) {
   return button;
 }
 
-function createAssignCancelButton() {
+function createAssignCancelButton(bindState) {
   const button = document.createElement('button');
+  const isSaving = Boolean(bindState?.isSaving);
 
   button.type = 'button';
   button.className = BIND_BUTTON_CLASS;
   button.classList.add(BIND_CANCEL_BUTTON_CLASS);
-  button.setAttribute('aria-label', '취소');
-  button.setAttribute('title', '취소');
+  button.setAttribute('aria-label', isSaving ? '저장 중' : '취소');
+  button.setAttribute('title', isSaving ? '저장 중' : '취소');
+
+  if (isSaving) {
+    button.disabled = true;
+    button.classList.add(BIND_BUTTON_DISABLED_CLASS);
+  }
 
   button.appendChild(createCancelXIcon());
 
@@ -1322,6 +1340,7 @@ function createAssignCancelButton() {
 
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
+    if (isSaving) return;
     cancelAssignState();
   });
 
@@ -1334,20 +1353,27 @@ function createAssignCancelButton() {
     }
 
     stopControlEvent(event);
+    if (isSaving) return;
     cancelAssignState();
   });
 
   return button;
 }
 
-function createClearCancelButton() {
+function createClearCancelButton(bindState) {
   const button = document.createElement('button');
+  const isSaving = Boolean(bindState?.isSaving);
 
   button.type = 'button';
   button.className = BIND_BUTTON_CLASS;
   button.classList.add(BIND_CANCEL_BUTTON_CLASS);
-  button.setAttribute('aria-label', '해제 취소');
-  button.setAttribute('title', '해제 취소');
+  button.setAttribute('aria-label', isSaving ? '해제 저장 중' : '해제 취소');
+  button.setAttribute('title', isSaving ? '해제 저장 중' : '해제 취소');
+
+  if (isSaving) {
+    button.disabled = true;
+    button.classList.add(BIND_BUTTON_DISABLED_CLASS);
+  }
 
   button.appendChild(createCancelXIcon());
 
@@ -1355,6 +1381,7 @@ function createClearCancelButton() {
 
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
+    if (isSaving) return;
     cancelClearState();
   });
 
@@ -1367,6 +1394,7 @@ function createClearCancelButton() {
     }
 
     stopControlEvent(event);
+    if (isSaving) return;
     cancelClearState();
   });
 
@@ -1374,39 +1402,71 @@ function createClearCancelButton() {
 }
 
 async function saveAssignState(bindState) {
-  if (!canSaveAssignState(bindState)) {
+  if (
+    !canSaveAssignState(bindState) ||
+    isEmoteBindSaving()
+  ) {
     return;
   }
 
-  await assignShortcutBindingTarget({
-    code: bindState.selectedCode,
-    phase: bindState.selectedPhase,
-    emojiId: bindState.selectedEmojiId,
-  });
-
-  exitEmoteBindMode();
-
+  setEmoteBindSaving(true);
   scheduleFavoriteEmoteSectionRender();
   scheduleBadgeUpdate();
+
+  try {
+		await assignShortcutBindingTarget({
+			code: normalizeShortcutCode(bindState.selectedCode),
+			phase: normalizeRenderPhase(bindState.selectedPhase),
+			emojiId: bindState.selectedEmojiId,
+		});
+
+    exitEmoteBindMode();
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+  } catch (error) {
+    setEmoteBindSaving(false);
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+
+    throw error;
+  }
 }
 
 async function saveClearState(bindState) {
   const emojiIds = getSelectedClearEmojiIds(bindState);
 
-  if (!emojiIds.length) {
+  if (
+    !emojiIds.length ||
+    isEmoteBindSaving()
+  ) {
     return;
   }
 
-  for (const emojiId of emojiIds) {
-    await clearShortcutBindingsByEmojiId({
-      emojiId,
-    });
-  }
-
-  exitEmoteBindMode();
-
+  setEmoteBindSaving(true);
   scheduleFavoriteEmoteSectionRender();
   scheduleBadgeUpdate();
+
+  try {
+    for (const emojiId of emojiIds) {
+      await clearShortcutBindingsByEmojiId({
+        emojiId,
+      });
+    }
+
+    exitEmoteBindMode();
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+  } catch (error) {
+    setEmoteBindSaving(false);
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+
+    throw error;
+  }
 }
 
 function cancelAssignState() {
@@ -1424,14 +1484,22 @@ function cancelClearState() {
 }
 
 function canSaveAssignState(bindState) {
+  if (bindState?.isSaving) {
+    return false;
+  }
+
   return Boolean(
     normalizeText(bindState?.selectedEmojiId) &&
-    normalizeText(bindState?.selectedCode) &&
-    normalizeText(bindState?.selectedPhase)
+    normalizeShortcutCode(bindState?.selectedCode) &&
+    normalizeRenderPhase(bindState?.selectedPhase)
   );
 }
 
 function canSaveClearState(bindState) {
+  if (bindState?.isSaving) {
+    return false;
+  }
+
   return getSelectedClearEmojiIds(bindState).length > 0;
 }
 
@@ -1937,4 +2005,8 @@ function stopControlEvent(event) {
 
 function normalizeText(value) {
   return String(value ?? '').trim();
+}
+
+function normalizeShortcutCode(value) {
+  return normalizeStoredShortcutCode(value);
 }

@@ -4,6 +4,10 @@ import {
   normalizeShortcutBinding,
 } from './shortcut-bindings.js';
 
+import {
+  normalizeStoredShortcutCode,
+} from './shortcut-key-code.js';
+
 export const SHORTCUT_BINDINGS_STORAGE_KEY = 'emzk_lite_shortcut_bindings_v1';
 export const SHORTCUT_BINDINGS_CHANGED_EVENT = 'emzk-lite-shortcut-bindings-changed';
 
@@ -530,12 +534,13 @@ function normalizeStoredShortcutBinding(binding) {
   const code = normalizeShortcutCode(normalizedBinding.code);
   const phase = normalizeStoredPhase(normalizedBinding.phase);
 
-  if (
-    !code ||
-    !phase
-  ) {
-    return null;
-  }
+	if (
+		!code ||
+		!phase ||
+		!normalizedBinding.actionConfig
+	) {
+		return null;
+	}
 
   return {
     ...normalizedBinding,
@@ -588,42 +593,11 @@ function getShortcutBindingKey(binding) {
 }
 
 function normalizeShortcutCode(code) {
-  const normalizedCode = String(code ?? '').trim();
-
-  if (!normalizedCode) {
-    return '';
-  }
-
-  if (isBlockedShortcutCode(normalizedCode)) {
-    return '';
-  }
-
-  return normalizedCode;
+  return normalizeStoredShortcutCode(code);
 }
 
 function normalizeEmojiId(emojiId) {
   return String(emojiId ?? '').trim();
-}
-
-function isBlockedShortcutCode(code) {
-  return (
-    code === 'Escape' ||
-    code === 'Tab' ||
-    code === 'CapsLock' ||
-    code === 'ContextMenu' ||
-
-    code === 'ShiftLeft' ||
-    code === 'ShiftRight' ||
-
-    code === 'ControlLeft' ||
-    code === 'ControlRight' ||
-
-    code === 'AltLeft' ||
-    code === 'AltRight' ||
-
-    code === 'MetaLeft' ||
-    code === 'MetaRight'
-  );
 }
 
 async function readShortcutBindingsStorageEntry() {

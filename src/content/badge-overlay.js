@@ -30,6 +30,10 @@ import {
   SHORTCUT_PHASE_UP,
 } from './shortcut-storage.js';
 
+import {
+  normalizeStoredShortcutCode,
+} from './shortcut-key-code.js';
+
 const BADGE_CLASS = 'emzk-lite-badge';
 const BADGE_TARGET_ATTR = 'data-emzk-lite-badge-target';
 
@@ -207,8 +211,8 @@ function applyAssignModeConflictBadges({
   const bindState = getEmoteBindModeState();
 
   const selectedEmojiId = normalizeText(bindState?.selectedEmojiId);
-  const selectedCode = normalizeText(bindState?.selectedCode);
-  const selectedPhase = normalizeText(bindState?.selectedPhase);
+  const selectedCode = normalizeShortcutCode(bindState?.selectedCode);
+  const selectedPhase = normalizePhase(bindState?.selectedPhase);
 
   if (
     !selectedEmojiId ||
@@ -225,9 +229,6 @@ function applyAssignModeConflictBadges({
       return assignment;
     }
 
-    /*
-     * 같은 이모티콘에 같은 키를 다시 지정하는 경우는 충돌로 보지 않는다.
-     */
     if (emojiId === selectedEmojiId) {
       return assignment;
     }
@@ -258,8 +259,8 @@ function hasShortcutAssignmentConflict({
     : [assignment];
 
   return items.some((item) => {
-    const itemCode = normalizeText(item?.code);
-    const itemPhase = normalizeText(item?.phase);
+    const itemCode = normalizeShortcutCode(item?.code);
+    const itemPhase = normalizePhase(item?.phase);
 
     if (itemCode !== selectedCode) {
       return false;
@@ -485,4 +486,8 @@ function areOnlyBadgeNodes(nodes) {
 
 function normalizeText(value) {
   return String(value ?? '').trim();
+}
+
+function normalizeShortcutCode(value) {
+  return normalizeStoredShortcutCode(value);
 }

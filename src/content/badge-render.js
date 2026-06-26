@@ -100,13 +100,13 @@ function renderAssignmentBadges({
   removeStaleBadges(targetButtonSet);
 
   badgeTargets.forEach((target) => {
-ensureBadge({
-  button: target.button,
-  label: target.label,
-  title: target.title,
-  badgeType: target.badgeType,
-  badgeState: target.badgeState,
-});
+		ensureBadge({
+			button: target.button,
+			label: target.label,
+			title: target.title,
+			badgeType: target.badgeType,
+			badgeState: target.badgeState,
+		});
   });
 }
 

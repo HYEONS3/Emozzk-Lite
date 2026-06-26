@@ -12,6 +12,7 @@ import {
 
 import {
   getShortcutCodeLabel,
+  normalizeStoredShortcutCode,
 } from './shortcut-key-code.js';
 
 export const EMOTE_BIND_MODE_NONE = 'none';
@@ -37,6 +38,7 @@ const DEFAULT_BIND_MODE_STATE = {
   selectedClearEmojiIds: [],
 
   keyListening: false,
+  isSaving: false,
 };
 
 let bindModeState = {
@@ -71,10 +73,11 @@ export function setEmoteBindModeState(nextState = {}) {
 export function resetEmoteBindModeState() {
   const previousState = bindModeState;
 
-  bindModeState = {
-    ...DEFAULT_BIND_MODE_STATE,
-    selectedClearEmojiIds: [],
-  };
+	bindModeState = {
+		...DEFAULT_BIND_MODE_STATE,
+		selectedClearEmojiIds: [],
+		isSaving: false,
+	};
 
   dispatchEmoteBindModeChanged({
     previousState,
@@ -99,6 +102,7 @@ export function enterEmoteBindAssignMode() {
     mode: EMOTE_BIND_MODE_ASSIGN,
     selectedClearEmojiIds: [],
     keyListening: false,
+    isSaving: false,
   });
 }
 
@@ -112,6 +116,7 @@ export function enterEmoteBindClearMode() {
 
     selectedClearEmojiIds: [],
     keyListening: false,
+    isSaving: false,
   });
 }
 
@@ -201,6 +206,21 @@ export function stopEmoteBindKeyListening() {
   return setEmoteBindModeState({
     keyListening: false,
   });
+}
+
+export function setEmoteBindSaving(isSaving) {
+  if (!isEmoteBindModeActive()) {
+    return getEmoteBindModeState();
+  }
+
+  return setEmoteBindModeState({
+    isSaving: Boolean(isSaving),
+    keyListening: false,
+  });
+}
+
+export function isEmoteBindSaving() {
+  return Boolean(bindModeState.isSaving);
 }
 
 export function setEmoteBindClearSelection(emojiIds) {
@@ -425,7 +445,11 @@ function normalizeBindModeState(state) {
       : [],
 
     keyListening: normalizedMode === EMOTE_BIND_MODE_ASSIGN
-      ? Boolean(state.keyListening)
+      ? Boolean(state.keyListening) && !Boolean(state.isSaving)
+      : false,
+
+    isSaving: normalizedMode !== EMOTE_BIND_MODE_NONE
+      ? Boolean(state.isSaving)
       : false,
   };
 }
@@ -443,17 +467,7 @@ function normalizeBindMode(mode) {
 }
 
 function normalizeEmoteBindCode(code) {
-  const normalizedCode = normalizeText(code);
-
-  if (!normalizedCode) {
-    return '';
-  }
-
-  if (isBlockedBindCode(normalizedCode)) {
-    return '';
-  }
-
-  return normalizedCode;
+  return normalizeStoredShortcutCode(code);
 }
 
 function normalizeEmoteBindPhase(phase) {
@@ -486,27 +500,6 @@ function normalizeEmojiIdList(values) {
   });
 
   return result;
-}
-
-function isBlockedBindCode(code) {
-  return (
-    code === 'Escape' ||
-    code === 'Tab' ||
-    code === 'CapsLock' ||
-    code === 'ContextMenu' ||
-
-    code === 'ShiftLeft' ||
-    code === 'ShiftRight' ||
-
-    code === 'ControlLeft' ||
-    code === 'ControlRight' ||
-
-    code === 'AltLeft' ||
-    code === 'AltRight' ||
-
-    code === 'MetaLeft' ||
-    code === 'MetaRight'
-  );
 }
 
 function normalizeText(value) {

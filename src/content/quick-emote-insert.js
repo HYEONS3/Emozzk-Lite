@@ -14,8 +14,10 @@ import {
 } from './emote-panel-ready.js';
 
 import {
-  focusChatInputAtEnd,
-  scheduleChatInputNormalizeAfterEmoteSettle,
+  prepareChatInputForQuickEmoteInsert,
+  cleanupQuickInsertInputBeforeClick,
+  scheduleQuickInsertInputCleanupAfterClick,
+  scheduleChatInputFocusEndAfterQuickInsert,
 } from './chat-input.js';
 
 import {
@@ -301,6 +303,36 @@ async function executeInsertItem({
       return false;
     }
 
+    /*
+     * 단축키 삽입 전용 준비.
+     *
+     * CHZZK 입력창이 textarea 상태일 수 있으므로,
+     * 가능한 경우 pre[contenteditable] 준비와 caret end를 먼저 수행한다.
+     */
+    const prepared = await prepareChatInputForQuickEmoteInsert();
+
+    if (!prepared) {
+      await waitRetryInterval();
+      continue;
+    }
+
+    /*
+     * 텍스트를 입력했다가 Backspace로 모두 지운 뒤 남는
+     * <pre><br></pre> technical filler를 click 전에 제거한다.
+     *
+     * 이 cleanup이 CHZZK state 갱신 input 이벤트를 발생시킬 수 있으므로
+     * 변경이 있었다면 한 프레임 기다린다.
+     */
+    const cleanedBeforeClick = cleanupQuickInsertInputBeforeClick();
+
+    if (cleanedBeforeClick) {
+      await waitAnimationFrames(1);
+    }
+
+    /*
+     * 입력창 준비/cleanup 과정에서 panel DOM이 갱신될 수 있으므로
+     * 실제 click 직전에 ready panel을 다시 잡는다.
+     */
     const currentPanel = getCurrentReadyPanel(panel);
 
     if (!currentPanel) {
@@ -309,13 +341,7 @@ async function executeInsertItem({
     }
 
     /*
-     * 단축키 삽입에서는 채팅창 focus 복구가 필요하다.
-     * 직접 마우스 클릭에는 이 파일이 관여하지 않는다.
-     */
-    focusChatInputAtEnd();
-
-    /*
-     * focus 복구/normalize 과정에서 DOM이 바뀔 수 있으므로,
+     * focus 복구/cleanup 과정에서 DOM이 바뀔 수 있으므로,
      * 실제 CHZZK 이모티콘 버튼 click 직전에 다시 제한을 본다.
      *
      * 이 검사가 없으면 10개 제한 상태에서도 버튼 click이 발생해
@@ -334,15 +360,15 @@ async function executeInsertItem({
 
     if (clickResult.clicked) {
       /*
-       * 중요:
        * 여기서 button.click()까지 보냈다면 이 item은 완료다.
        * CHZZK가 입력창 상태나 내부 정책 때문에 삽입을 거부해도
        * 확장프로그램은 retry하지 않는다.
        *
-       * 그래야 제한 토스트 이후 Backspace를 눌렀을 때
-       * 이전 keyup item이 다시 살아나는 문제가 생기지 않는다.
+       * 단축키 삽입 후에는 새로 남을 수 있는 leading technical <br>을
+       * settle 뒤 한 번 정리하고, caret을 끝으로 복구한다.
        */
-      scheduleChatInputNormalizeAfterEmoteSettle();
+      scheduleQuickInsertInputCleanupAfterClick();
+      scheduleChatInputFocusEndAfterQuickInsert();
       scheduleBadgeUpdate();
 
       return true;

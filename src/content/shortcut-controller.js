@@ -56,6 +56,8 @@ import {
 
 import {
   getShortcutCodeFromKeyboardEvent,
+  isImeKeyboardEvent,
+  normalizeStoredShortcutCode,
 } from './shortcut-key-code.js';
 
 const EVENT_PHASE_KEYDOWN = 'keydown';
@@ -76,7 +78,9 @@ export function attachShortcutController() {
 
   document.addEventListener(EVENT_PHASE_KEYDOWN, handleShortcutEvent, true);
   document.addEventListener(EVENT_PHASE_KEYUP, handleShortcutEvent, true);
+
   window.addEventListener('blur', clearActivePresses, true);
+
   window.addEventListener(
     SHORTCUT_BINDINGS_CHANGED_EVENT,
     handleShortcutBindingsChanged
@@ -90,7 +94,9 @@ export function detachShortcutController() {
 
   document.removeEventListener(EVENT_PHASE_KEYDOWN, handleShortcutEvent, true);
   document.removeEventListener(EVENT_PHASE_KEYUP, handleShortcutEvent, true);
+
   window.removeEventListener('blur', clearActivePresses, true);
+
   window.removeEventListener(
     SHORTCUT_BINDINGS_CHANGED_EVENT,
     handleShortcutBindingsChanged
@@ -143,15 +149,22 @@ function handleShortcutEvent(event) {
 
   /*
    * bind / unbind 모드에서는 emote-bind-events.js가 우선 처리한다.
-   * 여기서는 안전하게 기존 단축키 실행을 막는다.
+   * 여기서는 기존 단축키 실행만 막는다.
    */
   if (isEmoteBindModeActive()) {
     return;
   }
 
-  if (phase === EVENT_PHASE_KEYUP) {
-    if (event.isComposing) return;
+  /*
+   * 한글 IME 조합 입력은 Emozzk 단축키로 처리하지 않는다.
+   * event.code가 KeyQ처럼 들어와도 key=Process/keyCode=229면 무시한다.
+   */
+  if (isImeKeyboardEvent(event)) {
+    clearActivePressForEvent(event);
+    return;
+  }
 
+  if (phase === EVENT_PHASE_KEYUP) {
     handleShortcutKeyUp({
       event,
     });
@@ -159,7 +172,9 @@ function handleShortcutEvent(event) {
     return;
   }
 
-  if (shouldIgnoreKeyDownEvent(event)) return;
+  if (event.defaultPrevented) {
+    return;
+  }
 
   const state = getShortcutContext(event);
 
@@ -236,13 +251,13 @@ function handleShortcutKeyDown({
    */
   if (
     shouldBlockBindingPhase({
-      binding: downBinding || upBinding,
+      binding: primaryBinding,
       phase: EVENT_PHASE_KEYDOWN,
     })
   ) {
     blockKeyboardEvent({
       event,
-      binding: downBinding || upBinding,
+      binding: primaryBinding,
     });
   }
 
@@ -342,10 +357,12 @@ function handleActiveShortcutKeyUp({
     return;
   }
 
-  if (shouldBlockBindingPhase({
-    binding: upBinding,
-    phase: EVENT_PHASE_KEYUP,
-  })) {
+  if (
+    shouldBlockBindingPhase({
+      binding: upBinding,
+      phase: EVENT_PHASE_KEYUP,
+    })
+  ) {
     blockKeyboardEvent({
       event,
       binding: upBinding,
@@ -401,10 +418,12 @@ function handleLooseShortcutKeyUp({
     return true;
   }
 
-  if (shouldBlockBindingPhase({
-    binding: upBinding,
-    phase: EVENT_PHASE_KEYUP,
-  })) {
+  if (
+    shouldBlockBindingPhase({
+      binding: upBinding,
+      phase: EVENT_PHASE_KEYUP,
+    })
+  ) {
     blockKeyboardEvent({
       event,
       binding: upBinding,
@@ -459,7 +478,7 @@ function handleOpenPanelShortcut({
 }) {
   if (event.code !== 'KeyE') return false;
   if (hasAnyModifier(event)) return false;
-  if (state.isChatTyping) return false;
+  if (state.isTyping) return false;
 
   blockKeyboardEvent({
     event,
@@ -503,7 +522,7 @@ function findMatchedShortcutBindingForPhase({
 
 function isModernShortcutBinding(binding) {
   return Boolean(
-    normalizeCode(binding?.code) &&
+    normalizeStoredShortcutCode(binding?.code) &&
     normalizeStoragePhase(binding?.phase) &&
     binding?.actionConfig
   );
@@ -515,12 +534,16 @@ function isModernShortcutBindingMatched({
   storagePhase,
 }) {
   const eventCode = getShortcutCodeFromKeyboardEvent(event);
+  const bindingCode = normalizeStoredShortcutCode(binding?.code);
 
-  if (!eventCode) {
+  if (
+    !eventCode ||
+    !bindingCode
+  ) {
     return false;
   }
 
-  if (binding.code !== eventCode) {
+  if (bindingCode !== eventCode) {
     return false;
   }
 
@@ -566,29 +589,23 @@ function isShortcutBindingAllowedInState({
 }) {
   if (!binding) return false;
 
+  /*
+   * 패널이 열려 있으면 이모티콘 선택 단축키를 허용한다.
+   * 이때 채팅 입력창 focus가 있어도 패널 조작 상태로 본다.
+   */
+  if (state.panel) {
+    return true;
+  }
+
   if (state.isNonChatTyping) {
     return false;
   }
 
-  if (
-    state.isChatTyping &&
-    binding.options?.enabledInChatInput !== true
-  ) {
-    return false;
+  if (state.isChatTyping) {
+    return binding.options?.enabledInChatInput === true;
   }
 
-  if (
-    state.isTyping &&
-    !state.isChatTyping &&
-    binding.options?.enabledInSearchInput !== true
-  ) {
-    return false;
-  }
-
-  return Boolean(
-    state.isChatTyping ||
-    state.panel
-  );
+  return false;
 }
 
 function shouldBlockBindingPhase({
@@ -633,7 +650,7 @@ function blockKeyboardEvent({
 
   if (options.stopPropagation !== false) {
     event.stopPropagation();
-    event.stopImmediatePropagation();
+    event.stopImmediatePropagation?.();
   }
 }
 
@@ -647,13 +664,6 @@ function getShortcutContext(event) {
     isChatTyping,
     isNonChatTyping: isTyping && !isChatTyping,
   };
-}
-
-function shouldIgnoreKeyDownEvent(event) {
-  return (
-    event.defaultPrevented ||
-    event.isComposing
-  );
 }
 
 function isTypingContext(event) {
@@ -707,6 +717,14 @@ function hasAnyModifier(event) {
   );
 }
 
+function clearActivePressForEvent(event) {
+  const pressKey = getActivePressKeyFromEvent(event);
+
+  if (!pressKey) return;
+
+  activePresses.delete(pressKey);
+}
+
 function openPanelFromShortcut() {
   const opened = openEmotePanel();
 
@@ -744,11 +762,11 @@ function handleShortcutBindingsChanged(event) {
 
 function getActivePressKeyFromEvent(event) {
   /*
-   * activePress는 code 기준으로 관리한다.
+   * activePress는 physical code 기준으로 관리한다.
    *
    * 이유:
    * keydown 시점과 keyup 시점에 modifier 상태나 focus target이 달라질 수 있다.
-   * keyup은 "같은 physical key를 뗐는지"가 중요하다.
+   * keyup은 "같은 물리 키를 뗐는지"가 중요하다.
    */
   return String(event?.code || '');
 }
@@ -761,13 +779,21 @@ function normalizeControllerBinding(binding) {
   const normalizedBinding = normalizeShortcutBinding?.(binding);
 
   if (normalizedBinding) {
+    if (isModernShortcutBinding(normalizedBinding)) {
+      return {
+        ...normalizedBinding,
+        code: normalizeStoredShortcutCode(normalizedBinding.code),
+        phase: normalizeStoragePhase(normalizedBinding.phase),
+      };
+    }
+
     return normalizedBinding;
   }
 
   if (isModernShortcutBinding(binding)) {
     return {
       ...binding,
-      code: normalizeCode(binding.code),
+      code: normalizeStoredShortcutCode(binding.code),
       phase: normalizeStoragePhase(binding.phase),
     };
   }
@@ -781,10 +807,6 @@ function normalizeStoragePhase(phase) {
   }
 
   return SHORTCUT_PHASE_DOWN;
-}
-
-function normalizeCode(value) {
-  return String(value ?? '').trim();
 }
 
 function normalizeText(value) {

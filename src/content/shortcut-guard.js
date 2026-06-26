@@ -15,7 +15,6 @@ export function isTypingTarget(target = document.activeElement) {
 export function shouldIgnoreShortcut(event) {
   if (!event) return true;
   if (event.defaultPrevented) return true;
-  if (event.isComposing) return true;
   if (hasBlockingModifier(event)) return true;
 
   return (

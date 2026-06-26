@@ -18,6 +18,7 @@ import {
 
 import {
   getShortcutCodeLabel,
+  normalizeStoredShortcutCode,
 } from './shortcut-key-code.js';
 
 export function getShortcutBadgeAssignments(panel) {
@@ -145,16 +146,18 @@ function collectBadgeAssignmentsFromBinding({
   /*
    * 기존/호환 구조:
    * {
-   *   trigger: { code },
+   *   trigger: { code, ctrl, alt, shift, meta },
    *   onDown,
    *   onUp
    * }
    */
+  const legacyCode = getShortcutCodeFromLegacyTrigger(binding?.trigger);
+
   collectBadgeAssignment({
     rawAssignments,
     binding,
     actionConfig: binding?.onDown,
-    code: binding?.trigger?.code,
+    code: legacyCode,
     phase: SHORTCUT_PHASE_DOWN,
     buttons,
   });
@@ -163,7 +166,7 @@ function collectBadgeAssignmentsFromBinding({
     rawAssignments,
     binding,
     actionConfig: binding?.onUp,
-    code: binding?.trigger?.code,
+    code: legacyCode,
     phase: SHORTCUT_PHASE_UP,
     buttons,
   });
@@ -462,6 +465,28 @@ function getIndexEmojiIdFromActionArgs({
   return normalizeEmojiId(getEmoteIdFromButton(button));
 }
 
+function getShortcutCodeFromLegacyTrigger(trigger) {
+  if (!trigger || typeof trigger !== 'object') {
+    return '';
+  }
+
+  const code = normalizeCode(trigger.code);
+
+  if (!code) {
+    return '';
+  }
+
+  return normalizeStoredShortcutCode([
+    trigger.ctrl ? 'Ctrl' : '',
+    trigger.alt ? 'Alt' : '',
+    trigger.shift ? 'Shift' : '',
+    trigger.meta ? 'Meta' : '',
+    code,
+  ]
+    .filter(Boolean)
+    .join('+'));
+}
+
 function isSelectEmoteAction(actionConfig) {
   return (
     actionConfig &&
@@ -494,7 +519,7 @@ function normalizeStoragePhase(phase) {
 }
 
 function normalizeCode(value) {
-  return String(value ?? '').trim();
+  return normalizeStoredShortcutCode(value);
 }
 
 function normalizeEmojiId(value) {
