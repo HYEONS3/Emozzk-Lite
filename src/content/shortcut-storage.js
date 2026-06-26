@@ -15,10 +15,12 @@ export const SHORTCUT_PHASE_DOWN = 'down';
 export const SHORTCUT_PHASE_UP = 'up';
 export const SHORTCUT_PHASE_BOTH = 'both';
 
+export const SHORTCUT_BINDING_SET_OFF = 'off';
 export const SHORTCUT_BINDING_SET_1 = 'set_1';
 export const SHORTCUT_BINDING_SET_2 = 'set_2';
+export const SHORTCUT_BINDING_SET_3 = 'set_3';
 
-const SHORTCUT_BINDING_SETS_VERSION = 2;
+const SHORTCUT_BINDING_SETS_VERSION = 3;
 
 const USER_BINDING_SOURCE = 'user';
 
@@ -30,6 +32,10 @@ const DEFAULT_SHORTCUT_BINDING_SETS = [
   {
     id: SHORTCUT_BINDING_SET_2,
     label: '2',
+  },
+  {
+    id: SHORTCUT_BINDING_SET_3,
+    label: '3',
   },
 ];
 
@@ -49,6 +55,10 @@ export async function initShortcutBindingsStorage() {
 }
 
 export function getCachedShortcutBindings() {
+  if (cachedShortcutBindingSetState.activeSetId === SHORTCUT_BINDING_SET_OFF) {
+    return [];
+  }
+
   return getShortcutBindingsForSet(
     cachedShortcutBindingSetState,
     cachedShortcutBindingSetState.activeSetId
@@ -380,8 +390,10 @@ function normalizeShortcutBindingSetId(setId) {
   const normalizedSetId = String(setId ?? '').trim();
 
   if (
+    normalizedSetId === SHORTCUT_BINDING_SET_OFF ||
     normalizedSetId === SHORTCUT_BINDING_SET_1 ||
-    normalizedSetId === SHORTCUT_BINDING_SET_2
+    normalizedSetId === SHORTCUT_BINDING_SET_2 ||
+    normalizedSetId === SHORTCUT_BINDING_SET_3
   ) {
     return normalizedSetId;
   }
@@ -409,6 +421,19 @@ function setShortcutBindingsForActiveSet({
 }) {
   const activeSetId = normalizeShortcutBindingSetId(state.activeSetId) ||
     SHORTCUT_BINDING_SET_1;
+
+  if (activeSetId === SHORTCUT_BINDING_SET_OFF) {
+    return {
+      ...state,
+      activeSetId,
+      sets: state.sets.map((set) => {
+        return {
+          ...set,
+          bindings: normalizeShortcutBindings(set.bindings),
+        };
+      }),
+    };
+  }
 
   return {
     ...state,

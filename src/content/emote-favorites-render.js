@@ -53,8 +53,10 @@ import {
   getCachedShortcutBindingSetState,
   setActiveShortcutBindingSet,
   SHORTCUT_BINDINGS_CHANGED_EVENT,
+  SHORTCUT_BINDING_SET_OFF,
   SHORTCUT_BINDING_SET_1,
   SHORTCUT_BINDING_SET_2,
+  SHORTCUT_BINDING_SET_3,
   SHORTCUT_PHASE_BOTH,
   SHORTCUT_PHASE_DOWN,
   SHORTCUT_PHASE_UP,
@@ -113,6 +115,21 @@ const FAVORITES_RENDER_STATE_READY = 'ready';
 
 const BADGE_CLASS = 'emzk-lite-badge';
 const BADGE_TARGET_ATTR = 'data-emzk-lite-badge-target';
+
+const SHORTCUT_SET_DEFAULT_OPTIONS = [
+  {
+    id: SHORTCUT_BINDING_SET_1,
+    label: '1',
+  },
+  {
+    id: SHORTCUT_BINDING_SET_2,
+    label: '2',
+  },
+  {
+    id: SHORTCUT_BINDING_SET_3,
+    label: '3',
+  },
+];
 
 let started = false;
 let rafId = 0;
@@ -513,6 +530,7 @@ function renderFavoriteTitle({
 
 function createDefaultTitleContent(bindState) {
   const fragment = document.createDocumentFragment();
+  const shortcutsOff = isShortcutBindingOff();
 
   const label = document.createElement('span');
   label.className = FAVORITES_LABEL_CLASS;
@@ -521,30 +539,30 @@ function createDefaultTitleContent(bindState) {
   const actions = document.createElement('span');
   actions.className = FAVORITES_ACTIONS_CLASS;
 
-  const shortcutSetSwitch = createShortcutSetSwitch();
-
-  const assignButton = createHeaderIconButton({
-    icon: 'link',
-    label: '키 지정',
-    active: bindState.mode === EMOTE_BIND_MODE_ASSIGN,
-    onClick: () => {
-      toggleEmoteBindAssignMode();
-    },
-  });
-
-  const clearButton = createHeaderIconButton({
-    icon: 'unlink',
-    label: bindState.mode === EMOTE_BIND_MODE_CLEAR ? '해제 중' : '해제',
-    active: bindState.mode === EMOTE_BIND_MODE_CLEAR,
-    onClick: () => {
-      toggleEmoteBindClearMode();
-    },
-  });
-
   actions.append(
-    shortcutSetSwitch,
-    assignButton,
-    clearButton
+    createShortcutSetSwitch(),
+    createHeaderIconButton({
+      icon: 'link',
+      label: '키 지정',
+      title: shortcutsOff
+        ? 'OFF 상태에서는 키 지정할 수 없습니다.'
+        : '키 지정',
+      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_ASSIGN,
+      disabled: shortcutsOff,
+      onClick: toggleAssignModeIfShortcutEnabled,
+    }),
+    createHeaderIconButton({
+      icon: 'unlink',
+      label: bindState.mode === EMOTE_BIND_MODE_CLEAR ? '해제 중' : '해제',
+      title: shortcutsOff
+        ? 'OFF 상태에서는 단축키를 해제할 수 없습니다.'
+        : bindState.mode === EMOTE_BIND_MODE_CLEAR
+          ? '해제 중'
+          : '해제',
+      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_CLEAR,
+      disabled: shortcutsOff,
+      onClick: toggleClearModeIfShortcutEnabled,
+    })
   );
 
   fragment.append(
@@ -593,70 +611,46 @@ function createShortcutSetSwitch() {
   wrapper.setAttribute('role', 'group');
   wrapper.setAttribute('aria-label', '단축키 세트 전환');
 
-  const setState = getCachedShortcutBindingSetState();
   const activeSetId = getCachedActiveShortcutBindingSetId();
+  const sets = getShortcutSetSwitchOptions();
 
   wrapper.setAttribute(
     'data-emzk-lite-active-shortcut-set',
-    activeSetId === SHORTCUT_BINDING_SET_2 ? '2' : '1'
+    getShortcutSetActiveViewValue(activeSetId)
   );
 
-  const sets = Array.isArray(setState?.sets) && setState.sets.length
-    ? setState.sets
-    : [
-      {
-        id: SHORTCUT_BINDING_SET_1,
-        label: '1',
-      },
-      {
-        id: SHORTCUT_BINDING_SET_2,
-        label: '2',
-      },
-    ];
-
-  sets.forEach((set) => {
-    const setId = normalizeShortcutSetId(set?.id);
-
-    if (!setId) return;
-
-    const label = normalizeText(set?.label) ||
-      getShortcutSetFallbackLabel(setId);
-
-    wrapper.appendChild(createShortcutSetButton({
-      setId,
-      label,
-      active: setId === activeSetId,
-    }));
+  createShortcutSetButtons({
+    sets,
+    activeSetId,
+  }).forEach((button) => {
+    wrapper.appendChild(button);
   });
 
   return wrapper;
 }
 
 function updateShortcutSetSwitch(wrapper) {
-  if (!(wrapper instanceof HTMLElement)) {
-    return;
-  }
-
-  const setState = getCachedShortcutBindingSetState();
   const activeSetId = getCachedActiveShortcutBindingSetId();
+  const sets = getShortcutSetSwitchOptions();
 
   wrapper.setAttribute(
     'data-emzk-lite-active-shortcut-set',
-    activeSetId === SHORTCUT_BINDING_SET_2 ? '2' : '1'
+    getShortcutSetActiveViewValue(activeSetId)
   );
 
-  const sets = Array.isArray(setState?.sets) && setState.sets.length
-    ? setState.sets
-    : [
-      {
-        id: SHORTCUT_BINDING_SET_1,
-        label: '1',
-      },
-      {
-        id: SHORTCUT_BINDING_SET_2,
-        label: '2',
-      },
-    ];
+  if (shouldRebuildShortcutSetSwitch({
+    wrapper,
+    sets,
+  })) {
+    wrapper.replaceChildren(
+      ...createShortcutSetButtons({
+        sets,
+        activeSetId,
+      })
+    );
+
+    return;
+  }
 
   sets.forEach((set) => {
     const setId = normalizeShortcutSetId(set?.id);
@@ -677,10 +671,101 @@ function updateShortcutSetSwitch(wrapper) {
     const active = setId === activeSetId;
 
     button.textContent = label;
-    button.setAttribute('aria-label', `단축키 세트 ${label}`);
-    button.setAttribute('title', `단축키 세트 ${label}`);
+    button.setAttribute('aria-label', getShortcutSetButtonAriaLabel({
+      setId,
+      label,
+    }));
+    button.setAttribute('title', getShortcutSetButtonTitle({
+      setId,
+      label,
+    }));
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
     button.classList.toggle(SHORTCUT_SET_BUTTON_ACTIVE_CLASS, active);
+  });
+}
+
+function getShortcutSetSwitchOptions() {
+  const setState = getCachedShortcutBindingSetState();
+  const storedSets = Array.isArray(setState?.sets)
+    ? setState.sets
+    : [];
+
+  const storedSetById = new Map();
+
+  storedSets.forEach((set) => {
+    const setId = normalizeShortcutSetId(set?.id);
+
+    if (!setId || setId === SHORTCUT_BINDING_SET_OFF) {
+      return;
+    }
+
+    storedSetById.set(setId, set);
+  });
+
+  const actualSets = SHORTCUT_SET_DEFAULT_OPTIONS.map((defaultSet) => {
+    const storedSet = storedSetById.get(defaultSet.id);
+
+    return {
+      id: defaultSet.id,
+      label: normalizeText(storedSet?.label) || defaultSet.label,
+    };
+  });
+
+  return [
+    {
+      id: SHORTCUT_BINDING_SET_OFF,
+      label: 'OFF',
+    },
+    ...actualSets,
+  ];
+}
+
+function createShortcutSetButtons({
+  sets,
+  activeSetId,
+}) {
+  return sets
+    .map((set) => {
+      const setId = normalizeShortcutSetId(set?.id);
+
+      if (!setId) return null;
+
+      const label = normalizeText(set?.label) ||
+        getShortcutSetFallbackLabel(setId);
+
+      return createShortcutSetButton({
+        setId,
+        label,
+        active: setId === activeSetId,
+      });
+    })
+    .filter(Boolean);
+}
+
+function shouldRebuildShortcutSetSwitch({
+  wrapper,
+  sets,
+}) {
+  const buttons = Array.from(
+    wrapper.querySelectorAll(`:scope > .${SHORTCUT_SET_BUTTON_CLASS}`)
+  );
+
+  const expectedSetIds = sets
+    .map((set) => normalizeShortcutSetId(set?.id))
+    .filter(Boolean);
+
+  const currentSetIds = buttons
+    .map((button) => normalizeShortcutSetId(
+      button.getAttribute('data-emzk-lite-shortcut-set-id')
+    ))
+    .filter(Boolean);
+
+  if (currentSetIds.length !== expectedSetIds.length) {
+    return true;
+  }
+
+  return expectedSetIds.some((setId) => {
+    return !currentSetIds.includes(setId);
   });
 }
 
@@ -688,6 +773,8 @@ function syncDefaultHeaderActionButtons({
   actions,
   bindState,
 }) {
+  const shortcutsOff = isShortcutBindingOff();
+
   const buttons = Array.from(
     actions.querySelectorAll(`:scope > .${BIND_BUTTON_CLASS}`)
   );
@@ -707,33 +794,29 @@ function syncDefaultHeaderActionButtons({
       const label = button.getAttribute('aria-label');
 
       if (label === '키 지정') {
-        button.classList.toggle(
-          BIND_BUTTON_ACTIVE_CLASS,
-          bindState.mode === EMOTE_BIND_MODE_ASSIGN
-        );
-        button.setAttribute(
-          'aria-pressed',
-          bindState.mode === EMOTE_BIND_MODE_ASSIGN ? 'true' : 'false'
-        );
+        syncHeaderIconButtonState(button, {
+          label: '키 지정',
+          title: shortcutsOff
+            ? 'OFF 상태에서는 키 지정할 수 없습니다.'
+            : '키 지정',
+          active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_ASSIGN,
+          disabled: shortcutsOff,
+        });
       }
 
       if (label === '해제' || label === '해제 중') {
-        button.classList.toggle(
-          BIND_BUTTON_ACTIVE_CLASS,
-          bindState.mode === EMOTE_BIND_MODE_CLEAR
-        );
-        button.setAttribute(
-          'aria-pressed',
-          bindState.mode === EMOTE_BIND_MODE_CLEAR ? 'true' : 'false'
-        );
-        button.setAttribute(
-          'aria-label',
-          bindState.mode === EMOTE_BIND_MODE_CLEAR ? '해제 중' : '해제'
-        );
-        button.setAttribute(
-          'title',
-          bindState.mode === EMOTE_BIND_MODE_CLEAR ? '해제 중' : '해제'
-        );
+        const clearLabel = bindState.mode === EMOTE_BIND_MODE_CLEAR
+          ? '해제 중'
+          : '해제';
+
+        syncHeaderIconButtonState(button, {
+          label: clearLabel,
+          title: shortcutsOff
+            ? 'OFF 상태에서는 단축키를 해제할 수 없습니다.'
+            : clearLabel,
+          active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_CLEAR,
+          disabled: shortcutsOff,
+        });
       }
     });
 
@@ -745,20 +828,40 @@ function syncDefaultHeaderActionButtons({
     createHeaderIconButton({
       icon: 'link',
       label: '키 지정',
-      active: bindState.mode === EMOTE_BIND_MODE_ASSIGN,
-      onClick: () => {
-        toggleEmoteBindAssignMode();
-      },
+      title: shortcutsOff
+        ? 'OFF 상태에서는 키 지정할 수 없습니다.'
+        : '키 지정',
+      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_ASSIGN,
+      disabled: shortcutsOff,
+      onClick: toggleAssignModeIfShortcutEnabled,
     }),
     createHeaderIconButton({
       icon: 'unlink',
       label: bindState.mode === EMOTE_BIND_MODE_CLEAR ? '해제 중' : '해제',
-      active: bindState.mode === EMOTE_BIND_MODE_CLEAR,
-      onClick: () => {
-        toggleEmoteBindClearMode();
-      },
+      title: shortcutsOff
+        ? 'OFF 상태에서는 단축키를 해제할 수 없습니다.'
+        : bindState.mode === EMOTE_BIND_MODE_CLEAR
+          ? '해제 중'
+          : '해제',
+      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_CLEAR,
+      disabled: shortcutsOff,
+      onClick: toggleClearModeIfShortcutEnabled,
     })
   );
+}
+
+function syncHeaderIconButtonState(button, {
+  label,
+  title,
+  active,
+  disabled,
+}) {
+  button.disabled = Boolean(disabled);
+  button.setAttribute('aria-label', label);
+  button.setAttribute('title', title || label);
+  button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  button.classList.toggle(BIND_BUTTON_ACTIVE_CLASS, Boolean(active));
+  button.classList.toggle(BIND_BUTTON_DISABLED_CLASS, Boolean(disabled));
 }
 
 function createShortcutSetButton({
@@ -772,8 +875,14 @@ function createShortcutSetButton({
   button.className = SHORTCUT_SET_BUTTON_CLASS;
   button.textContent = label;
   button.setAttribute('data-emzk-lite-shortcut-set-id', setId);
-  button.setAttribute('aria-label', `단축키 세트 ${label}`);
-  button.setAttribute('title', `단축키 세트 ${label}`);
+  button.setAttribute('aria-label', getShortcutSetButtonAriaLabel({
+    setId,
+    label,
+  }));
+  button.setAttribute('title', getShortcutSetButtonTitle({
+    setId,
+    label,
+  }));
   button.setAttribute('aria-pressed', active ? 'true' : 'false');
 
   if (active) {
@@ -819,11 +928,17 @@ function createShortcutSetButton({
 }
 
 function isShortcutSetButtonCurrentlyActive(setId) {
-  return getCachedActiveShortcutBindingSetId() === setId;
+  return getCachedActiveShortcutBindingSetId() === normalizeShortcutSetId(setId);
 }
 
 async function switchShortcutSet(setId) {
-  await setActiveShortcutBindingSet(setId);
+  const normalizedSetId = normalizeShortcutSetId(setId);
+
+  if (!normalizedSetId) {
+    return;
+  }
+
+  await setActiveShortcutBindingSet(normalizedSetId);
 
   /*
    * setActiveShortcutBindingSet() 내부에서 SHORTCUT_BINDINGS_CHANGED_EVENT가 발생하지만,
@@ -837,8 +952,10 @@ function normalizeShortcutSetId(setId) {
   const normalizedSetId = normalizeText(setId);
 
   if (
+    normalizedSetId === SHORTCUT_BINDING_SET_OFF ||
     normalizedSetId === SHORTCUT_BINDING_SET_1 ||
-    normalizedSetId === SHORTCUT_BINDING_SET_2
+    normalizedSetId === SHORTCUT_BINDING_SET_2 ||
+    normalizedSetId === SHORTCUT_BINDING_SET_3
   ) {
     return normalizedSetId;
   }
@@ -847,11 +964,73 @@ function normalizeShortcutSetId(setId) {
 }
 
 function getShortcutSetFallbackLabel(setId) {
+  if (setId === SHORTCUT_BINDING_SET_OFF) {
+    return 'OFF';
+  }
+
   if (setId === SHORTCUT_BINDING_SET_2) {
     return '2';
   }
 
+  if (setId === SHORTCUT_BINDING_SET_3) {
+    return '3';
+  }
+
   return '1';
+}
+
+function getShortcutSetActiveViewValue(setId) {
+  if (setId === SHORTCUT_BINDING_SET_OFF) {
+    return 'off';
+  }
+
+  if (setId === SHORTCUT_BINDING_SET_2) {
+    return '2';
+  }
+
+  if (setId === SHORTCUT_BINDING_SET_3) {
+    return '3';
+  }
+
+  return '1';
+}
+
+function getShortcutSetButtonAriaLabel({
+  setId,
+  label,
+}) {
+  if (setId === SHORTCUT_BINDING_SET_OFF) {
+    return '단축키 OFF';
+  }
+
+  return `단축키 세트 ${label}`;
+}
+
+function getShortcutSetButtonTitle({
+  setId,
+  label,
+}) {
+  if (setId === SHORTCUT_BINDING_SET_OFF) {
+    return '단축키 OFF';
+  }
+
+  return `단축키 세트 ${label}`;
+}
+
+function isShortcutBindingOff() {
+  return getCachedActiveShortcutBindingSetId() === SHORTCUT_BINDING_SET_OFF;
+}
+
+function toggleAssignModeIfShortcutEnabled() {
+  if (isShortcutBindingOff()) return;
+
+  toggleEmoteBindAssignMode();
+}
+
+function toggleClearModeIfShortcutEnabled() {
+  if (isShortcutBindingOff()) return;
+
+  toggleEmoteBindClearMode();
 }
 
 function createAssignTitleContent(bindState) {
@@ -893,9 +1072,9 @@ function getAssignHintDescription(bindState) {
     normalizeText(bindState?.selectedEmojiId)
   );
 
-	const hasSelectedCode = Boolean(
-		normalizeShortcutCode(bindState?.selectedCode)
-	);
+  const hasSelectedCode = Boolean(
+    normalizeShortcutCode(bindState?.selectedCode)
+  );
 
   if (!hasSelectedEmote) {
     return '단축키를 지정할 이모티콘을 선택하세요.';
@@ -917,9 +1096,9 @@ function getAssignHintText(bindState) {
     normalizeText(bindState?.selectedEmojiId)
   );
 
-	const hasSelectedCode = Boolean(
-		normalizeShortcutCode(bindState?.selectedCode)
-	);
+  const hasSelectedCode = Boolean(
+    normalizeShortcutCode(bindState?.selectedCode)
+  );
 
   if (!hasSelectedEmote) {
     return '선택';
@@ -1340,7 +1519,9 @@ function createAssignCancelButton(bindState) {
 
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
+
     if (isSaving) return;
+
     cancelAssignState();
   });
 
@@ -1353,7 +1534,9 @@ function createAssignCancelButton(bindState) {
     }
 
     stopControlEvent(event);
+
     if (isSaving) return;
+
     cancelAssignState();
   });
 
@@ -1381,7 +1564,9 @@ function createClearCancelButton(bindState) {
 
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
+
     if (isSaving) return;
+
     cancelClearState();
   });
 
@@ -1394,7 +1579,9 @@ function createClearCancelButton(bindState) {
     }
 
     stopControlEvent(event);
+
     if (isSaving) return;
+
     cancelClearState();
   });
 
@@ -1414,11 +1601,11 @@ async function saveAssignState(bindState) {
   scheduleBadgeUpdate();
 
   try {
-		await assignShortcutBindingTarget({
-			code: normalizeShortcutCode(bindState.selectedCode),
-			phase: normalizeRenderPhase(bindState.selectedPhase),
-			emojiId: bindState.selectedEmojiId,
-		});
+    await assignShortcutBindingTarget({
+      code: normalizeShortcutCode(bindState.selectedCode),
+      phase: normalizeRenderPhase(bindState.selectedPhase),
+      emojiId: bindState.selectedEmojiId,
+    });
 
     exitEmoteBindMode();
 
@@ -1484,7 +1671,10 @@ function cancelClearState() {
 }
 
 function canSaveAssignState(bindState) {
-  if (bindState?.isSaving) {
+  if (
+    bindState?.isSaving ||
+    isShortcutBindingOff()
+  ) {
     return false;
   }
 
@@ -1496,7 +1686,10 @@ function canSaveAssignState(bindState) {
 }
 
 function canSaveClearState(bindState) {
-  if (bindState?.isSaving) {
+  if (
+    bindState?.isSaving ||
+    isShortcutBindingOff()
+  ) {
     return false;
   }
 
@@ -1595,7 +1788,9 @@ function createCancelXIcon() {
 function createHeaderIconButton({
   icon,
   label,
+  title = label,
   active,
+  disabled = false,
   onClick,
 }) {
   const button = document.createElement('button');
@@ -1603,11 +1798,16 @@ function createHeaderIconButton({
   button.type = 'button';
   button.className = BIND_BUTTON_CLASS;
   button.setAttribute('aria-label', label);
-  button.setAttribute('title', label);
+  button.setAttribute('title', title || label);
   button.setAttribute('aria-pressed', active ? 'true' : 'false');
 
   if (active) {
     button.classList.add(BIND_BUTTON_ACTIVE_CLASS);
+  }
+
+  if (disabled) {
+    button.disabled = true;
+    button.classList.add(BIND_BUTTON_DISABLED_CLASS);
   }
 
   button.appendChild(createBindIcon(icon));
