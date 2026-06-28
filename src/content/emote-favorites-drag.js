@@ -10,8 +10,13 @@ import {
 } from './recent-emote-storage.js';
 
 import {
-  reorderFavoriteRecentEmotesByIds,
+  reorderFavoriteRecentEmoteSubset,
 } from './favorite-recent-emote-storage.js';
+
+import {
+  FAVORITE_GROUP_BOUND,
+  FAVORITE_GROUP_UNBOUND,
+} from './emote-favorite-groups.js';
 
 import {
   mergeFavoriteAndRecentEmotes,
@@ -35,6 +40,7 @@ import {
 } from './emote-bind-mode-state.js';
 
 const FAVORITES_LIST_SELECTOR = '.emzk-lite-favorites-list';
+const FAVORITES_GROUP_ATTR = 'data-emzk-lite-favorite-group';
 
 const DRAG_ATTACHED_ATTR = 'data-emzk-lite-drag-attached';
 
@@ -113,6 +119,10 @@ function handlePointerDown(event) {
 
   if (!item) return;
 
+  const group = getFavoriteGroupFromItem(item);
+
+  if (!group) return;
+
   disableNativeDraggableChildren(item);
 
   const itemRect = item.getBoundingClientRect();
@@ -139,6 +149,7 @@ function handlePointerDown(event) {
     latestClientX: event.clientX,
     latestClientY: event.clientY,
 
+    group,
     startOrder: [],
     placeholder: null,
     dragMetrics: null,
@@ -217,13 +228,19 @@ function handlePointerUp(event) {
 
   if (!shouldSave) return;
 
-  const nextOrder = getFavoriteIdsFromList(context.list);
+  const nextOrder = getFavoriteIdsFromListByGroup({
+    list: context.list,
+    group: context.group,
+  });
 
   if (isSameOrder(context.startOrder, nextOrder)) {
     return;
   }
 
-  saveFavoriteOrder(nextOrder);
+  saveFavoriteSubsetOrder({
+    subsetEmojiIds: context.startOrder,
+    reorderedSubsetEmojiIds: nextOrder,
+  });
 }
 
 function handlePointerCancel(event) {
@@ -287,9 +304,13 @@ function startDrag(event) {
   } = activeDrag;
 
   activeDrag.started = true;
-  activeDrag.startOrder = getFavoriteIdsFromList(list);
+  activeDrag.startOrder = getFavoriteIdsFromListByGroup({
+    list,
+    group: activeDrag.group,
+  });
   activeDrag.dragMetrics = getDragMetrics(item);
   activeDrag.placeholder = createPlaceholder(activeDrag.dragMetrics);
+  activeDrag.placeholder.setAttribute(FAVORITES_GROUP_ATTR, activeDrag.group);
   activeDrag.scrollContainer = getAutoScrollContainer(list);
 
   activeDrag.ghostItem = createDragGhostItem({
@@ -349,6 +370,7 @@ function updateDragFrame() {
     list: activeDrag.list,
     placeholder: activeDrag.placeholder,
     draggedItem: activeDrag.item,
+    group: activeDrag.group,
   });
 
   if (beforeElement === NO_INSERTION_HIT) {
@@ -358,7 +380,11 @@ function updateDragFrame() {
   movePlaceholder({
     list: activeDrag.list,
     placeholder: activeDrag.placeholder,
-    beforeElement,
+    beforeElement: beforeElement ?? getGroupAppendBeforeElement({
+      list: activeDrag.list,
+      group: activeDrag.group,
+      placeholder: activeDrag.placeholder,
+    }),
   });
 }
 
@@ -389,6 +415,7 @@ function getInsertionBeforeElementByGridPoint({
   list,
   placeholder,
   draggedItem,
+  group,
 }) {
   if (!(list instanceof HTMLElement)) {
     return NO_INSERTION_HIT;
@@ -398,6 +425,7 @@ function getInsertionBeforeElementByGridPoint({
     list,
     placeholder,
     draggedItem,
+    group,
   });
 
   if (!items.length) {
@@ -452,6 +480,7 @@ function getDraggableItemsForOrdering({
   list,
   placeholder,
   draggedItem,
+  group,
 }) {
   return Array.from(list.querySelectorAll(':scope > li'))
     .filter((item) => {
@@ -460,7 +489,8 @@ function getDraggableItemsForOrdering({
         item !== placeholder &&
         item !== draggedItem &&
         isElementVisibleForOrdering(item) &&
-        isDraggableFavoriteItem(item)
+        isDraggableFavoriteItem(item) &&
+        (!group || getFavoriteGroupFromItem(item) === group)
       );
     })
     .sort(compareItemsByVisualPosition);
@@ -679,8 +709,9 @@ function cleanupDrag({
 	clearInlineAnimationState(list);
 
   if (restoreOrder) {
-    restoreFavoriteOrder({
+    restoreFavoriteGroupOrder({
       list,
+      group: activeDrag?.group,
       orderedIds: startOrder,
     });
   }
@@ -910,14 +941,18 @@ function clearInlineAnimationState(list) {
   });
 }
 
-function restoreFavoriteOrder({
+function restoreFavoriteGroupOrder({
   list,
+  group,
   orderedIds,
 }) {
+  if (!isFavoriteGroup(group)) return;
+
   const itemById = new Map();
 
   getSortableItems(list).forEach((item) => {
     if (item.classList.contains(PLACEHOLDER_CLASS)) return;
+    if (getFavoriteGroupFromItem(item) !== group) return;
 
     const id = getFavoriteIdFromItem(item);
 
@@ -932,7 +967,10 @@ function restoreFavoriteOrder({
 
     if (!item) return;
 
-    list.appendChild(item);
+    list.insertBefore(item, getGroupAppendBeforeElement({
+      list,
+      group,
+    }));
   });
 }
 
@@ -961,13 +999,21 @@ function isDraggableFavoriteItem(item) {
   return isRealEmoteButton(button);
 }
 
-function getFavoriteIdsFromList(list) {
+function getFavoriteIdsFromListByGroup({
+  list,
+  group,
+}) {
+  if (!isFavoriteGroup(group)) {
+    return [];
+  }
+
   return Array.from(list.querySelectorAll(':scope > li'))
     .filter((item) => {
       return (
         item instanceof HTMLElement &&
         !item.classList.contains(PLACEHOLDER_CLASS) &&
-        isElementVisibleForOrdering(item)
+        isElementVisibleForOrdering(item) &&
+        getFavoriteGroupFromItem(item) === group
       );
     })
     .map(getFavoriteIdFromItem)
@@ -984,9 +1030,15 @@ function getFavoriteIdFromItem(item) {
   return getRecentEmoteIdFromAlt(alt);
 }
 
-async function saveFavoriteOrder(orderedIds) {
+async function saveFavoriteSubsetOrder({
+  subsetEmojiIds,
+  reorderedSubsetEmojiIds,
+}) {
   try {
-    const result = await reorderFavoriteRecentEmotesByIds(orderedIds);
+    const result = await reorderFavoriteRecentEmoteSubset({
+      subsetEmojiIds,
+      reorderedSubsetEmojiIds,
+    });
 
     if (!result.changed) {
       return;
@@ -1163,6 +1215,36 @@ function getPointerDistance({
     currentX - startX,
     currentY - startY
   );
+}
+
+function getFavoriteGroupFromItem(item) {
+  const group = item?.getAttribute?.(FAVORITES_GROUP_ATTR) || '';
+
+  return isFavoriteGroup(group) ? group : '';
+}
+
+function isFavoriteGroup(group) {
+  return (
+    group === FAVORITE_GROUP_BOUND ||
+    group === FAVORITE_GROUP_UNBOUND
+  );
+}
+
+function getGroupAppendBeforeElement({
+  list,
+  group,
+  placeholder = null,
+}) {
+  if (group !== FAVORITE_GROUP_BOUND) {
+    return null;
+  }
+
+  return Array.from(list.children).find((child) => {
+    if (!(child instanceof HTMLElement)) return false;
+    if (child === placeholder) return false;
+
+    return getFavoriteGroupFromItem(child) !== FAVORITE_GROUP_BOUND;
+  }) ?? null;
 }
 
 function isSameOrder(a, b) {

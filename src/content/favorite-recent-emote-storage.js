@@ -3,6 +3,10 @@ import {
   normalizeRecentEmotes,
 } from './recent-emote-storage.js';
 
+import {
+  mergeReorderedFavoriteSubset,
+} from './emote-favorite-groups.js';
+
 const FAVORITE_RECENT_EMOTES_STORAGE_KEY = 'emozzk_lite_favorite_recent_emotes_v1';
 const MAX_FAVORITE_RECENT_EMOTE_COUNT = 200;
 
@@ -112,6 +116,69 @@ export async function reorderFavoriteRecentEmotesByIds(orderedIds) {
     ...orderedItems,
     ...remainingItems,
   ]);
+
+  if (isSameFavoriteOrder(favoriteEmotesCache, next)) {
+    return createReorderResult({
+      changed: false,
+    });
+  }
+
+  await setFavoriteRecentEmotes(next);
+
+  return createReorderResult({
+    changed: true,
+  });
+}
+
+
+export async function ensureFavoriteRecentEmoteAppended(emote) {
+  await ensureInitialized();
+
+  const id = getRecentEmoteId(emote);
+
+  if (!id) {
+    return createToggleResult({
+      changed: false,
+      added: false,
+      removed: false,
+    });
+  }
+
+  if (isFavoriteRecentEmoteId(id)) {
+    return createToggleResult({
+      changed: false,
+      added: false,
+      removed: false,
+    });
+  }
+
+  const next = normalizeFavoriteRecentEmotes([
+    ...favoriteEmotesCache,
+    emote,
+  ]);
+
+  await setFavoriteRecentEmotes(next);
+
+  return createToggleResult({
+    changed: true,
+    added: true,
+    removed: false,
+  });
+}
+
+export async function reorderFavoriteRecentEmoteSubset({
+  subsetEmojiIds,
+  reorderedSubsetEmojiIds,
+}) {
+  await ensureInitialized();
+
+  const next = normalizeFavoriteRecentEmotes(
+    mergeReorderedFavoriteSubset({
+      favorites: favoriteEmotesCache,
+      subsetEmojiIds,
+      reorderedSubsetEmojiIds,
+    })
+  );
 
   if (isSameFavoriteOrder(favoriteEmotesCache, next)) {
     return createReorderResult({

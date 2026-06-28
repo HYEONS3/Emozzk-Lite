@@ -292,6 +292,52 @@ export async function clearShortcutBindingsByEmojiId({
   return setShortcutBindings(nextBindings);
 }
 
+
+export async function clearShortcutBindingsByEmojiIdFromAllSets({
+  emojiId,
+}) {
+  const normalizedEmojiId = normalizeEmojiId(emojiId);
+
+  if (!normalizedEmojiId) {
+    return getCachedShortcutBindings();
+  }
+
+  let changed = false;
+
+  const nextSets = normalizeShortcutBindingSets(
+    cachedShortcutBindingSetState.sets
+  ).map((set) => {
+    const baseBindings = getEditableShortcutBindings(set.bindings);
+    const nextBindings = baseBindings.filter((binding) => {
+      return getBindingEmojiId(binding) !== normalizedEmojiId;
+    });
+
+    if (nextBindings.length !== baseBindings.length) {
+      changed = true;
+    }
+
+    return {
+      ...set,
+      bindings: nextBindings,
+    };
+  });
+
+  if (!changed) {
+    return getCachedShortcutBindings();
+  }
+
+  cachedShortcutBindingSetState = normalizeShortcutBindingSetStateValue({
+    ...cachedShortcutBindingSetState,
+    sets: nextSets,
+  });
+
+  await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
+
+  dispatchShortcutBindingsChanged();
+
+  return getCachedShortcutBindings();
+}
+
 export function createShortcutBindingSetId(index) {
   const normalizedIndex = Number(index);
 

@@ -1060,6 +1060,37 @@ button[data-emzk-lite-badge-target="true"] {
   opacity: 0.65;
 }
 
+.emzk-lite-favorites-separator {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+  margin: 2px 0;
+  padding: 0 2px;
+  color: currentColor;
+  pointer-events: none;
+  user-select: none;
+  touch-action: auto;
+  will-change: auto;
+}
+
+.emzk-lite-favorites-separator::before,
+.emzk-lite-favorites-separator::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.2;
+}
+
+.emzk-lite-favorites-separator span {
+  flex: 0 0 auto;
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.72;
+}
+
 /* ========================================================================== */
 /* Favorite drag                                                              */
 /* ========================================================================== */
@@ -1067,6 +1098,13 @@ button[data-emzk-lite-badge-target="true"] {
 .emzk-lite-favorites-section .emzk-lite-favorites-list > li {
   touch-action: none;
   will-change: transform;
+}
+
+.emzk-lite-favorites-section
+  .emzk-lite-favorites-list
+  > .emzk-lite-favorites-separator {
+  touch-action: auto;
+  will-change: auto;
 }
 
 .emzk-lite-favorites-drag-active {

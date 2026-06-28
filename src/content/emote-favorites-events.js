@@ -47,6 +47,10 @@ import {
   isEmoteBindModeActive,
 } from './emote-bind-mode-state.js';
 
+import {
+  clearShortcutBindingsByEmojiIdFromAllSets,
+} from './shortcut-storage.js';
+
 const FAVORITES_SECTION_SELECTOR = '.emzk-lite-favorites-section';
 
 export function attachEmoteFavoriteEvents() {
@@ -101,6 +105,13 @@ async function handleFavoriteClick(event) {
     }
 
     const emojiId = getRecentEmoteId(recentEmote);
+
+    if (result.removed) {
+      await clearShortcutBindingsByEmojiIdFromAllSets({
+        emojiId,
+      });
+    }
+
     const mergedRecentEmotes = syncRecentLocalStorageWithFavorites({
       favorites: result.favorites,
     });

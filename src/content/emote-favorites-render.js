@@ -13,21 +13,31 @@ import {
 } from './emote-recent-section.js';
 
 import {
+  ensureFavoriteRecentEmoteAppended,
   getCachedFavoriteRecentEmotes,
 } from './favorite-recent-emote-storage.js';
 
 import {
   getRecentEmoteId,
   getRecentEmoteIdFromAlt,
+  readRecentEmotes,
+  writeRecentEmotes,
 } from './recent-emote-storage.js';
 
 import {
+  dispatchFavoritesChanged,
   getFavoritesChangedEventName,
 } from './emote-favorites-event-name.js';
 
 import {
   attachFavoriteEmoteDrag,
 } from './emote-favorites-drag.js';
+
+import {
+  FAVORITE_GROUP_BOUND,
+  FAVORITE_GROUP_UNBOUND,
+  splitFavoriteEmotesByBindings,
+} from './emote-favorite-groups.js';
 
 import {
   EMOTE_BIND_MODE_ASSIGN,
@@ -50,6 +60,7 @@ import {
 import {
   assignShortcutBindingTarget,
   clearShortcutBindingsByEmojiId,
+  getCachedShortcutBindings,
   createShortcutBindingSetId,
   getCachedActiveShortcutBindingSetId,
   getCachedShortcutBindingSetState,
@@ -68,6 +79,14 @@ import {
 } from './badge-overlay.js';
 
 import {
+  mergeFavoriteAndRecentEmotes,
+} from './favorite-recent-merge.js';
+
+import {
+  getCachedRecentStorageLimit,
+} from './recent-emote-storage-limit-bridge.js';
+
+import {
   normalizeStoredShortcutCode,
 } from './shortcut-key-code.js';
 
@@ -75,6 +94,8 @@ const FAVORITES_SECTION_CLASS = 'emzk-lite-favorites-section';
 const FAVORITES_TITLE_CLASS = 'emzk-lite-favorites-title';
 const FAVORITES_LIST_CLASS = 'emzk-lite-favorites-list';
 const FAVORITES_EMPTY_CLASS = 'emzk-lite-favorites-empty';
+const FAVORITES_SEPARATOR_CLASS = 'emzk-lite-favorites-separator';
+const FAVORITES_GROUP_ATTR = 'data-emzk-lite-favorite-group';
 
 const FAVORITES_LABEL_CLASS = 'emzk-lite-favorites-label';
 const FAVORITES_ACTIONS_CLASS = 'emzk-lite-favorites-actions';
@@ -285,9 +306,23 @@ export function renderFavoriteEmoteSection() {
   }
 
   const favoriteEmotes = getCachedFavoriteRecentEmotes();
-  const favoriteIds = favoriteEmotes
+  const favoriteGroups = splitFavoriteEmotesByBindings({
+    favorites: favoriteEmotes,
+    bindings: getCachedShortcutBindings(),
+  });
+
+  const boundFavoriteIds = favoriteGroups.bound
     .map(getRecentEmoteId)
     .filter(Boolean);
+
+  const unboundFavoriteIds = favoriteGroups.unbound
+    .map(getRecentEmoteId)
+    .filter(Boolean);
+
+  const favoriteIds = [
+    ...boundFavoriteIds,
+    ...unboundFavoriteIds,
+  ];
 
   const favoriteIdSet = new Set(favoriteIds);
 
@@ -307,14 +342,26 @@ export function renderFavoriteEmoteSection() {
     const partition = partitionRecentItems({
       recentList,
       favoriteList,
-      favoriteIds,
+      boundFavoriteIds,
+      unboundFavoriteIds,
       favoriteIdSet,
+    });
+
+    const shouldShowSeparator =
+      partition.boundFavoriteItems.length > 0 &&
+      partition.unboundFavoriteItems.length > 0;
+
+    const favoriteChildren = createFavoriteChildren({
+      favoriteList,
+      boundFavoriteItems: partition.boundFavoriteItems,
+      unboundFavoriteItems: partition.unboundFavoriteItems,
+      shouldShowSeparator,
     });
 
     applyPartition({
       favoriteList,
       recentList,
-      favoriteItems: partition.favoriteItems,
+      favoriteChildren,
       normalItems: partition.normalItems,
     });
 
@@ -1891,6 +1938,26 @@ async function saveAssignState(bindState) {
       emojiId: bindState.selectedEmojiId,
     });
 
+    const favoriteResult = await ensureFavoriteRecentEmoteAppended({
+      emojiId: bindState.selectedEmojiId,
+      imageUrl: bindState.selectedEmojiImageUrl,
+    });
+
+    if (favoriteResult.changed) {
+      const mergedRecentEmotes = syncRecentLocalStorageWithFavorites({
+        favorites: favoriteResult.favorites,
+      });
+
+      dispatchFavoritesChanged({
+        emojiId: bindState.selectedEmojiId,
+        added: favoriteResult.added,
+        removed: favoriteResult.removed,
+        source: 'bind',
+        favorites: favoriteResult.favorites,
+        mergedRecentEmotes,
+      });
+    }
+
     exitEmoteBindMode();
 
     scheduleFavoriteEmoteSectionRender();
@@ -1952,6 +2019,22 @@ function cancelClearState() {
 
   scheduleFavoriteEmoteSectionRender();
   scheduleBadgeUpdate();
+}
+
+function syncRecentLocalStorageWithFavorites({
+  favorites,
+}) {
+  const recent = readRecentEmotes();
+
+  const merged = mergeFavoriteAndRecentEmotes({
+    favorites,
+    recent,
+    maxRecentEmoteCount: getCachedRecentStorageLimit(),
+  });
+
+  writeRecentEmotes(merged);
+
+  return merged;
 }
 
 function canSaveAssignState(bindState) {
@@ -2228,7 +2311,8 @@ function syncFavoriteEmptyState({
 function partitionRecentItems({
   recentList,
   favoriteList,
-  favoriteIds,
+  boundFavoriteIds,
+  unboundFavoriteIds,
   favoriteIdSet,
 }) {
   const allItems = collectEmoteItems({
@@ -2247,11 +2331,29 @@ function partitionRecentItems({
     itemById.set(id, item);
   });
 
-  const favoriteItems = favoriteIds
+  const boundFavoriteItems = boundFavoriteIds
     .map((id) => itemById.get(id))
     .filter(Boolean);
 
+  const unboundFavoriteItems = unboundFavoriteIds
+    .map((id) => itemById.get(id))
+    .filter(Boolean);
+
+  const favoriteItems = [
+    ...boundFavoriteItems,
+    ...unboundFavoriteItems,
+  ];
+
   const favoriteItemSet = new Set(favoriteItems);
+
+  favoriteItems.forEach((item) => {
+    const id = getEmoteItemId(item);
+    const group = boundFavoriteIds.includes(id)
+      ? FAVORITE_GROUP_BOUND
+      : FAVORITE_GROUP_UNBOUND;
+
+    item.setAttribute(FAVORITES_GROUP_ATTR, group);
+  });
 
   const normalItems = allItems.filter((item) => {
     if (favoriteItemSet.has(item)) return false;
@@ -2260,13 +2362,59 @@ function partitionRecentItems({
 
     if (!id) return false;
 
+    item.removeAttribute(FAVORITES_GROUP_ATTR);
+
     return !favoriteIdSet.has(id);
   });
 
   return {
+    boundFavoriteItems,
+    unboundFavoriteItems,
     favoriteItems,
     normalItems,
   };
+}
+
+function createFavoriteChildren({
+  favoriteList,
+  boundFavoriteItems,
+  unboundFavoriteItems,
+  shouldShowSeparator,
+}) {
+  const children = [
+    ...boundFavoriteItems,
+  ];
+
+  if (shouldShowSeparator) {
+    children.push(getFavoriteSeparator(favoriteList));
+  }
+
+  children.push(...unboundFavoriteItems);
+
+  return children;
+}
+
+function getFavoriteSeparator(favoriteList) {
+  const existingSeparator = favoriteList.querySelector(
+    `:scope > .${FAVORITES_SEPARATOR_CLASS}`
+  );
+
+  if (existingSeparator instanceof HTMLElement) {
+    return existingSeparator;
+  }
+
+  const separator = document.createElement('li');
+  const label = document.createElement('span');
+
+  separator.className = FAVORITES_SEPARATOR_CLASS;
+  separator.setAttribute('role', 'separator');
+  separator.setAttribute('aria-label', '?쇰컲 利먭꺼李얘린');
+  separator.setAttribute('draggable', 'false');
+
+  label.textContent = '利먭꺼李얘린';
+  separator.appendChild(label);
+
+  return separator;
 }
 
 function collectEmoteItems({
@@ -2304,13 +2452,13 @@ function getEmoteItemId(item) {
 function applyPartition({
   favoriteList,
   recentList,
-  favoriteItems,
+  favoriteChildren,
   normalItems,
 }) {
-  placeChildren(favoriteList, favoriteItems);
+  placeChildren(favoriteList, favoriteChildren);
   placeChildren(recentList, normalItems);
 
-  pruneChildren(favoriteList, favoriteItems);
+  pruneChildren(favoriteList, favoriteChildren);
   pruneChildren(recentList, normalItems);
 }
 
