@@ -2408,10 +2408,10 @@ function getFavoriteSeparator(favoriteList) {
 
   separator.className = FAVORITES_SEPARATOR_CLASS;
   separator.setAttribute('role', 'separator');
-  separator.setAttribute('aria-label', '?쇰컲 利먭꺼李얘린');
+  separator.setAttribute('aria-label', '일반 즐겨찾기');
   separator.setAttribute('draggable', 'false');
 
-  label.textContent = '利먭꺼李얘린';
+  label.textContent = '즐겨찾기';
   separator.appendChild(label);
 
   return separator;
