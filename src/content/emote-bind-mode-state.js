@@ -113,6 +113,7 @@ export function enterEmoteBindClearMode() {
     selectedEmojiId: '',
     selectedEmojiLabel: '',
     selectedEmojiImageUrl: '',
+    selectedCode: '',
 
     selectedClearEmojiIds: [],
     keyListening: false,
@@ -142,17 +143,18 @@ export function toggleEmoteBindClearMode() {
 
 export function selectEmoteBindTarget({
   emojiId,
-  emojiLabel = '',
-  emojiImageUrl = '',
+  emojiLabel,
+  emojiImageUrl,
 }) {
-  if (!isEmoteBindAssignMode()) {
-    return getEmoteBindModeState();
-  }
+  const previousState = getEmoteBindModeState();
 
-  return setEmoteBindModeState({
+  setEmoteBindModeState({
+    ...previousState,
     selectedEmojiId: normalizeText(emojiId),
     selectedEmojiLabel: normalizeText(emojiLabel),
     selectedEmojiImageUrl: normalizeText(emojiImageUrl),
+    selectedCode: '',
+    selectedPhase: normalizeEmoteBindPhase(previousState.selectedPhase),
     keyListening: false,
   });
 }
@@ -162,27 +164,45 @@ export function clearEmoteBindTarget() {
     selectedEmojiId: '',
     selectedEmojiLabel: '',
     selectedEmojiImageUrl: '',
+    selectedCode: '',
     keyListening: false,
   });
 }
 
 export function setEmoteBindCode(code) {
-  const normalizedCode = normalizeEmoteBindCode(code);
+  const previousState = getEmoteBindModeState();
+  const selectedCode = normalizeStoredShortcutCode(code);
 
-  if (!normalizedCode) {
-    return getEmoteBindModeState();
+  if (
+    previousState.mode !== EMOTE_BIND_MODE_ASSIGN ||
+    !selectedCode
+  ) {
+    return;
   }
 
-  return setEmoteBindModeState({
-    selectedCode: normalizedCode,
-    keyListening: false,
+  setEmoteBindModeState({
+    ...previousState,
+    selectedCode,
+    selectedPhase: normalizeEmoteBindPhase(previousState.selectedPhase),
+
+    /*
+     * Save 전까지 다른 키를 입력하면 단축키 후보를 교체할 수 있게 유지한다.
+     * Escape는 bind 전체 취소로 처리한다.
+     */
+    keyListening: true,
   });
 }
 
 export function setEmoteBindPhase(phase) {
-  return setEmoteBindModeState({
+  const previousState = getEmoteBindModeState();
+
+  if (previousState.mode !== EMOTE_BIND_MODE_ASSIGN) {
+    return;
+  }
+
+  setEmoteBindModeState({
+    ...previousState,
     selectedPhase: normalizeEmoteBindPhase(phase),
-    keyListening: false,
   });
 }
 
@@ -193,11 +213,18 @@ export function cycleEmoteBindPhase() {
 }
 
 export function startEmoteBindKeyListening() {
-  if (!isEmoteBindAssignMode()) {
-    return getEmoteBindModeState();
+  const previousState = getEmoteBindModeState();
+
+  if (previousState.mode !== EMOTE_BIND_MODE_ASSIGN) {
+    return;
   }
 
-  return setEmoteBindModeState({
+  if (!normalizeText(previousState.selectedEmojiId)) {
+    return;
+  }
+
+  setEmoteBindModeState({
+    ...previousState,
     keyListening: true,
   });
 }

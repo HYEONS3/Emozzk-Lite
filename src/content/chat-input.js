@@ -539,16 +539,6 @@ function getChatInputPriority(element) {
     score += 50;
   }
 
-  const rect = element.getBoundingClientRect();
-
-  /*
-   * 채팅 입력창은 보통 화면 하단에 있으므로 약한 보정만 둔다.
-   * 절대 조건으로 쓰지 않는다.
-   */
-  if (rect.top > window.innerHeight * 0.4) {
-    score += 5;
-  }
-
   return score;
 }
 
@@ -613,15 +603,15 @@ function isVisible(element) {
     return false;
   }
 
+  if (!element.isConnected) {
+    return false;
+  }
+
   const rect = element.getBoundingClientRect();
 
   if (
     rect.width <= 0 ||
-    rect.height <= 0 ||
-    rect.bottom <= 0 ||
-    rect.right <= 0 ||
-    rect.top >= window.innerHeight ||
-    rect.left >= window.innerWidth
+    rect.height <= 0
   ) {
     return false;
   }
@@ -631,6 +621,7 @@ function isVisible(element) {
   return (
     style.display !== 'none' &&
     style.visibility !== 'hidden' &&
-    style.opacity !== '0'
+    style.visibility !== 'collapse' &&
+    Number.parseFloat(style.opacity || '1') > 0
   );
 }

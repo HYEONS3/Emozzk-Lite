@@ -9,6 +9,7 @@ import {
 
 import {
   findRecentEmoteSection,
+  isRecentEmoteCategoryActive,
 } from './emote-recent-section.js';
 
 import {
@@ -98,10 +99,6 @@ const BIND_EMOTE_PREVIEW_CLASS = 'emzk-lite-bind-emote-preview';
 const BIND_EMOTE_IMAGE_CLASS = 'emzk-lite-bind-emote-image';
 const BIND_EMOTE_EMPTY_CLASS = 'emzk-lite-bind-emote-empty';
 
-const BIND_KEYCAP_BUTTON_CLASS = 'emzk-lite-bind-keycap-button';
-const BIND_KEYCAP_BUTTON_LISTENING_CLASS = 'emzk-lite-bind-keycap-button-listening';
-const BIND_KEYCAP_TEXT_CLASS = 'emzk-lite-bind-keycap-text';
-
 const BIND_PHASE_BUTTON_CLASS = 'emzk-lite-bind-phase-button';
 const BIND_PHASE_BUTTON_ACTIVE_CLASS = 'emzk-lite-bind-phase-button-active';
 const BIND_PHASE_ICON_CLASS = 'emzk-lite-bind-phase-icon';
@@ -119,6 +116,10 @@ const BADGE_TARGET_ATTR = 'data-emzk-lite-badge-target';
 
 const SHORTCUT_SET_DRAG_SUPPRESS_CLICK_ATTR =
   'data-emzk-lite-shortcut-set-suppress-click';
+
+const SHORTCUT_SET_DRAGGING_ATTR =
+  'data-emzk-lite-shortcut-set-dragging';
+
 const SHORTCUT_SET_DRAG_THRESHOLD = 3;
 
 const SHORTCUT_SET_DRAG_PREVIEW_CLASS =
@@ -129,137 +130,12 @@ let rafId = 0;
 let observer = null;
 let isRendering = false;
 
-
-
-
-const FAVORITES_DEBUG = true;
-const FAVORITES_DEBUG_STACK = true;
-
-let favoritesDebugSeq = 0;
-let pendingFavoriteRenderReason = 'initial';
-
-function debugFavoriteLog(label, payload = {}) {
-  if (!FAVORITES_DEBUG) return;
-
-  const entry = {
-    time: new Date().toISOString(),
-    label,
-    ...payload,
-  };
-
-  window.__EMZK_FAV_LOGS__ ||= [];
-  window.__EMZK_FAV_LOGS__.push(entry);
-
-  if (window.__EMZK_FAV_LOGS__.length > 300) {
-    window.__EMZK_FAV_LOGS__.shift();
-  }
-
-  console.log('[Emozzk Lite][favorites]', label, entry);
-}
-
-function debugFavoriteWarn(label, payload = {}) {
-  if (!FAVORITES_DEBUG) return;
-
-  const entry = {
-    time: new Date().toISOString(),
-    label,
-    ...payload,
-  };
-
-  window.__EMZK_FAV_LOGS__ ||= [];
-  window.__EMZK_FAV_LOGS__.push(entry);
-
-  console.warn('[Emozzk Lite][favorites]', label, entry);
-
-  if (FAVORITES_DEBUG_STACK) {
-    console.trace(`[Emozzk Lite][favorites] ${label}`);
-  }
-}
-
-function getDebugFavoriteSnapshot(panel = findEmotePanel()) {
-  const area = panel ? getEmojiArea(panel) : null;
-  const recentSection = panel ? findRecentEmoteSection(panel) : null;
-  const recentGroup = recentSection?.heading?.parentElement ?? null;
-  const groupParent = recentGroup?.parentElement ?? null;
-  const recentList = recentSection
-    ? findRecentListFromSection(recentSection)
-    : null;
-
-  const favoriteSections = Array.from(
-    document.querySelectorAll(`.${FAVORITES_SECTION_CLASS}`)
-  );
-
-  const favoriteSection = groupParent
-    ? findFavoriteSection(groupParent)
-    : favoriteSections[0] ?? null;
-
-  const favoriteList = favoriteSection?.querySelector?.(
-    `:scope > .${FAVORITES_LIST_CLASS}`
-  ) ?? null;
-
-  const storedFavoriteIds = getCachedFavoriteRecentEmotes()
-    .map(getRecentEmoteId)
-    .filter(Boolean);
-
-  return {
-    hasPanel: Boolean(panel),
-    hasArea: Boolean(area),
-    hasRecentSection: Boolean(recentSection),
-    hasRecentHeading: Boolean(recentSection?.heading),
-    hasRecentGroup: Boolean(recentGroup),
-    hasGroupParent: Boolean(groupParent),
-    hasRecentList: Boolean(recentList),
-    favoriteSectionCount: favoriteSections.length,
-    hasFavoriteSection: Boolean(favoriteSection),
-    hasFavoriteList: Boolean(favoriteList),
-    storedFavoriteCount: storedFavoriteIds.length,
-    storedFavoriteIds,
-    recentListLiCount: getDebugListItemCount(recentList),
-    favoriteListLiCount: getDebugListItemCount(favoriteList),
-    recentListIds: getDebugListItemIds(recentList),
-    favoriteListIds: getDebugListItemIds(favoriteList),
-  };
-}
-
-function getDebugListItemCount(list) {
-  if (!(list instanceof Element)) return 0;
-
-  return list.querySelectorAll(':scope > li').length;
-}
-
-function getDebugListItemIds(list) {
-  if (!(list instanceof Element)) return [];
-
-  return Array.from(list.querySelectorAll(':scope > li'))
-    .map(getEmoteItemId)
-    .filter(Boolean);
-}
-
-function getDebugTargetInfo(target) {
-  if (!(target instanceof Element)) {
-    return {
-      type: String(target),
-    };
-  }
-
-  return {
-    tag: target.tagName.toLowerCase(),
-    id: target.id || '',
-    className: String(target.className || ''),
-    inPanel: Boolean(findEmotePanel()?.contains(target)),
-    inFavorites: Boolean(target.closest(`.${FAVORITES_SECTION_CLASS}`)),
-    inRecentArea: Boolean(target.closest('#emoji_area')),
-  };
-}
-
-
 export function startFavoriteEmoteSectionRenderer() {
   if (started) return;
 
   started = true;
 
   document.addEventListener('click', handlePossibleFavoriteRender, true);
-  document.addEventListener('keydown', handlePossibleFavoriteRender, true);
   document.addEventListener(
     getFavoritesChangedEventName(),
     scheduleFavoriteEmoteSectionRender
@@ -285,7 +161,6 @@ export function stopFavoriteEmoteSectionRenderer() {
   started = false;
 
   document.removeEventListener('click', handlePossibleFavoriteRender, true);
-  document.removeEventListener('keydown', handlePossibleFavoriteRender, true);
   document.removeEventListener(
     getFavoritesChangedEventName(),
     scheduleFavoriteEmoteSectionRender
@@ -313,22 +188,7 @@ export function stopFavoriteEmoteSectionRenderer() {
   removeShortcutSetDragPreview();
 }
 
-export function scheduleFavoriteEmoteSectionRender(reason = 'unknown') {
-  const normalizedReason =
-    typeof reason === 'string'
-      ? reason
-      : reason?.type
-        ? `event:${reason.type}`
-        : 'unknown';
-
-  debugFavoriteLog('schedule', {
-    reason: normalizedReason,
-    hasPendingRaf: Boolean(rafId),
-    snapshot: getDebugFavoriteSnapshot(),
-  });
-
-  pendingFavoriteRenderReason = normalizedReason;
-
+export function scheduleFavoriteEmoteSectionRender() {
   if (rafId) return;
 
   rafId = requestAnimationFrame(() => {
@@ -338,82 +198,42 @@ export function scheduleFavoriteEmoteSectionRender(reason = 'unknown') {
 }
 
 export function renderFavoriteEmoteSection() {
-  const seq = ++favoritesDebugSeq;
-  const reason = pendingFavoriteRenderReason || 'direct';
-
-  pendingFavoriteRenderReason = '';
-
-  debugFavoriteLog('render:start', {
-    seq,
-    reason,
-    snapshot: getDebugFavoriteSnapshot(),
-  });
-
   const panel = findEmotePanel();
 
   if (!panel) {
-    debugFavoriteWarn('render:abort:no-panel', {
-      seq,
-      reason,
-      snapshot: getDebugFavoriteSnapshot(panel),
-    });
-
-    removeFavoriteSection('render:no-panel', seq);
     return;
   }
 
   const area = getEmojiArea(panel);
 
   if (!area) {
-    debugFavoriteWarn('render:abort:no-area', {
-      seq,
-      reason,
-      snapshot: getDebugFavoriteSnapshot(panel),
-    });
-
-    removeFavoriteSection('render:no-area', seq);
     return;
   }
 
+	if (!isRecentEmoteCategoryActive(panel)) {
+		removeFavoriteSection(area);
+		markFavoriteAreaReady(area);
+		return;
+	}
+	
   const recentSection = findRecentEmoteSection(panel);
 
   if (!recentSection) {
-    debugFavoriteWarn('render:abort:no-recent-section', {
-      seq,
-      reason,
-      snapshot: getDebugFavoriteSnapshot(panel),
-    });
-
     markFavoriteAreaReady(area);
-    removeFavoriteSection('render:no-recent-section', seq);
     return;
   }
 
   const recentGroup = recentSection.heading?.parentElement;
 
   if (!recentGroup) {
-    debugFavoriteWarn('render:abort:no-recent-group', {
-      seq,
-      reason,
-      snapshot: getDebugFavoriteSnapshot(panel),
-    });
-
     markFavoriteAreaReady(area);
-    removeFavoriteSection('render:no-recent-group', seq);
     return;
   }
 
   const groupParent = recentGroup.parentElement;
 
   if (!groupParent) {
-    debugFavoriteWarn('render:abort:no-group-parent', {
-      seq,
-      reason,
-      snapshot: getDebugFavoriteSnapshot(panel),
-    });
-
     markFavoriteAreaReady(area);
-    removeFavoriteSection('render:no-group-parent', seq);
     return;
   }
 
@@ -447,10 +267,6 @@ export function renderFavoriteEmoteSection() {
     });
   }
 
-  /*
-   * recentList가 아직 없더라도 즐겨찾기 shell/header/empty 안내는 먼저 삽입한다.
-   * item 이동은 recentList가 준비된 뒤에만 수행한다.
-   */
   if (!recentList || !favoriteList) {
     syncFavoriteEmptyState({
       section: favoriteSection,
@@ -494,21 +310,6 @@ export function renderFavoriteEmoteSection() {
       favoriteIds,
       favoriteIdSet,
     });
-		
-		debugFavoriteLog('render:partition', {
-			seq,
-			reason,
-			favoriteIds,
-			favoriteItemCount: partition.favoriteItems.length,
-			normalItemCount: partition.normalItems.length,
-			favoriteItemIds: partition.favoriteItems
-				.map(getEmoteItemId)
-				.filter(Boolean),
-			normalItemIds: partition.normalItems
-				.map(getEmoteItemId)
-				.filter(Boolean),
-			beforeApplySnapshot: getDebugFavoriteSnapshot(panel),
-		});
 
     applyPartition({
       favoriteList,
@@ -516,12 +317,6 @@ export function renderFavoriteEmoteSection() {
       favoriteItems: partition.favoriteItems,
       normalItems: partition.normalItems,
     });
-
-		debugFavoriteLog('render:after-apply-partition', {
-			seq,
-			reason,
-			snapshot: getDebugFavoriteSnapshot(panel),
-		});
 
     syncFavoriteEmptyState({
       section: favoriteSection,
@@ -542,61 +337,20 @@ export function renderFavoriteEmoteSection() {
   } finally {
     markFavoriteAreaReady(area);
     isRendering = false;
-		debugFavoriteLog('render:end', {
-			seq,
-			reason,
-			snapshot: getDebugFavoriteSnapshot(panel),
-		});
   }
 }
 
 function handlePossibleFavoriteRender(event) {
   const target = event.target;
 
-  debugFavoriteLog('document-event', {
-    eventType: event.type,
-    target: getDebugTargetInfo(target),
-    snapshot: getDebugFavoriteSnapshot(),
-  });
-
   if (target instanceof Element) {
-    if (target.closest(`.${BADGE_CLASS}`)) {
-      debugFavoriteLog('document-event:skip', {
-        reason: 'badge',
-      });
-      return;
-    }
-
-    if (target.closest(`.${BIND_BUTTON_CLASS}`)) {
-      debugFavoriteLog('document-event:skip', {
-        reason: 'bind-button',
-      });
-      return;
-    }
-
-    if (target.closest(`.${BIND_KEYCAP_BUTTON_CLASS}`)) {
-      debugFavoriteLog('document-event:skip', {
-        reason: 'bind-keycap-button',
-      });
-      return;
-    }
-
-    if (target.closest(`.${BIND_PHASE_BUTTON_CLASS}`)) {
-      debugFavoriteLog('document-event:skip', {
-        reason: 'bind-phase-button',
-      });
-      return;
-    }
-
-    if (target.closest(`.${SHORTCUT_SET_BUTTON_CLASS}`)) {
-      debugFavoriteLog('document-event:skip', {
-        reason: 'shortcut-set-button',
-      });
-      return;
-    }
+    if (target.closest(`.${BADGE_CLASS}`)) return;
+    if (target.closest(`.${BIND_BUTTON_CLASS}`)) return;
+    if (target.closest(`.${BIND_PHASE_BUTTON_CLASS}`)) return;
+    if (target.closest(`.${SHORTCUT_SET_BUTTON_CLASS}`)) return;
   }
 
-  scheduleFavoriteEmoteSectionRender(`document:${event.type}`);
+  scheduleFavoriteEmoteSectionRender();
 }
 
 function handleShortcutBindingsChanged() {
@@ -1264,8 +1018,8 @@ function createShortcutSetOffIcon() {
   const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
 
   svg.setAttribute('viewBox', '0 0 16 16');
-  svg.setAttribute('width', '10');
-  svg.setAttribute('height', '10');
+  svg.setAttribute('width', '12');
+  svg.setAttribute('height', '12');
   svg.setAttribute('aria-hidden', 'true');
   svg.classList.add(SHORTCUT_SET_OFF_ICON_CLASS);
 
@@ -1302,6 +1056,8 @@ function attachShortcutSetSwitchPointerEvents(wrapper) {
     lastSetId = '';
     hasDragged = false;
 
+    setShortcutSetDragging(wrapper, false);
+
     wrapper.setPointerCapture?.(event.pointerId);
 
     switchShortcutSetByPointer({
@@ -1326,6 +1082,7 @@ function attachShortcutSetSwitchPointerEvents(wrapper) {
       SHORTCUT_SET_DRAG_THRESHOLD
     ) {
       hasDragged = true;
+      setShortcutSetDragging(wrapper, true);
     }
 
     switchShortcutSetByPointer({
@@ -1348,6 +1105,7 @@ function attachShortcutSetSwitchPointerEvents(wrapper) {
     dragging = false;
     wrapper.releasePointerCapture?.(event.pointerId);
     hideShortcutSetDragPreview();
+    setShortcutSetDragging(wrapper, false);
 
     if (hasDragged) {
       suppressNextShortcutSetClick(wrapper);
@@ -1356,8 +1114,24 @@ function attachShortcutSetSwitchPointerEvents(wrapper) {
 
   wrapper.addEventListener('pointercancel', () => {
     dragging = false;
+    hasDragged = false;
+
     hideShortcutSetDragPreview();
+    setShortcutSetDragging(wrapper, false);
   });
+}
+
+function setShortcutSetDragging(wrapper, dragging) {
+  if (!(wrapper instanceof Element)) {
+    return;
+  }
+
+  if (dragging) {
+    wrapper.setAttribute(SHORTCUT_SET_DRAGGING_ATTR, 'true');
+    return;
+  }
+
+  wrapper.removeAttribute(SHORTCUT_SET_DRAGGING_ATTR);
 }
 
 function switchShortcutSetByPointer({
@@ -1500,6 +1274,12 @@ function removeShortcutSetDragPreview() {
     .forEach((preview) => {
       preview.remove();
     });
+
+  document
+    .querySelectorAll(`[${SHORTCUT_SET_DRAGGING_ATTR}]`)
+    .forEach((element) => {
+      element.removeAttribute(SHORTCUT_SET_DRAGGING_ATTR);
+    });
 }
 
 function suppressNextShortcutSetClick(wrapper) {
@@ -1608,14 +1388,13 @@ function createAssignTitleContent(bindState) {
   const left = document.createElement('span');
   left.className = BIND_LEFT_CLASS;
 
-  left.appendChild(createSelectedEmotePreview(bindState));
-  left.appendChild(createKeycapButton(bindState));
+	left.appendChild(createSelectedEmotePreview(bindState));
 
-  if (isEmoteBindExperimentalKeyupEnabled()) {
-    left.appendChild(createPhaseToggleButton(bindState));
-  }
+	if (isEmoteBindExperimentalKeyupEnabled()) {
+		left.appendChild(createPhaseToggleButton(bindState));
+	}
 
-  left.appendChild(createAssignHint(bindState));
+	left.appendChild(createAssignHint(bindState));
 
   bar.append(
     left,
@@ -1636,51 +1415,47 @@ function createAssignHint(bindState) {
 }
 
 function getAssignHintDescription(bindState) {
+  if (bindState?.isSaving) {
+    return '단축키를 저장하는 중입니다.';
+  }
+
   const hasSelectedEmote = Boolean(
     normalizeText(bindState?.selectedEmojiId)
   );
 
-  const hasSelectedCode = Boolean(
-    normalizeShortcutCode(bindState?.selectedCode)
-  );
+  const selectedCode = normalizeShortcutCode(bindState?.selectedCode);
 
   if (!hasSelectedEmote) {
     return '단축키를 지정할 이모티콘을 선택하세요.';
   }
 
-  if (bindState?.keyListening) {
-    return '등록할 키를 입력하세요.';
+  if (!selectedCode) {
+    return '등록할 키를 입력하세요. Space와 Enter는 등록되지 않습니다. Escape를 누르면 취소됩니다.';
   }
 
-  if (!hasSelectedCode) {
-    return 'KEY 버튼을 누른 뒤 등록할 키를 입력하세요.';
-  }
-
-  return '저장 버튼을 누르면 단축키가 적용됩니다.';
+  return `${getEmoteBindCodeLabel(selectedCode)} 단축키가 선택되었습니다. 다른 키를 누르면 저장 전 단축키를 바꿀 수 있습니다.`;
 }
 
 function getAssignHintText(bindState) {
+  if (bindState?.isSaving) {
+    return '저장 중';
+  }
+
   const hasSelectedEmote = Boolean(
     normalizeText(bindState?.selectedEmojiId)
   );
 
-  const hasSelectedCode = Boolean(
-    normalizeShortcutCode(bindState?.selectedCode)
-  );
+  const selectedCode = normalizeShortcutCode(bindState?.selectedCode);
 
   if (!hasSelectedEmote) {
-    return '선택';
+    return '이모티콘 선택';
   }
 
-  if (bindState?.keyListening) {
+  if (!selectedCode) {
     return '키 입력';
   }
 
-  if (!hasSelectedCode) {
-    return 'KEY 클릭';
-  }
-
-  return '저장 가능';
+  return `${getEmoteBindCodeLabel(selectedCode)}`;
 }
 
 function createClearTitleContent(bindState) {
@@ -1720,7 +1495,7 @@ function getClearHintText(bindState) {
     return '이모티콘 선택';
   }
 
-  return `${selectedCount}개 선택`;
+  return `${selectedCount}개 선택됨`;
 }
 
 function getClearHintDescription(bindState) {
@@ -1769,74 +1544,6 @@ function createSelectedEmotePreview(bindState) {
   return wrapper;
 }
 
-function createKeycapButton(bindState) {
-  const button = document.createElement('button');
-
-  const hasSelectedEmote = Boolean(
-    normalizeText(bindState?.selectedEmojiId)
-  );
-
-  button.type = 'button';
-  button.className = BIND_KEYCAP_BUTTON_CLASS;
-  button.setAttribute(
-    'aria-label',
-    hasSelectedEmote ? '키 입력 대기' : '이모티콘을 먼저 선택하세요'
-  );
-  button.setAttribute(
-    'title',
-    !hasSelectedEmote
-      ? '이모티콘을 먼저 선택하세요'
-      : bindState.keyListening
-        ? '키 입력 대기 중'
-        : '키 지정'
-  );
-
-  if (!hasSelectedEmote) {
-    button.disabled = true;
-    button.classList.add(BIND_BUTTON_DISABLED_CLASS);
-  }
-
-  if (bindState.keyListening) {
-    button.classList.add(BIND_KEYCAP_BUTTON_LISTENING_CLASS);
-  }
-
-  const label = document.createElement('span');
-
-  label.className = BIND_KEYCAP_TEXT_CLASS;
-  label.textContent = bindState.keyListening
-    ? 'KEY'
-    : getEmoteBindCodeLabel(bindState.selectedCode);
-
-  button.appendChild(label);
-
-  button.addEventListener('mousedown', stopControlEvent);
-
-  button.addEventListener('click', (event) => {
-    stopControlEvent(event);
-
-    if (!hasSelectedEmote) return;
-
-    startEmoteBindKeyListening();
-  });
-
-  button.addEventListener('keydown', (event) => {
-    if (
-      event.code !== 'Enter' &&
-      event.code !== 'Space'
-    ) {
-      return;
-    }
-
-    stopControlEvent(event);
-
-    if (!hasSelectedEmote) return;
-
-    startEmoteBindKeyListening();
-  });
-
-  return button;
-}
-
 function createPhaseToggleButton(bindState) {
   const currentPhase = normalizeRenderPhase(bindState.selectedPhase);
   const nextPhase = getNextEmoteBindPhase(currentPhase);
@@ -1869,6 +1576,15 @@ function createPhaseToggleButton(bindState) {
     }
 
     stopControlEvent(event);
+
+    /*
+     * keyListening 중 Enter/Space가 단축키 입력과 섞이는 걸 피한다.
+     * phase는 마우스 클릭으로 바꾸는 쪽이 안전하다.
+     */
+    if (bindState?.keyListening) {
+      return;
+    }
+
     setEmoteBindPhase(nextPhase);
   });
 
@@ -2225,32 +1941,16 @@ async function saveClearState(bindState) {
 }
 
 function cancelAssignState() {
-  debugFavoriteLog('cancelAssignState:before', {
-    snapshot: getDebugFavoriteSnapshot(),
-  });
-
   exitEmoteBindMode();
 
-  debugFavoriteLog('cancelAssignState:after-exit', {
-    snapshot: getDebugFavoriteSnapshot(),
-  });
-
-  scheduleFavoriteEmoteSectionRender('cancel-assign');
+  scheduleFavoriteEmoteSectionRender();
   scheduleBadgeUpdate();
 }
 
 function cancelClearState() {
-  debugFavoriteLog('cancelClearState:before', {
-    snapshot: getDebugFavoriteSnapshot(),
-  });
-
   exitEmoteBindMode();
 
-  debugFavoriteLog('cancelClearState:after-exit', {
-    snapshot: getDebugFavoriteSnapshot(),
-  });
-
-  scheduleFavoriteEmoteSectionRender('cancel-clear');
+  scheduleFavoriteEmoteSectionRender();
   scheduleBadgeUpdate();
 }
 
@@ -2634,39 +2334,12 @@ function pruneChildren(parent, nextChildren) {
   });
 }
 
-function removeFavoriteSection(reason = 'unknown', seq = 0) {
-  const sections = Array.from(
-    document.querySelectorAll(`.${FAVORITES_SECTION_CLASS}`)
-  );
-
-  debugFavoriteWarn('removeFavoriteSection', {
-    seq,
-    reason,
-    sectionCount: sections.length,
-    beforeSnapshot: getDebugFavoriteSnapshot(),
-  });
-
-  sections.forEach((section, index) => {
-    const favoriteList = section.querySelector?.(
-      `:scope > .${FAVORITES_LIST_CLASS}`
-    );
-
-    debugFavoriteWarn('removeFavoriteSection:section', {
-      seq,
-      reason,
-      index,
-      liCount: getDebugListItemCount(favoriteList),
-      ids: getDebugListItemIds(favoriteList),
+function removeFavoriteSection() {
+  document
+    .querySelectorAll(`.${FAVORITES_SECTION_CLASS}`)
+    .forEach((section) => {
+      section.remove();
     });
-
-    section.remove();
-  });
-
-  debugFavoriteWarn('removeFavoriteSection:after', {
-    seq,
-    reason,
-    afterSnapshot: getDebugFavoriteSnapshot(),
-  });
 }
 
 function startFavoriteSectionMutationObserver() {
@@ -2681,21 +2354,6 @@ function startFavoriteSectionMutationObserver() {
 
     if (!hasRelevantMutation) return;
 
-		debugFavoriteLog('mutation:render', {
-			mutationCount: mutations.length,
-			mutations: mutations.map((mutation) => {
-				return {
-					type: mutation.type,
-					target: getDebugTargetInfo(mutation.target),
-					added: mutation.addedNodes?.length ?? 0,
-					removed: mutation.removedNodes?.length ?? 0,
-					attributeName: mutation.attributeName ?? '',
-				};
-			}),
-			snapshot: getDebugFavoriteSnapshot(),
-		});
-
-		pendingFavoriteRenderReason = 'mutation';
 		renderFavoriteEmoteSection();
   });
 

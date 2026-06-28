@@ -24,16 +24,26 @@ function normalizeText(value) {
 }
 
 function isVisibleElement(element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+
+  if (!element.isConnected) {
+    return false;
+  }
+
   const rect = element.getBoundingClientRect();
+
+  if (
+    rect.width <= 0 ||
+    rect.height <= 0
+  ) {
+    return false;
+  }
+
   const style = window.getComputedStyle(element);
 
   return (
-    rect.width > 0 &&
-    rect.height > 0 &&
-    rect.bottom > 0 &&
-    rect.right > 0 &&
-    rect.top < window.innerHeight &&
-    rect.left < window.innerWidth &&
     style.display !== 'none' &&
     style.visibility !== 'hidden' &&
     style.opacity !== '0'

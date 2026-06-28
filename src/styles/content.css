@@ -71,11 +71,6 @@
   --emzk-lite-bind-header-action-gap: 4px;
   --emzk-lite-bind-action-gap: 5px;
 
-  --emzk-lite-bind-keycap-min-width: 40px;
-  --emzk-lite-bind-keycap-max-width: 88px;
-  --emzk-lite-bind-keycap-padding-x: 12px;
-  --emzk-lite-bind-keycap-label-max-width: 56px;
-
   --emzk-lite-bind-inner-inset: 3px;
   --emzk-lite-bind-inner-radius: 6px;
 
@@ -354,7 +349,9 @@ button[data-emzk-lite-badge-target="true"] {
 .emzk-lite-favorites-title:not([data-emzk-lite-bind-mode="assign"]):not([data-emzk-lite-bind-mode="clear"])
   .emzk-lite-shortcut-set-switch + .emzk-lite-bind-button {
   margin-left: auto;
-}/* ========================================================================== */
+}
+
+/* ========================================================================== */
 /* Shortcut binding set switch                                                */
 /* ========================================================================== */
 
@@ -391,13 +388,8 @@ button[data-emzk-lite-badge-target="true"] {
 
   overflow: visible;
 
-  cursor: pointer;
   touch-action: none;
   user-select: none;
-}
-
-.emzk-lite-shortcut-set-switch:active {
-  cursor: grabbing;
 }
 
 .emzk-lite-shortcut-set-switch::before {
@@ -432,6 +424,7 @@ button[data-emzk-lite-badge-target="true"] {
     opacity var(--emzk-lite-motion-fast);
 }
 
+
 .emzk-lite-shortcut-set-button {
   position: relative;
   z-index: 1;
@@ -459,7 +452,6 @@ button[data-emzk-lite-badge-target="true"] {
   letter-spacing: -0.35px;
   text-align: center;
 
-  cursor: pointer;
   user-select: none;
 
   transition:
@@ -488,16 +480,28 @@ button[data-emzk-lite-badge-target="true"] {
   width: 12px;
   height: 12px;
 
-  color: currentColor;
-  opacity: 0.78;
+  color: rgba(var(--color-content-rgb, 255, 255, 255), 0.42);
+  opacity: 0.7;
 
   pointer-events: none;
   user-select: none;
+
+  transition:
+    color var(--emzk-lite-motion-fast),
+    opacity var(--emzk-lite-motion-fast),
+    filter var(--emzk-lite-motion-fast);
 }
 
-.emzk-lite-shortcut-set-button-active
+.emzk-lite-shortcut-set-off-icon circle {
+  stroke-width: 2;
+}
+
+.emzk-lite-shortcut-set-switch
+  .emzk-lite-shortcut-set-button-active
   .emzk-lite-shortcut-set-off-icon {
-  opacity: 1;
+  color: rgba(255, 150, 150, 0.64);
+  opacity: 0.82;
+  filter: none;
 }
 
 /* Drag preview - iPad key preview style */
@@ -568,7 +572,6 @@ button[data-emzk-lite-badge-target="true"] {
   font: inherit;
   line-height: 1;
 
-  cursor: pointer;
   user-select: none;
 
   transition:
@@ -600,7 +603,6 @@ button[data-emzk-lite-badge-target="true"] {
 .emzk-lite-bind-button-disabled,
 .emzk-lite-bind-button:disabled {
   opacity: var(--emzk-lite-bind-disabled-opacity);
-  cursor: not-allowed;
   filter: grayscale(0.35);
 }
 
@@ -728,7 +730,6 @@ button[data-emzk-lite-badge-target="true"] {
 /* Keylike controls                                                           */
 /* ========================================================================== */
 
-.emzk-lite-bind-keycap-button,
 .emzk-lite-bind-phase-button,
 .emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"] .emzk-lite-bind-button,
 .emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"] .emzk-lite-bind-button {
@@ -760,7 +761,6 @@ button[data-emzk-lite-badge-target="true"] {
   font: inherit;
   line-height: 1;
 
-  cursor: pointer;
   user-select: none;
 
   transition:
@@ -773,7 +773,6 @@ button[data-emzk-lite-badge-target="true"] {
     filter var(--emzk-lite-motion-fast);
 }
 
-.emzk-lite-bind-keycap-button::before,
 .emzk-lite-bind-phase-button::before,
 .emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"] .emzk-lite-bind-button::before,
 .emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"] .emzk-lite-bind-button::before {
@@ -788,7 +787,6 @@ button[data-emzk-lite-badge-target="true"] {
   pointer-events: none;
 }
 
-.emzk-lite-bind-keycap-button:hover,
 .emzk-lite-bind-phase-button:hover,
 .emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"] .emzk-lite-bind-button:hover,
 .emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"] .emzk-lite-bind-button:hover {
@@ -801,7 +799,6 @@ button[data-emzk-lite-badge-target="true"] {
   border-color: var(--emzk-lite-bind-active-border);
 }
 
-.emzk-lite-bind-keycap-button:active,
 .emzk-lite-bind-phase-button:active,
 .emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"] .emzk-lite-bind-button:active,
 .emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"] .emzk-lite-bind-button:active {
@@ -811,7 +808,6 @@ button[data-emzk-lite-badge-target="true"] {
     inset 0 -1px 0 var(--emzk-lite-keylike-pressed-highlight);
 }
 
-.emzk-lite-bind-keycap-button-listening,
 .emzk-lite-bind-phase-button-active {
   color: var(--emzk-lite-bind-active-text);
   background: var(--emzk-lite-bind-active-bg);
@@ -902,42 +898,6 @@ button[data-emzk-lite-badge-target="true"] {
 }
 
 /* ========================================================================== */
-/* Key binding button                                                         */
-/* ========================================================================== */
-
-.emzk-lite-bind-keycap-button {
-  width: auto;
-  min-width: var(--emzk-lite-bind-keycap-min-width);
-  max-width: var(--emzk-lite-bind-keycap-max-width);
-  padding: 0 var(--emzk-lite-bind-keycap-padding-x);
-}
-
-.emzk-lite-bind-keycap-text {
-  position: relative;
-  z-index: 1;
-
-  flex: 0 1 auto;
-
-  min-width: 0;
-  max-width: var(--emzk-lite-bind-keycap-label-max-width);
-
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  color: currentColor;
-
-  font-family: var(--emzk-lite-font-family);
-  font-size: var(--emzk-lite-bind-font-size);
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.2px;
-
-  pointer-events: none;
-  user-select: none;
-}
-
-/* ========================================================================== */
 /* Phase toggle button                                                        */
 /* ========================================================================== */
 
@@ -961,6 +921,30 @@ button[data-emzk-lite-badge-target="true"] {
 }
 
 /* ========================================================================== */
+/* Assign mode                                                                */
+/* ========================================================================== */
+
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"]) {
+  user-select: none;
+}
+
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"])
+  button[type="button"],
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"])
+  .emzk-lite-favorites-list > li,
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"])
+  .emzk-lite-favorites-list > li button[type="button"] {
+  touch-action: manipulation;
+}
+
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"])
+  .emzk-lite-favorites-drag-placeholder,
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"])
+  .emzk-lite-favorites-dragging-item {
+  display: none !important;
+}
+
+/* ========================================================================== */
 /* Clear mode                                                                 */
 /* ========================================================================== */
 
@@ -978,7 +962,6 @@ button[data-emzk-lite-badge-target="true"] {
   .emzk-lite-favorites-list > li,
 #emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"])
   .emzk-lite-favorites-list > li button[type="button"] {
-  cursor: pointer;
   touch-action: manipulation;
 }
 
@@ -1086,16 +1069,8 @@ button[data-emzk-lite-badge-target="true"] {
   will-change: transform;
 }
 
-.emzk-lite-favorites-section .emzk-lite-favorites-list > li button[type="button"] {
-  cursor: grab;
-}
-
 .emzk-lite-favorites-drag-active {
   user-select: none;
-}
-
-.emzk-lite-favorites-drag-active .emzk-lite-favorites-list > li button[type="button"] {
-  cursor: grabbing;
 }
 
 .emzk-lite-favorites-drag-active .emzk-lite-badge {
@@ -1132,6 +1107,58 @@ button[data-emzk-lite-badge-target="true"] {
   outline-offset: -2px;
 
   pointer-events: none;
+}
+
+/* ========================================================================== */
+/* Cursor                                                                     */
+/* ========================================================================== */
+
+/* Clickable controls */
+.emzk-lite-shortcut-set-switch,
+.emzk-lite-shortcut-set-button,
+.emzk-lite-bind-button,
+.emzk-lite-bind-phase-button,
+.emzk-lite-favorites-section .emzk-lite-favorites-list > li button[type="button"] {
+  cursor: pointer;
+}
+
+/* Assign mode clickable targets */
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"])
+  button[type="button"],
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"])
+  .emzk-lite-favorites-list > li,
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"])
+  .emzk-lite-favorites-list > li button[type="button"] {
+  cursor: pointer;
+}
+
+/* Clear mode clickable targets */
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"])
+  button[type="button"],
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"])
+  .emzk-lite-favorites-list > li,
+#emoji_area:has(.emzk-lite-favorites-title[data-emzk-lite-bind-mode="clear"])
+  .emzk-lite-favorites-list > li button[type="button"] {
+  cursor: pointer;
+}
+
+/* Favorite emote drag cursor lock */
+html.emzk-lite-favorites-drag-cursor-lock,
+html.emzk-lite-favorites-drag-cursor-lock * {
+  cursor: grabbing !important;
+}
+
+/* Shortcut set drag */
+.emzk-lite-shortcut-set-switch[data-emzk-lite-shortcut-set-dragging="true"],
+.emzk-lite-shortcut-set-switch[data-emzk-lite-shortcut-set-dragging="true"]
+  .emzk-lite-shortcut-set-button {
+  cursor: grabbing;
+}
+
+/* Disabled controls */
+.emzk-lite-bind-button-disabled,
+.emzk-lite-bind-button:disabled {
+  cursor: not-allowed;
 }
 
 /* ========================================================================== */
@@ -1178,12 +1205,6 @@ button[data-emzk-lite-badge-target="true"] {
     --emzk-lite-unlink-badge-shadow: rgba(0, 0, 0, 0.18);
   }
 
-  .emzk-lite-bind-keycap-button-listening {
-    filter:
-      brightness(1.08)
-      drop-shadow(0 0 4px rgba(0, 0, 0, 0.12));
-  }
-
   .emzk-lite-favorites-dragging-item {
     filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
   }
@@ -1223,7 +1244,6 @@ button[data-emzk-lite-badge-target="true"] {
   .emzk-lite-favorites-title,
   .emzk-lite-badge,
   .emzk-lite-bind-button,
-  .emzk-lite-bind-keycap-button,
   .emzk-lite-bind-phase-button,
   .emzk-lite-bind-emote-preview,
   .emzk-lite-shortcut-set-button,

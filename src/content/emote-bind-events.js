@@ -30,6 +30,7 @@ import {
   isEmoteBindModeActive,
   selectEmoteBindTarget,
   setEmoteBindCode,
+  startEmoteBindKeyListening,
   stopEmoteBindKeyListening,
   toggleEmoteBindClearSelection,
 } from './emote-bind-mode-state.js';
@@ -143,15 +144,15 @@ function handleBindModeClick(event) {
 
   blockEvent(event);
 
-  if (isEmoteBindKeyListening()) {
-    stopEmoteBindKeyListening();
-  }
-
   handleBindModeEmoteButtonClick(button);
 }
 
 function handleBindModeKeyDown(event) {
   if (!isEmoteBindModeActive()) {
+    return;
+  }
+
+  if (shouldIgnoreBindControlKeyDown(event)) {
     return;
   }
 
@@ -181,12 +182,12 @@ function handleKeyListeningKeyDown(event) {
     !hasAnyModifier(event)
   ) {
     blockEvent(event);
+    exitCurrentBindMode();
+    return;
+  }
 
-    stopEmoteBindKeyListening();
-
-    scheduleFavoriteEmoteSectionRender();
-    scheduleBadgeUpdate();
-
+  if (shouldRejectBindShortcutKey(event)) {
+    blockEvent(event);
     return;
   }
 
@@ -239,6 +240,8 @@ function handleAssignModeClick({
     emojiLabel,
     emojiImageUrl,
   });
+
+  startEmoteBindKeyListening();
 
   scheduleFavoriteEmoteSectionRender();
   scheduleBadgeUpdate();
@@ -480,6 +483,21 @@ function isPanelVisible(panel) {
   return rect.width > 0 && rect.height > 0;
 }
 
+function shouldRejectBindShortcutKey(event) {
+  if (isImeKeyboardEvent(event)) {
+    return true;
+  }
+
+  if (
+    event.code === 'Space' ||
+    event.code === 'Enter'
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function shouldBlockBindModeKeyDown(event) {
   if (isImeKeyboardEvent(event)) {
     return false;
@@ -494,6 +512,39 @@ function shouldBlockBindModeKeyDown(event) {
   }
 
   if (isModifierOnlyCode(event.code)) {
+    return false;
+  }
+
+  return true;
+}
+
+function shouldIgnoreBindControlKeyDown(event) {
+  const element = getElementFromTarget(event.target);
+
+  if (!element) {
+    return false;
+  }
+
+  const control = element.closest('button, [role="button"], [role="group"]');
+
+  if (!control) {
+    return false;
+  }
+
+  const panel = findEmotePanel();
+
+  if (!panel || !panel.contains(control)) {
+    return false;
+  }
+
+  /*
+   * 실제 이모티콘 버튼은 무시 대상이 아니다.
+   * 여기서 무시해야 하는 건 phase/save/cancel/set switch 같은 bind UI 컨트롤이다.
+   */
+  if (
+    control instanceof HTMLButtonElement &&
+    isRealEmoteButton(control)
+  ) {
     return false;
   }
 

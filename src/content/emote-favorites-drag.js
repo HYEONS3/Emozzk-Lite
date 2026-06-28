@@ -41,6 +41,7 @@ const DRAG_ATTACHED_ATTR = 'data-emzk-lite-drag-attached';
 const DRAG_ACTIVE_CLASS = 'emzk-lite-favorites-drag-active';
 const DRAGGING_ITEM_CLASS = 'emzk-lite-favorites-dragging-item';
 const PLACEHOLDER_CLASS = 'emzk-lite-favorites-drag-placeholder';
+const DRAG_CURSOR_LOCK_CLASS = 'emzk-lite-favorites-drag-cursor-lock';
 
 const DRAG_START_DISTANCE_PX = 6;
 
@@ -121,7 +122,6 @@ function handlePointerDown(event) {
     section,
     list,
     item,
-    captureTarget: item,
 
     ghostItem: null,
     ghostMetrics: null,
@@ -309,28 +309,17 @@ function startDrag(event) {
   activeDrag.pointerOffsetX = activeDrag.ghostMetrics.widthNumber / 2;
   activeDrag.pointerOffsetY = activeDrag.ghostMetrics.heightNumber / 2;
 
-  try {
-    activeDrag.captureTarget.setPointerCapture(event.pointerId);
-  } catch {
-    /*
-     * pointer capture 실패는 무시한다.
-     * document-level pointer listener가 있으므로 동작은 유지된다.
-     */
-  }
 
-  /*
-   * 원본 li는 list 안에서 순서 계산용으로 유지하되, 레이아웃에는 영향을 주지 않게 숨긴다.
-   * 실제 표시되는 드래그 대상은 body에 붙인 img clone이다.
-   */
   list.insertBefore(activeDrag.placeholder, item);
   hideOriginalDraggedItem(item);
 
   document.body.appendChild(activeDrag.ghostItem);
 
-  section.classList.add(DRAG_ACTIVE_CLASS);
-  item.classList.add(DRAGGING_ITEM_CLASS);
+	section.classList.add(DRAG_ACTIVE_CLASS);
+	item.classList.add(DRAGGING_ITEM_CLASS);
+	document.documentElement.classList.add(DRAG_CURSOR_LOCK_CLASS);
 
-  moveDraggedItem();
+	moveDraggedItem();
   scheduleDragFrame();
   scheduleAutoScrollFrame();
 }
@@ -649,18 +638,16 @@ function cleanupDrag({
 }) {
   if (!activeDrag) return;
 
-  const {
-    item,
-    ghostItem,
-    section,
-    list,
-    placeholder,
-    pointerId,
-    captureTarget,
-    startOrder,
-    frameId,
-    autoScrollFrameId,
-  } = activeDrag;
+	const {
+		item,
+		ghostItem,
+		section,
+		list,
+		placeholder,
+		startOrder,
+		frameId,
+		autoScrollFrameId,
+	} = activeDrag;
 
   if (frameId) {
     cancelAnimationFrame(frameId);
@@ -674,15 +661,6 @@ function cleanupDrag({
   document.removeEventListener('pointerup', handlePointerUp, true);
   document.removeEventListener('pointercancel', handlePointerCancel, true);
 
-  try {
-    if (captureTarget.hasPointerCapture?.(pointerId)) {
-      captureTarget.releasePointerCapture(pointerId);
-    }
-  } catch {
-    /*
-     * capture 해제 실패는 무시.
-     */
-  }
 
   if (ghostItem?.isConnected) {
     ghostItem.remove();
@@ -692,12 +670,13 @@ function cleanupDrag({
     placeholder.replaceWith(item);
   }
 
-  resetDraggedItem(item);
+	resetDraggedItem(item);
 
-  section.classList.remove(DRAG_ACTIVE_CLASS);
-  item.classList.remove(DRAGGING_ITEM_CLASS);
-
-  clearInlineAnimationState(list);
+	section.classList.remove(DRAG_ACTIVE_CLASS);
+	item.classList.remove(DRAGGING_ITEM_CLASS);
+	document.documentElement.classList.remove(DRAG_CURSOR_LOCK_CLASS);
+	
+	clearInlineAnimationState(list);
 
   if (restoreOrder) {
     restoreFavoriteOrder({
@@ -750,29 +729,31 @@ function createDragGhostItem({
   ghost.setAttribute('aria-hidden', 'true');
   ghost.setAttribute('draggable', 'false');
 
-  Object.assign(ghost.style, {
-    position: 'fixed',
-    left: '0',
-    top: '0',
-    right: 'auto',
-    bottom: 'auto',
-    width: `${widthNumber}px`,
-    height: `${heightNumber}px`,
-    minWidth: `${widthNumber}px`,
-    minHeight: `${heightNumber}px`,
-    maxWidth: `${widthNumber}px`,
-    maxHeight: `${heightNumber}px`,
-    boxSizing: 'border-box',
-    zIndex: '2147483647',
-    margin: '0',
-    pointerEvents: 'none',
-    userSelect: 'none',
-    touchAction: 'none',
-    transition: 'none',
-    transform: '',
-    opacity: '0.96',
-    filter: 'drop-shadow(0 6px 10px rgba(0, 0, 0, 0.38))',
-  });
+	Object.assign(ghost.style, {
+		position: 'fixed',
+		left: '0',
+		top: '0',
+		right: 'auto',
+		bottom: 'auto',
+		width: `${widthNumber}px`,
+		height: `${heightNumber}px`,
+		minWidth: `${widthNumber}px`,
+		minHeight: `${heightNumber}px`,
+		maxWidth: `${widthNumber}px`,
+		maxHeight: `${heightNumber}px`,
+		boxSizing: 'border-box',
+		zIndex: '2147483647',
+		margin: '0',
+
+		pointerEvents: 'none',
+
+		userSelect: 'none',
+		touchAction: 'none',
+		transition: 'none',
+		transform: '',
+		opacity: '0.96',
+		filter: 'drop-shadow(0 6px 10px rgba(0, 0, 0, 0.38))',
+	});
 
   return ghost;
 }
@@ -867,7 +848,7 @@ function getSortableItems(list) {
       return (
         isElementVisibleForOrdering(item) &&
         isDraggableFavoriteItem(item)
-      );
+      );  
     });
 }
 
