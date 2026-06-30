@@ -47,6 +47,9 @@ import {
 } from './shortcut-storage.js';
 
 import {
+  EMOTE_BIND_MODE_RENAME,
+  exitEmoteBindMode,
+  getEmoteBindModeState,
   isEmoteBindModeActive,
 } from './emote-bind-mode-state.js';
 
@@ -68,6 +71,7 @@ const activePresses = new Map();
 let attached = false;
 let shortcutBindings = getDefaultShortcutBindings();
 let activeShortcutBindingSetId = '';
+let suppressNextRenameEscapeKeyUp = false;
 
 export function attachShortcutController() {
   if (attached) return;
@@ -146,14 +150,19 @@ function handleShortcutEvent(event) {
   ) {
     return;
   }
-
   /*
-   * bind / unbind 모드에서는 emote-bind-events.js가 우선 처리한다.
-   * 여기서는 기존 단축키 실행만 막는다.
+   * rename 모드의 Escape는 CHZZK 패널 닫기보다 먼저 차단한다.
    */
-  if (isEmoteBindModeActive()) {
-    return;
-  }
+		if (handleSuppressedRenameEscapeKeyUp(event)) {
+		return;
+	}
+
+	if (handleRenameModeShortcutEvent(event)) {
+		return;
+	}
+	if (isEmoteBindModeActive()) {
+		return;
+	}
 
   /*
    * 한글 IME 조합 입력은 Emozzk 단축키로 처리하지 않는다.
@@ -200,6 +209,56 @@ function handleShortcutEvent(event) {
     event,
     state,
   });
+}
+
+function handleRenameModeShortcutEvent(event) {
+  const bindState = getEmoteBindModeState();
+
+  if (bindState.mode !== EMOTE_BIND_MODE_RENAME) {
+    return false;
+  }
+
+  if (
+    event.type !== EVENT_PHASE_KEYDOWN ||
+    event.code !== 'Escape' ||
+    hasAnyModifier(event)
+  ) {
+    return false;
+  }
+
+  suppressNextRenameEscapeKeyUp = true;
+
+  blockKeyboardEvent({
+    event,
+    binding: null,
+  });
+
+  exitEmoteBindMode();
+  scheduleBadgeUpdate();
+
+  return true;
+}
+
+function handleSuppressedRenameEscapeKeyUp(event) {
+  if (!suppressNextRenameEscapeKeyUp) {
+    return false;
+  }
+
+  if (
+    event.type !== EVENT_PHASE_KEYUP ||
+    event.code !== 'Escape'
+  ) {
+    return false;
+  }
+
+  suppressNextRenameEscapeKeyUp = false;
+
+  blockKeyboardEvent({
+    event,
+    binding: null,
+  });
+
+  return true;
 }
 
 function handleShortcutKeyDown({
@@ -773,6 +832,7 @@ function getActivePressKeyFromEvent(event) {
 
 function clearActivePresses() {
   activePresses.clear();
+  suppressNextRenameEscapeKeyUp = false;
 }
 
 function normalizeControllerBinding(binding) {

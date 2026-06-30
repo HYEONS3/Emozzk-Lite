@@ -18,6 +18,10 @@ import {
 export const EMOTE_BIND_MODE_NONE = 'none';
 export const EMOTE_BIND_MODE_ASSIGN = 'assign';
 export const EMOTE_BIND_MODE_CLEAR = 'clear';
+export const EMOTE_BIND_MODE_RENAME = 'rename';
+
+
+
 
 export const EMOTE_BIND_MODE_CHANGED_EVENT = 'emzk-lite-emote-bind-mode-changed';
 
@@ -31,11 +35,10 @@ const DEFAULT_BIND_MODE_STATE = {
   selectedCode: '',
   selectedPhase: SHORTCUT_PHASE_DOWN,
 
-  /*
-   * clear mode 전용 임시 선택 목록.
-   * 실제 단축키 해제는 save 시점에만 수행한다.
-   */
   selectedClearEmojiIds: [],
+
+  renameValue: '',
+  renameSaving: false,
 
   keyListening: false,
   isSaving: false,
@@ -76,7 +79,6 @@ export function resetEmoteBindModeState() {
 	bindModeState = {
 		...DEFAULT_BIND_MODE_STATE,
 		selectedClearEmojiIds: [],
-		isSaving: false,
 	};
 
   dispatchEmoteBindModeChanged({
@@ -119,6 +121,34 @@ export function enterEmoteBindClearMode() {
     keyListening: false,
     isSaving: false,
   });
+}
+
+export function enterShortcutSetRenameMode({
+  renameValue = '',
+} = {}) {
+  return setEmoteBindModeState({
+    mode: EMOTE_BIND_MODE_RENAME,
+
+    selectedEmojiId: '',
+    selectedEmojiLabel: '',
+    selectedEmojiImageUrl: '',
+    selectedCode: '',
+
+    selectedClearEmojiIds: [],
+    renameValue: normalizeText(renameValue),
+    renameSaving: false,
+
+    keyListening: false,
+    isSaving: false,
+  });
+}
+
+export function exitShortcutSetRenameMode() {
+  if (!isShortcutSetRenameMode()) {
+    return getEmoteBindModeState();
+  }
+
+  return exitEmoteBindMode();
 }
 
 export function exitEmoteBindMode() {
@@ -206,6 +236,26 @@ export function setEmoteBindPhase(phase) {
   });
 }
 
+export function setShortcutSetRenameValue(value) {
+  if (!isShortcutSetRenameMode()) {
+    return getEmoteBindModeState();
+  }
+
+  return setEmoteBindModeState({
+    renameValue: normalizeInputText(value),
+  });
+}
+
+export function setShortcutSetRenameSaving(isSaving) {
+  if (!isShortcutSetRenameMode()) {
+    return getEmoteBindModeState();
+  }
+
+  return setEmoteBindModeState({
+    renameSaving: Boolean(isSaving),
+  });
+}
+
 export function cycleEmoteBindPhase() {
   return setEmoteBindPhase(
     getNextEmoteBindPhase(bindModeState.selectedPhase)
@@ -236,7 +286,10 @@ export function stopEmoteBindKeyListening() {
 }
 
 export function setEmoteBindSaving(isSaving) {
-  if (!isEmoteBindModeActive()) {
+  if (
+    !isEmoteBindAssignMode() &&
+    !isEmoteBindClearMode()
+  ) {
     return getEmoteBindModeState();
   }
 
@@ -356,6 +409,14 @@ export function isEmoteBindExperimentalKeyupEnabled() {
   return isExperimentalKeyupEnabled();
 }
 
+export function isShortcutSetRenameMode() {
+  return bindModeState.mode === EMOTE_BIND_MODE_RENAME;
+}
+
+export function isShortcutSetRenameSaving() {
+  return Boolean(bindModeState.renameSaving);
+}
+
 export function getEmoteBindAvailableCodes() {
   return [
     'F1',
@@ -463,21 +524,35 @@ function normalizeBindModeState(state) {
       ? normalizeText(state.selectedEmojiImageUrl)
       : '',
 
-    selectedCode: normalizeEmoteBindCode(state.selectedCode) ||
-      DEFAULT_BIND_MODE_STATE.selectedCode,
-    selectedPhase: normalizeEmoteBindPhase(state.selectedPhase),
+    selectedCode: normalizedMode === EMOTE_BIND_MODE_ASSIGN
+      ? normalizeEmoteBindCode(state.selectedCode) ||
+        DEFAULT_BIND_MODE_STATE.selectedCode
+      : '',
+    selectedPhase: normalizedMode === EMOTE_BIND_MODE_ASSIGN
+      ? normalizeEmoteBindPhase(state.selectedPhase)
+      : SHORTCUT_PHASE_DOWN,
 
     selectedClearEmojiIds: normalizedMode === EMOTE_BIND_MODE_CLEAR
       ? normalizeEmojiIdList(state.selectedClearEmojiIds)
       : [],
 
+		renameValue: normalizedMode === EMOTE_BIND_MODE_RENAME
+			? normalizeInputText(state.renameValue)
+			: '',
+    renameSaving: normalizedMode === EMOTE_BIND_MODE_RENAME
+      ? Boolean(state.renameSaving)
+      : false,
+
     keyListening: normalizedMode === EMOTE_BIND_MODE_ASSIGN
       ? Boolean(state.keyListening) && !Boolean(state.isSaving)
       : false,
 
-    isSaving: normalizedMode !== EMOTE_BIND_MODE_NONE
-      ? Boolean(state.isSaving)
-      : false,
+		isSaving: (
+			normalizedMode === EMOTE_BIND_MODE_ASSIGN ||
+			normalizedMode === EMOTE_BIND_MODE_CLEAR
+		)
+			? Boolean(state.isSaving)
+			: false,
   };
 }
 
@@ -488,6 +563,10 @@ function normalizeBindMode(mode) {
 
   if (mode === EMOTE_BIND_MODE_CLEAR) {
     return EMOTE_BIND_MODE_CLEAR;
+  }
+
+  if (mode === EMOTE_BIND_MODE_RENAME) {
+    return EMOTE_BIND_MODE_RENAME;
   }
 
   return EMOTE_BIND_MODE_NONE;
@@ -540,19 +619,24 @@ function dispatchEmoteBindModeChanged({
   window.dispatchEvent(
     new CustomEvent(EMOTE_BIND_MODE_CHANGED_EVENT, {
       detail: {
-        previousState: {
-          ...previousState,
-          selectedClearEmojiIds: [
-            ...(previousState.selectedClearEmojiIds || []),
-          ],
-        },
-        nextState: {
-          ...nextState,
-          selectedClearEmojiIds: [
-            ...(nextState.selectedClearEmojiIds || []),
-          ],
-        },
+        previousState: cloneBindModeStateForEvent(previousState),
+        nextState: cloneBindModeStateForEvent(nextState),
       },
     })
   );
+}
+
+function cloneBindModeStateForEvent(state) {
+  return {
+    ...state,
+    selectedClearEmojiIds: [
+      ...(state.selectedClearEmojiIds || []),
+    ],
+  };
+}
+
+
+
+function normalizeInputText(value) {
+  return String(value ?? '');
 }

@@ -44,7 +44,8 @@ import {
 } from './emote-favorites-event-name.js';
 
 import {
-  isEmoteBindModeActive,
+  isEmoteBindAssignMode,
+  isEmoteBindClearMode,
 } from './emote-bind-mode-state.js';
 
 import {
@@ -59,7 +60,7 @@ export function attachEmoteFavoriteEvents() {
 }
 
 function handleFavoriteMouseDown(event) {
-  if (isEmoteBindModeActive()) return;
+  if (isEmoteBindInteractionModeActive()) return;
   if (!isFavoriteToggleEvent(event)) return;
 
   const button = getOriginalEmoteButtonFromEvent(event);
@@ -70,7 +71,7 @@ function handleFavoriteMouseDown(event) {
 }
 
 async function handleFavoriteClick(event) {
-  if (isEmoteBindModeActive()) return;
+	if (isEmoteBindInteractionModeActive()) return;
   if (!isFavoriteToggleEvent(event)) return;
 
   const button = getOriginalEmoteButtonFromEvent(event);
@@ -163,6 +164,13 @@ function isElementInFavoriteSection(element, panel) {
   const section = element.closest(FAVORITES_SECTION_SELECTOR);
 
   return Boolean(section && panel.contains(section));
+}
+
+function isEmoteBindInteractionModeActive() {
+  return (
+    isEmoteBindAssignMode() ||
+    isEmoteBindClearMode()
+  );
 }
 
 function getRecentEmoteFromButton(button) {

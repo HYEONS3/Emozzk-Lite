@@ -43,6 +43,9 @@ import {
   EMOTE_BIND_MODE_ASSIGN,
   EMOTE_BIND_MODE_CHANGED_EVENT,
   EMOTE_BIND_MODE_CLEAR,
+  EMOTE_BIND_MODE_RENAME,
+  enterShortcutSetRenameMode,
+  exitShortcutSetRenameMode,
   exitEmoteBindMode,
   getEmoteBindCodeLabel,
   getEmoteBindModeState,
@@ -52,7 +55,8 @@ import {
   isEmoteBindSaving,
   setEmoteBindPhase,
   setEmoteBindSaving,
-  startEmoteBindKeyListening,
+  setShortcutSetRenameSaving,
+  setShortcutSetRenameValue,
   toggleEmoteBindAssignMode,
   toggleEmoteBindClearMode,
 } from './emote-bind-mode-state.js';
@@ -66,6 +70,7 @@ import {
   getCachedShortcutBindingSetState,
   getShortcutBindingSetIndex,
   normalizeShortcutBindingSetCount,
+  renameShortcutBindingSet,
   setActiveShortcutBindingSet,
   SHORTCUT_BINDINGS_CHANGED_EVENT,
   SHORTCUT_BINDING_SET_OFF,
@@ -115,6 +120,7 @@ const BIND_CLEAR_BAR_CLASS = 'emzk-lite-bind-clear-bar';
 const BIND_LEFT_CLASS = 'emzk-lite-bind-left';
 const BIND_VALUE_CLASS = 'emzk-lite-bind-value';
 const BIND_HINT_CLASS = 'emzk-lite-bind-hint';
+const RENAME_INPUT_CLASS = 'emzk-lite-rename-input';
 
 const BIND_EMOTE_PREVIEW_CLASS = 'emzk-lite-bind-emote-preview';
 const BIND_EMOTE_IMAGE_CLASS = 'emzk-lite-bind-emote-image';
@@ -205,6 +211,7 @@ export function stopFavoriteEmoteSectionRenderer() {
   }
 
   clearFavoriteRenderState();
+  exitShortcutSetRenameModeSilently();
   removeFavoriteSection();
   removeShortcutSetDragPreview();
 }
@@ -222,21 +229,25 @@ export function renderFavoriteEmoteSection() {
   const panel = findEmotePanel();
 
   if (!panel) {
+    exitShortcutSetRenameModeSilently();
     return;
   }
 
   const area = getEmojiArea(panel);
 
   if (!area) {
+		exitShortcutSetRenameModeSilently();
     return;
   }
 
-	if (!isRecentEmoteCategoryActive(panel)) {
-		removeFavoriteSection(area);
-		markFavoriteAreaReady(area);
-		return;
-	}
-	
+  if (!isRecentEmoteCategoryActive(panel)) {
+    exitShortcutSetRenameModeSilently();
+
+    removeFavoriteSection(area);
+    markFavoriteAreaReady(area);
+    return;
+  }
+
   const recentSection = findRecentEmoteSection(panel);
 
   if (!recentSection) {
@@ -395,12 +406,46 @@ function handlePossibleFavoriteRender(event) {
     if (target.closest(`.${BIND_BUTTON_CLASS}`)) return;
     if (target.closest(`.${BIND_PHASE_BUTTON_CLASS}`)) return;
     if (target.closest(`.${SHORTCUT_SET_BUTTON_CLASS}`)) return;
+    if (target.closest(`.${RENAME_INPUT_CLASS}`)) return;
+
+    exitShortcutSetRenameModeOnPanelClick(target);
   }
 
   scheduleFavoriteEmoteSectionRender();
 }
 
+function exitShortcutSetRenameModeOnPanelClick(target) {
+  const bindState = getEmoteBindModeState();
+
+  if (bindState.mode !== EMOTE_BIND_MODE_RENAME) {
+    return false;
+  }
+
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  const panel = findEmotePanel();
+
+  if (!panel || !panel.contains(target)) {
+    return false;
+  }
+
+  exitShortcutSetRenameModeSilently();
+  return true;
+}
+
 function handleShortcutBindingsChanged() {
+  const bindState = getEmoteBindModeState();
+
+  if (
+    isShortcutBindingOff() &&
+    bindState.mode === EMOTE_BIND_MODE_RENAME
+  ) {
+    cancelShortcutSetRenameMode();
+    return;
+  }
+
   scheduleFavoriteEmoteSectionRender();
 }
 
@@ -528,6 +573,21 @@ function renderFavoriteTitle({
   const bindState = getEmoteBindModeState();
   const previousMode = title.getAttribute('data-emzk-lite-bind-mode') || '';
 
+  if (bindState.mode === EMOTE_BIND_MODE_RENAME) {
+    title.setAttribute('data-emzk-lite-bind-mode', EMOTE_BIND_MODE_RENAME);
+
+    if (previousMode === EMOTE_BIND_MODE_RENAME) {
+      syncRenameTitleContent({
+        title,
+        bindState,
+      });
+      return;
+    }
+
+    title.replaceChildren(createRenameTitleContent(bindState));
+    return;
+  }
+
   title.setAttribute('data-emzk-lite-bind-mode', bindState.mode);
 
   /*
@@ -544,11 +604,12 @@ function renderFavoriteTitle({
   }
 
   /*
-   * assign / clear에서 기본 모드로 돌아온 경우는 기본 헤더 구조를 다시 만든다.
+   * assign / clear / rename에서 기본 모드로 돌아온 경우는 기본 헤더 구조를 다시 만든다.
    */
   if (
     previousMode === EMOTE_BIND_MODE_ASSIGN ||
-    previousMode === EMOTE_BIND_MODE_CLEAR
+    previousMode === EMOTE_BIND_MODE_CLEAR ||
+    previousMode === EMOTE_BIND_MODE_RENAME
   ) {
     title.replaceChildren(createDefaultTitleContent(bindState));
     return;
@@ -577,6 +638,16 @@ function createDefaultTitleContent(bindState) {
 
   actions.append(
     createShortcutSetSwitch(),
+    createHeaderIconButton({
+      icon: 'edit',
+      label: '세트 이름 변경',
+      title: shortcutsOff
+        ? 'OFF 상태에서는 세트 이름을 변경할 수 없습니다.'
+        : '세트 이름 변경',
+      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_RENAME,
+      disabled: shortcutsOff,
+      onClick: startShortcutSetRenameMode,
+    }),
     createHeaderIconButton({
       icon: 'link',
       label: '키 지정',
@@ -668,7 +739,6 @@ function createShortcutSetSwitch() {
   return wrapper;
 }
 
-
 function updateShortcutSetSwitch(wrapper) {
   const activeSetId = getCachedActiveShortcutBindingSetId();
   const sets = getShortcutSetSwitchOptions();
@@ -679,22 +749,19 @@ function updateShortcutSetSwitch(wrapper) {
     activeSetId,
   });
 
+  if (shouldRebuildShortcutSetSwitch({
+    wrapper,
+    sets,
+  })) {
+    wrapper.replaceChildren(
+      ...createShortcutSetButtons({
+        sets,
+        activeSetId,
+      })
+    );
 
-	if (shouldRebuildShortcutSetSwitch({
-		wrapper,
-		sets,
-	})) {
-		wrapper.replaceChildren(
-			...createShortcutSetButtons({
-				sets,
-				activeSetId,
-			})
-		);
-
-
-		return;
-	}
-
+    return;
+  }
 
   sets.forEach((set) => {
     const setId = normalizeShortcutSetId(set?.id);
@@ -709,26 +776,35 @@ function updateShortcutSetSwitch(wrapper) {
       return;
     }
 
-    const label = normalizeText(set?.label) ||
-      getShortcutSetFallbackLabel(setId);
+    const segmentLabel = normalizeText(set?.segmentLabel) ||
+      getShortcutSetSegmentLabel(setId);
 
+    const previewLabel = normalizeText(set?.previewLabel) ||
+      getShortcutSetPreviewLabel({
+        setId,
+        label: set?.label,
+      });
 
-		const active = setId === activeSetId;
+    const active = setId === activeSetId;
 
-		syncShortcutSetButtonContent({
-			button,
-			setId,
-			label,
-		});
-		
+    syncShortcutSetButtonContent({
+      button,
+      setId,
+      segmentLabel,
+    });
+
     button.setAttribute('aria-label', getShortcutSetButtonAriaLabel({
       setId,
-      label,
+      segmentLabel,
+      previewLabel,
     }));
+
     button.setAttribute('title', getShortcutSetButtonTitle({
       setId,
-      label,
+      segmentLabel,
+      previewLabel,
     }));
+
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
     button.classList.toggle(SHORTCUT_SET_BUTTON_ACTIVE_CLASS, active);
   });
@@ -805,14 +881,19 @@ function getShortcutSetSwitchOptions() {
 
     return {
       id: setId,
-      label: normalizeText(storedSet?.label) || String(setIndex),
+      segmentLabel: getShortcutSetSegmentLabel(setId),
+      previewLabel: getShortcutSetPreviewLabel({
+        setId,
+        label: storedSet?.label,
+      }),
     };
   });
 
   return [
     {
       id: SHORTCUT_BINDING_SET_OFF,
-      label: 'OFF',
+      segmentLabel: 'OFF',
+      previewLabel: 'OFF',
     },
     ...visibleSets,
   ];
@@ -828,12 +909,19 @@ function createShortcutSetButtons({
 
       if (!setId) return null;
 
-      const label = normalizeText(set?.label) ||
-        getShortcutSetFallbackLabel(setId);
+      const segmentLabel = normalizeText(set?.segmentLabel) ||
+        getShortcutSetSegmentLabel(setId);
+
+      const previewLabel = normalizeText(set?.previewLabel) ||
+        getShortcutSetPreviewLabel({
+          setId,
+          label: set?.label,
+        });
 
       return createShortcutSetButton({
         setId,
-        label,
+        segmentLabel,
+        previewLabel,
         active: setId === activeSetId,
       });
     })
@@ -877,6 +965,10 @@ function syncDefaultHeaderActionButtons({
     actions.querySelectorAll(`:scope > .${BIND_BUTTON_CLASS}`)
   );
 
+  const hasRenameButton = buttons.some((button) => {
+    return button.getAttribute('aria-label') === '세트 이름 변경';
+  });
+
   const hasAssignButton = buttons.some((button) => {
     return button.getAttribute('aria-label') === '키 지정';
   });
@@ -887,9 +979,24 @@ function syncDefaultHeaderActionButtons({
     return label === '해제' || label === '해제 중';
   });
 
-  if (hasAssignButton && hasClearButton) {
+  if (
+    hasRenameButton &&
+    hasAssignButton &&
+    hasClearButton
+  ) {
     buttons.forEach((button) => {
       const label = button.getAttribute('aria-label');
+
+      if (label === '세트 이름 변경') {
+        syncHeaderIconButtonState(button, {
+          label: '세트 이름 변경',
+          title: shortcutsOff
+            ? 'OFF 상태에서는 세트 이름을 변경할 수 없습니다.'
+            : '세트 이름 변경',
+          active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_RENAME,
+          disabled: shortcutsOff,
+        });
+      }
 
       if (label === '키 지정') {
         syncHeaderIconButtonState(button, {
@@ -923,6 +1030,16 @@ function syncDefaultHeaderActionButtons({
 
   actions.replaceChildren(
     createShortcutSetSwitch(),
+    createHeaderIconButton({
+      icon: 'edit',
+      label: '세트 이름 변경',
+      title: shortcutsOff
+        ? 'OFF 상태에서는 세트 이름을 변경할 수 없습니다.'
+        : '세트 이름 변경',
+      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_RENAME,
+      disabled: shortcutsOff,
+      onClick: startShortcutSetRenameMode,
+    }),
     createHeaderIconButton({
       icon: 'link',
       label: '키 지정',
@@ -964,7 +1081,8 @@ function syncHeaderIconButtonState(button, {
 
 function createShortcutSetButton({
   setId,
-  label,
+  segmentLabel,
+  previewLabel,
   active,
 }) {
   const button = document.createElement('button');
@@ -972,21 +1090,26 @@ function createShortcutSetButton({
   button.type = 'button';
   button.className = SHORTCUT_SET_BUTTON_CLASS;
   button.setAttribute('data-emzk-lite-shortcut-set-id', setId);
+
   button.setAttribute('aria-label', getShortcutSetButtonAriaLabel({
     setId,
-    label,
+    segmentLabel,
+    previewLabel,
   }));
+
   button.setAttribute('title', getShortcutSetButtonTitle({
     setId,
-    label,
+    segmentLabel,
+    previewLabel,
   }));
+
   button.setAttribute('aria-pressed', active ? 'true' : 'false');
   button.setAttribute('draggable', 'false');
 
   syncShortcutSetButtonContent({
     button,
     setId,
-    label,
+    segmentLabel,
   });
 
   if (active) {
@@ -1034,10 +1157,11 @@ function createShortcutSetButton({
 
   return button;
 }
+
 function syncShortcutSetButtonContent({
   button,
   setId,
-  label,
+  segmentLabel,
 }) {
   if (!(button instanceof HTMLButtonElement)) {
     return;
@@ -1057,25 +1181,26 @@ function syncShortcutSetButtonContent({
     return;
   }
 
-  button.textContent = label;
+  button.textContent = segmentLabel;
 }
 
 function createShortcutSetOffIcon() {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
 
-  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('viewBox', '0 0 12 12');
   svg.setAttribute('width', '12');
   svg.setAttribute('height', '12');
   svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
   svg.classList.add(SHORTCUT_SET_OFF_ICON_CLASS);
 
-  circle.setAttribute('cx', '8');
-  circle.setAttribute('cy', '8');
-  circle.setAttribute('r', '5');
+  circle.setAttribute('cx', '6');
+  circle.setAttribute('cy', '6');
+  circle.setAttribute('r', '4.25');
   circle.setAttribute('fill', 'none');
   circle.setAttribute('stroke', 'currentColor');
-  circle.setAttribute('stroke-width', '1.8');
+  circle.setAttribute('stroke-width', '1.5');
 
   svg.appendChild(circle);
 
@@ -1256,7 +1381,11 @@ function getShortcutSetFromPointerPosition({
 
   return {
     setId,
-    label: normalizeText(set?.label) || getShortcutSetFallbackLabel(setId),
+    previewLabel: normalizeText(set?.previewLabel) ||
+      getShortcutSetPreviewLabel({
+        setId,
+        label: set?.label,
+      }),
     index,
   };
 }
@@ -1291,7 +1420,8 @@ function showShortcutSetDragPreview({
 
   const label = shortcutSet?.setId === SHORTCUT_BINDING_SET_OFF
     ? 'OFF'
-    : shortcutSet?.label;
+    : normalizeText(shortcutSet?.previewLabel) ||
+      getShortcutSetFallbackLabel(shortcutSet?.setId);
 
   const left = rect.left + slotWidth * shortcutSet.index + slotWidth / 2;
   const top = rect.top - 7;
@@ -1354,12 +1484,10 @@ async function switchShortcutSet(setId) {
     return;
   }
 
+  exitShortcutSetRenameModeSilently();
+
   await setActiveShortcutBindingSet(normalizedSetId);
 
-  /*
-   * setActiveShortcutBindingSet() 내부에서 SHORTCUT_BINDINGS_CHANGED_EVENT가 발생하지만,
-   * 즉시 UI와 badge를 맞추기 위해 한 번 더 예약한다.
-   */
   scheduleFavoriteEmoteSectionRender();
   scheduleBadgeUpdate();
 }
@@ -1390,26 +1518,74 @@ function getShortcutSetFallbackLabel(setId) {
   return String(setIndex);
 }
 
-function getShortcutSetButtonAriaLabel({
+function getShortcutSetSegmentLabel(setId) {
+  return getShortcutSetFallbackLabel(setId);
+}
+
+function getShortcutSetCustomLabel({
   setId,
   label,
+}) {
+  const normalizedLabel = normalizeText(label);
+  const fallbackLabel = getShortcutSetFallbackLabel(setId);
+
+  if (!normalizedLabel) {
+    return '';
+  }
+
+  if (normalizedLabel === fallbackLabel) {
+    return '';
+  }
+
+  return normalizedLabel;
+}
+
+function getShortcutSetPreviewLabel({
+  setId,
+  label,
+}) {
+  return getShortcutSetCustomLabel({
+    setId,
+    label,
+  }) || getShortcutSetFallbackLabel(setId);
+}
+
+function getShortcutSetButtonAriaLabel({
+  setId,
+  segmentLabel,
+  previewLabel,
 }) {
   if (setId === SHORTCUT_BINDING_SET_OFF) {
     return '단축키 OFF';
   }
 
-  return `단축키 세트 ${label}`;
+  if (
+    previewLabel &&
+    previewLabel !== segmentLabel
+  ) {
+    return `단축키 세트 ${segmentLabel}: ${previewLabel}`;
+  }
+
+  return `단축키 세트 ${segmentLabel}`;
 }
 
 function getShortcutSetButtonTitle({
   setId,
-  label,
+  segmentLabel,
+  previewLabel,
 }) {
   if (setId === SHORTCUT_BINDING_SET_OFF) {
     return '단축키 OFF';
   }
 
-  return `단축키 세트 ${label}`;
+  if (
+    previewLabel &&
+    previewLabel !== segmentLabel
+  ) {
+    return `${segmentLabel} · ${previewLabel}`;
+  }
+
+  return `단축키 세트 ${segmentLabel}`;
 }
 
 function isShortcutBindingOff() {
@@ -1419,12 +1595,14 @@ function isShortcutBindingOff() {
 function toggleAssignModeIfShortcutEnabled() {
   if (isShortcutBindingOff()) return;
 
+  exitShortcutSetRenameModeSilently();
   toggleEmoteBindAssignMode();
 }
 
 function toggleClearModeIfShortcutEnabled() {
   if (isShortcutBindingOff()) return;
 
+  exitShortcutSetRenameModeSilently();
   toggleEmoteBindClearMode();
 }
 
@@ -1435,13 +1613,13 @@ function createAssignTitleContent(bindState) {
   const left = document.createElement('span');
   left.className = BIND_LEFT_CLASS;
 
-	left.appendChild(createSelectedEmotePreview(bindState));
+  left.appendChild(createSelectedEmotePreview(bindState));
 
-	if (isEmoteBindExperimentalKeyupEnabled()) {
-		left.appendChild(createPhaseToggleButton(bindState));
-	}
+  if (isEmoteBindExperimentalKeyupEnabled()) {
+    left.appendChild(createPhaseToggleButton(bindState));
+  }
 
-	left.appendChild(createAssignHint(bindState));
+  left.appendChild(createAssignHint(bindState));
 
   bar.append(
     left,
@@ -1675,6 +1853,8 @@ function appendSvgPath(svg, d) {
   path.setAttribute('stroke-linejoin', 'round');
 
   svg.appendChild(path);
+
+  return path;
 }
 
 function normalizeRenderPhase(phase) {
@@ -2218,7 +2398,12 @@ function createBindIcon(icon) {
   path.setAttribute('stroke-linecap', 'round');
   path.setAttribute('stroke-linejoin', 'round');
 
-  if (icon === 'unlink') {
+  if (icon === 'edit') {
+    path.setAttribute(
+      'd',
+      'M4 20h4.5L19 9.5a2.1 2.1 0 0 0-3-3L5.5 17 4 20ZM13.5 8 16 10.5'
+    );
+  } else if (icon === 'unlink') {
     path.setAttribute(
       'd',
       'M8.5 12.5 6 15a4 4 0 0 0 5.66 5.66l2.5-2.5M15.5 11.5 18 9a4 4 0 0 0-5.66-5.66l-2.5 2.5M3 3l18 18'
@@ -2404,15 +2589,11 @@ function getFavoriteSeparator(favoriteList) {
   }
 
   const separator = document.createElement('li');
-  const label = document.createElement('span');
 
   separator.className = FAVORITES_SEPARATOR_CLASS;
   separator.setAttribute('role', 'separator');
   separator.setAttribute('aria-label', '일반 즐겨찾기');
   separator.setAttribute('draggable', 'false');
-
-  label.textContent = '즐겨찾기';
-  separator.appendChild(label);
 
   return separator;
 }
@@ -2502,7 +2683,7 @@ function startFavoriteSectionMutationObserver() {
 
     if (!hasRelevantMutation) return;
 
-		renderFavoriteEmoteSection();
+    renderFavoriteEmoteSection();
   });
 
   observer.observe(document.body, {
@@ -2643,3 +2824,262 @@ function normalizeShortcutCode(value) {
   return normalizeStoredShortcutCode(value);
 }
 
+function createRenameTitleContent(bindState) {
+  const bar = document.createElement('span');
+
+  bar.className = BIND_BAR_CLASS;
+
+  const left = document.createElement('span');
+  left.className = BIND_LEFT_CLASS;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = RENAME_INPUT_CLASS;
+  input.value = bindState.renameValue;
+  input.placeholder = getShortcutSetFallbackLabel(
+    getCachedActiveShortcutBindingSetId()
+  );
+  input.setAttribute('aria-label', '세트 이름');
+  input.setAttribute('title', '현재 세트의 이름을 입력하세요.');
+
+  input.addEventListener('mousedown', (event) => {
+    event.stopPropagation();
+  });
+
+  input.addEventListener('click', (event) => {
+    event.stopPropagation();
+  });
+
+  input.addEventListener('input', () => {
+    setShortcutSetRenameValue(input.value);
+  });
+
+  input.addEventListener('keydown', (event) => {
+    if (event.code === 'Escape') {
+      stopControlEvent(event);
+      cancelShortcutSetRenameMode();
+      return;
+    }
+
+    if (event.code === 'Enter') {
+      stopControlEvent(event);
+
+      void saveShortcutSetRenameMode()
+        .catch((error) => {
+          console.error('[Emozzk Lite] failed to rename shortcut set:', error);
+        });
+    }
+  });
+
+  left.appendChild(input);
+
+  bar.append(
+    left,
+    createRenameActionButtons(bindState)
+  );
+
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+  });
+
+  return bar;
+}
+
+function syncRenameTitleContent({
+  title,
+  bindState,
+}) {
+  const input = title.querySelector(`:scope .${RENAME_INPUT_CLASS}`);
+
+  if (!(input instanceof HTMLInputElement)) {
+    title.replaceChildren(createRenameTitleContent(bindState));
+    return;
+  }
+
+  if (
+    document.activeElement !== input &&
+    input.value !== bindState.renameValue
+  ) {
+    input.value = bindState.renameValue;
+  }
+
+  const saveButton = title.querySelector(`:scope .${BIND_SAVE_BUTTON_CLASS}`);
+  const cancelButton = title.querySelector(`:scope .${BIND_CANCEL_BUTTON_CLASS}`);
+
+  syncRenameButtonState({
+    button: saveButton,
+    label: bindState.renameSaving ? '저장 중' : '세트 이름 저장',
+    disabled: bindState.renameSaving,
+  });
+
+  syncRenameButtonState({
+    button: cancelButton,
+    label: bindState.renameSaving ? '저장 중' : '세트 이름 변경 취소',
+    disabled: bindState.renameSaving,
+  });
+}
+
+function syncRenameButtonState({
+  button,
+  label,
+  disabled,
+}) {
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  button.disabled = Boolean(disabled);
+  button.setAttribute('aria-label', label);
+  button.setAttribute('title', label);
+  button.classList.toggle(BIND_BUTTON_DISABLED_CLASS, Boolean(disabled));
+}
+
+function createRenameActionButtons(bindState) {
+  const actions = document.createElement('span');
+
+  actions.className = BIND_ACTIONS_CLASS;
+
+  actions.append(
+    createRenameSaveButton(bindState),
+    createRenameCancelButton(bindState)
+  );
+
+  return actions;
+}
+
+function createRenameSaveButton(bindState) {
+  const button = document.createElement('button');
+
+  const saveLabel = bindState.renameSaving
+    ? '저장 중'
+    : '세트 이름 저장';
+
+  button.type = 'button';
+  button.className = BIND_BUTTON_CLASS;
+  button.classList.add(BIND_SAVE_BUTTON_CLASS);
+  button.setAttribute('aria-label', saveLabel);
+  button.setAttribute('title', saveLabel);
+
+  if (bindState.renameSaving) {
+    button.disabled = true;
+    button.classList.add(BIND_BUTTON_DISABLED_CLASS);
+  }
+
+  button.appendChild(createSaveFloppyIcon());
+
+  button.addEventListener('mousedown', stopControlEvent);
+
+  button.addEventListener('click', (event) => {
+    stopControlEvent(event);
+
+    if (getEmoteBindModeState().renameSaving) return;
+
+    void saveShortcutSetRenameMode()
+      .catch((error) => {
+        console.error('[Emozzk Lite] failed to rename shortcut set:', error);
+      });
+  });
+
+  return button;
+}
+
+function createRenameCancelButton(bindState) {
+  const button = document.createElement('button');
+
+  const cancelLabel = bindState.renameSaving
+    ? '저장 중'
+    : '세트 이름 변경 취소';
+
+  button.type = 'button';
+  button.className = BIND_BUTTON_CLASS;
+  button.classList.add(BIND_CANCEL_BUTTON_CLASS);
+  button.setAttribute('aria-label', cancelLabel);
+  button.setAttribute('title', cancelLabel);
+
+  if (bindState.renameSaving) {
+    button.disabled = true;
+    button.classList.add(BIND_BUTTON_DISABLED_CLASS);
+  }
+
+  button.appendChild(createCancelXIcon());
+
+  button.addEventListener('mousedown', stopControlEvent);
+
+  button.addEventListener('click', (event) => {
+    stopControlEvent(event);
+
+    if (getEmoteBindModeState().renameSaving) return;
+
+    cancelShortcutSetRenameMode();
+  });
+
+  return button;
+}
+
+function startShortcutSetRenameMode() {
+  if (isShortcutBindingOff()) return;
+
+  const activeSetId = getCachedActiveShortcutBindingSetId();
+	const setState = getCachedShortcutBindingSetState();
+	const sets = Array.isArray(setState?.sets) ? setState.sets : [];
+
+	const set = sets.find((candidate) => {
+		return candidate.id === activeSetId;
+	});
+
+  enterShortcutSetRenameMode({
+    renameValue: normalizeText(set?.label),
+  });
+
+  scheduleFavoriteEmoteSectionRender();
+}
+
+function cancelShortcutSetRenameMode() {
+  exitShortcutSetRenameMode();
+
+  scheduleFavoriteEmoteSectionRender();
+}
+
+async function saveShortcutSetRenameMode() {
+  const bindState = getEmoteBindModeState();
+
+  if (
+    bindState.mode !== EMOTE_BIND_MODE_RENAME ||
+    bindState.renameSaving ||
+    isShortcutBindingOff()
+  ) {
+    return;
+  }
+
+  setShortcutSetRenameSaving(true);
+  scheduleFavoriteEmoteSectionRender();
+
+  try {
+    await renameShortcutBindingSet({
+      setId: getCachedActiveShortcutBindingSetId(),
+      label: bindState.renameValue,
+    });
+
+    exitShortcutSetRenameMode();
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+  } catch (error) {
+    setShortcutSetRenameSaving(false);
+    scheduleFavoriteEmoteSectionRender();
+
+    throw error;
+  }
+}
+
+function exitShortcutSetRenameModeSilently() {
+  const bindState = getEmoteBindModeState();
+
+  if (bindState.mode !== EMOTE_BIND_MODE_RENAME) {
+    return false;
+  }
+
+  exitShortcutSetRenameMode();
+  return true;
+}

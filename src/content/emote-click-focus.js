@@ -7,7 +7,8 @@ import {
 } from './emote-buttons.js';
 
 import {
-  isEmoteBindModeActive,
+  isEmoteBindAssignMode,
+  isEmoteBindClearMode,
 } from './emote-bind-mode-state.js';
 
 import {
@@ -27,7 +28,7 @@ export function attachEmoteClickFocusRestore() {
 }
 
 function handleEmoteClick(event) {
-  if (isEmoteBindModeActive()) return;
+  if (isEmoteBindInteractionModeActive()) return;
   if (isFavoriteToggleEvent(event)) return;
 
   const button = getRealEmoteButtonFromEvent(event);
@@ -43,6 +44,13 @@ function handleEmoteClick(event) {
   }
 
   scheduleChatInputFocusEnd();
+}
+
+function isEmoteBindInteractionModeActive() {
+  return (
+    isEmoteBindAssignMode() ||
+    isEmoteBindClearMode()
+  );
 }
 
 function getRealEmoteButtonFromEvent(event) {

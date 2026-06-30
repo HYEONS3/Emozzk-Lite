@@ -36,7 +36,11 @@ import {
 
 import {
   EMOTE_BIND_MODE_CHANGED_EVENT,
-  isEmoteBindModeActive,
+  EMOTE_BIND_MODE_RENAME,
+  exitShortcutSetRenameMode,
+  getEmoteBindModeState,
+  isEmoteBindAssignMode,
+  isEmoteBindClearMode,
 } from './emote-bind-mode-state.js';
 
 const FAVORITES_LIST_SELECTOR = '.emzk-lite-favorites-list';
@@ -54,12 +58,11 @@ const DRAG_START_DISTANCE_PX = 6;
 const REORDER_DURATION_MS = 210;
 const REORDER_EASING = 'cubic-bezier(0.16, 1, 0.3, 1)';
 
-const AUTO_SCROLL_EDGE_PX = 56;
-const AUTO_SCROLL_MAX_SPEED_PX_PER_SECOND = 720;
+const AUTO_SCROLL_EDGE_PX = 24;
+const AUTO_SCROLL_MAX_SPEED_PX_PER_SECOND = 520;
 
 const CLICK_SUPPRESS_MS = 350;
 
-const ROW_GROUP_TOLERANCE_PX = 10;
 const NO_INSERTION_HIT = Symbol('NO_INSERTION_HIT');
 
 let activeDrag = null;
@@ -89,7 +92,7 @@ function handlePointerDown(event) {
   if (activeDrag) return;
 
   /*
-   * bind / clear mode에서는 이모티콘 클릭·드래그가 설정 동작이다.
+   * assign / clear mode에서는 이모티콘 클릭·드래그가 설정 동작이다.
    *
    * assign:
    * - 이모티콘 클릭 → 단축키 지정 대상 임시 선택
@@ -97,9 +100,10 @@ function handlePointerDown(event) {
    * clear:
    * - 이모티콘 클릭/드래그 → 해제 후보 다중 선택
    *
-   * 따라서 즐겨찾기 위치 이동 drag reorder는 어떤 bind mode에서도 시작하지 않는다.
+   * 따라서 즐겨찾기 위치 이동 drag reorder는 assign / clear 중에는 시작하지 않는다.
+   * rename은 입력 상태일 뿐이므로 drag reorder를 여기서 막지 않는다.
    */
-  if (isEmoteBindModeActive()) return;
+  if (isEmoteBindInteractionModeActive()) return;
 
   if (!isPrimaryPointerEvent(event)) return;
   if (hasAnyModifier(event)) return;
@@ -122,6 +126,8 @@ function handlePointerDown(event) {
   const group = getFavoriteGroupFromItem(item);
 
   if (!group) return;
+
+  exitShortcutSetRenameModeBeforeDragIfNeeded();
 
   disableNativeDraggableChildren(item);
 
@@ -155,6 +161,8 @@ function handlePointerDown(event) {
     dragMetrics: null,
     scrollContainer: null,
 
+		insertionLockItem: null,
+
     frameId: 0,
     autoScrollFrameId: 0,
     lastAutoScrollTime: 0,
@@ -172,7 +180,7 @@ function handlePointerMove(event) {
   if (!activeDrag) return;
   if (event.pointerId !== activeDrag.pointerId) return;
 
-  if (isEmoteBindModeActive()) {
+  if (isEmoteBindInteractionModeActive()) {
     cancelActiveDrag();
     return;
   }
@@ -210,7 +218,7 @@ function handlePointerUp(event) {
   const shouldSave =
     activeDrag.started &&
     !activeDrag.cancelled &&
-    !isEmoteBindModeActive();
+    !isEmoteBindInteractionModeActive();
 
   if (shouldSave) {
     event.preventDefault();
@@ -275,7 +283,7 @@ function handleBindModeChanged() {
   /*
    * drag reorder 도중 clear/assign mode로 바뀌면 위치 변경을 폐기한다.
    */
-  if (isEmoteBindModeActive()) {
+  if (isEmoteBindInteractionModeActive()) {
     cancelActiveDrag();
   }
 }
@@ -292,7 +300,7 @@ function startDrag(event) {
   if (!activeDrag) return;
   if (activeDrag.started) return;
 
-  if (isEmoteBindModeActive()) {
+  if (isEmoteBindInteractionModeActive()) {
     cancelActiveDrag();
     return;
   }
@@ -330,17 +338,16 @@ function startDrag(event) {
   activeDrag.pointerOffsetX = activeDrag.ghostMetrics.widthNumber / 2;
   activeDrag.pointerOffsetY = activeDrag.ghostMetrics.heightNumber / 2;
 
-
   list.insertBefore(activeDrag.placeholder, item);
   hideOriginalDraggedItem(item);
 
   document.body.appendChild(activeDrag.ghostItem);
 
-	section.classList.add(DRAG_ACTIVE_CLASS);
-	item.classList.add(DRAGGING_ITEM_CLASS);
-	document.documentElement.classList.add(DRAG_CURSOR_LOCK_CLASS);
+  section.classList.add(DRAG_ACTIVE_CLASS);
+  item.classList.add(DRAGGING_ITEM_CLASS);
+  document.documentElement.classList.add(DRAG_CURSOR_LOCK_CLASS);
 
-	moveDraggedItem();
+  moveDraggedItem();
   scheduleDragFrame();
   scheduleAutoScrollFrame();
 }
@@ -357,35 +364,51 @@ function updateDragFrame() {
 
   activeDrag.frameId = 0;
 
-  if (isEmoteBindModeActive()) {
+  if (isEmoteBindInteractionModeActive()) {
     cancelActiveDrag();
     return;
   }
 
   moveDraggedItem();
 
-  const beforeElement = getInsertionBeforeElementByGridPoint({
+  if (
+    activeDrag.insertionLockItem instanceof HTMLElement &&
+    !isPointInsideElement({
+      x: activeDrag.latestClientX,
+      y: activeDrag.latestClientY,
+      element: activeDrag.insertionLockItem,
+    })
+  ) {
+    activeDrag.insertionLockItem = null;
+  }
+
+  const insertion = getInsertionBeforeElementByHitPosition({
     x: activeDrag.latestClientX,
     y: activeDrag.latestClientY,
     list: activeDrag.list,
     placeholder: activeDrag.placeholder,
     draggedItem: activeDrag.item,
     group: activeDrag.group,
+    lockedItem: activeDrag.insertionLockItem,
   });
 
-  if (beforeElement === NO_INSERTION_HIT) {
+  if (insertion === NO_INSERTION_HIT) {
     return;
   }
 
-  movePlaceholder({
+  const moved = movePlaceholder({
     list: activeDrag.list,
     placeholder: activeDrag.placeholder,
-    beforeElement: beforeElement ?? getGroupAppendBeforeElement({
+    beforeElement: insertion.beforeElement ?? getGroupAppendBeforeElement({
       list: activeDrag.list,
       group: activeDrag.group,
       placeholder: activeDrag.placeholder,
     }),
   });
+
+  if (moved) {
+    activeDrag.insertionLockItem = insertion.hitItem;
+  }
 }
 
 function moveDraggedItem() {
@@ -409,71 +432,183 @@ function moveDraggedItem() {
   ghostItem.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1.04)`;
 }
 
-function getInsertionBeforeElementByGridPoint({
+function getInsertionBeforeElementByHitPosition({
   x,
   y,
   list,
   placeholder,
   draggedItem,
   group,
+  lockedItem = null,
 }) {
   if (!(list instanceof HTMLElement)) {
     return NO_INSERTION_HIT;
   }
 
-  const items = getDraggableItemsForOrdering({
+  if (!(placeholder instanceof HTMLElement)) {
+    return NO_INSERTION_HIT;
+  }
+
+  if (!isFavoriteGroup(group)) {
+    return NO_INSERTION_HIT;
+  }
+
+  const orderedItems = getOrderedItemsIncludingPlaceholder({
     list,
     placeholder,
     draggedItem,
     group,
   });
 
-  if (!items.length) {
+  if (!orderedItems.length) {
     return NO_INSERTION_HIT;
   }
 
-  const rows = groupItemsByVisualRows(items);
-
-  if (!rows.length) {
-    return NO_INSERTION_HIT;
-  }
-
-  const row = findClosestRowByY({
-    rows,
+  const hitItem = findHitFavoriteItem({
+    x,
     y,
+    items: orderedItems.filter((item) => {
+      return item !== placeholder;
+    }),
   });
 
-  if (!row?.items?.length) {
+  if (!hitItem) {
     return NO_INSERTION_HIT;
   }
 
   /*
-   * 같은 visual row 안에서 x 좌표 기준으로 삽입 위치를 결정한다.
-   * 이 로직은 위/아래 이동 시에도 먼저 row를 고른 뒤 row 내부 x만 보므로
-   * 기존 elementFromPoint + centerX 방식보다 grid/wrap 레이아웃에서 안정적이다.
+   * 직전에 이 item 때문에 placeholder가 이동했다면,
+   * 커서가 이 item 영역 안에 남아 있는 동안은 같은 item으로 재이동하지 않는다.
+   *
+   * 이 lock이 없으면:
+   * - 뒤 item 위에서 insert after
+   * - placeholder가 이동한 뒤 같은 item이 앞 item으로 재해석됨
+   * - 즉시 insert before
+   * - 다시 insert after
+   * 의 왕복이 발생한다.
    */
-  for (const item of row.items) {
-    const rect = item.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
+  if (hitItem === lockedItem) {
+    return NO_INSERTION_HIT;
+  }
 
-    if (x < centerX) {
-      return item;
+  const placeholderIndex = orderedItems.indexOf(placeholder);
+  const hitIndex = orderedItems.indexOf(hitItem);
+
+  if (
+    placeholderIndex < 0 ||
+    hitIndex < 0 ||
+    placeholderIndex === hitIndex
+  ) {
+    return NO_INSERTION_HIT;
+  }
+
+  if (hitIndex > placeholderIndex) {
+    return {
+      hitItem,
+      beforeElement: getBeforeElementForInsertAfter({
+        orderedItems,
+        hitItem,
+        list,
+        group,
+        placeholder,
+      }),
+    };
+  }
+
+  return {
+    hitItem,
+    beforeElement: hitItem,
+  };
+}
+
+function getOrderedItemsIncludingPlaceholder({
+  list,
+  placeholder,
+  draggedItem,
+  group,
+}) {
+  return Array.from(list.querySelectorAll(':scope > li'))
+    .filter((item) => {
+      if (!(item instanceof HTMLElement)) return false;
+      if (item === draggedItem) return false;
+
+      if (item === placeholder) {
+        return true;
+      }
+
+      return (
+        isElementVisibleForOrdering(item) &&
+        isDraggableFavoriteItem(item) &&
+        getFavoriteGroupFromItem(item) === group
+      );
+    });
+}
+
+function findHitFavoriteItem({
+  x,
+  y,
+  items,
+}) {
+  return items.find((item) => {
+    return isPointInsideElement({
+      x,
+      y,
+      element: item,
+    });
+  }) ?? null;
+}
+
+function isPointInsideElement({
+  x,
+  y,
+  element,
+}) {
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+
+  const rect = element.getBoundingClientRect();
+
+  return (
+    x >= rect.left &&
+    x <= rect.right &&
+    y >= rect.top &&
+    y <= rect.bottom
+  );
+}
+
+function getBeforeElementForInsertAfter({
+  orderedItems,
+  hitItem,
+  list,
+  group,
+  placeholder,
+}) {
+  const hitIndex = orderedItems.indexOf(hitItem);
+
+  if (hitIndex < 0) {
+    return NO_INSERTION_HIT;
+  }
+
+  for (let index = hitIndex + 1; index < orderedItems.length; index += 1) {
+    const nextItem = orderedItems[index];
+
+    if (!(nextItem instanceof HTMLElement)) {
+      continue;
     }
+
+    if (nextItem === placeholder) {
+      continue;
+    }
+
+    return nextItem;
   }
 
-  /*
-   * row의 마지막보다 오른쪽이면 "현재 row 끝"에 삽입한다.
-   * DOM 기준으로는 다음 row의 첫 item 앞에 넣으면 현재 row 끝이 된다.
-   * 마지막 row라면 null을 반환해 append 처리한다.
-   */
-  const rowIndex = rows.indexOf(row);
-  const nextRow = rows[rowIndex + 1];
-
-  if (nextRow?.items?.[0]) {
-    return nextRow.items[0];
-  }
-
-  return null;
+  return getGroupAppendBeforeElement({
+    list,
+    group,
+    placeholder,
+  });
 }
 
 function getDraggableItemsForOrdering({
@@ -492,89 +627,7 @@ function getDraggableItemsForOrdering({
         isDraggableFavoriteItem(item) &&
         (!group || getFavoriteGroupFromItem(item) === group)
       );
-    })
-    .sort(compareItemsByVisualPosition);
-}
-
-function groupItemsByVisualRows(items) {
-  const rows = [];
-
-  items.forEach((item) => {
-    const rect = item.getBoundingClientRect();
-    const centerY = rect.top + rect.height / 2;
-
-    const row = findMatchingRow({
-      rows,
-      centerY,
     });
-
-    if (row) {
-      row.items.push(item);
-      row.top = Math.min(row.top, rect.top);
-      row.bottom = Math.max(row.bottom, rect.bottom);
-      row.centerY = (row.top + row.bottom) / 2;
-      return;
-    }
-
-    rows.push({
-      top: rect.top,
-      bottom: rect.bottom,
-      centerY,
-      items: [item],
-    });
-  });
-
-  rows.sort((a, b) => {
-    return a.centerY - b.centerY;
-  });
-
-  rows.forEach((row) => {
-    row.items.sort(compareItemsByVisualPosition);
-  });
-
-  return rows;
-}
-
-function findMatchingRow({
-  rows,
-  centerY,
-}) {
-  return rows.find((row) => {
-    return Math.abs(row.centerY - centerY) <= ROW_GROUP_TOLERANCE_PX;
-  }) ?? null;
-}
-
-function findClosestRowByY({
-  rows,
-  y,
-}) {
-  if (!rows.length) {
-    return null;
-  }
-
-  return rows.reduce((bestRow, row) => {
-    if (!bestRow) return row;
-
-    const bestDistance = Math.abs(bestRow.centerY - y);
-    const currentDistance = Math.abs(row.centerY - y);
-
-    return currentDistance < bestDistance
-      ? row
-      : bestRow;
-  }, null);
-}
-
-function compareItemsByVisualPosition(a, b) {
-  const rectA = a.getBoundingClientRect();
-  const rectB = b.getBoundingClientRect();
-
-  const rowDelta = rectA.top - rectB.top;
-
-  if (Math.abs(rowDelta) > ROW_GROUP_TOLERANCE_PX) {
-    return rowDelta;
-  }
-
-  return rectA.left - rectB.left;
 }
 
 function movePlaceholder({
@@ -618,7 +671,7 @@ function updateAutoScrollFrame(timestamp) {
 
   activeDrag.autoScrollFrameId = 0;
 
-  if (isEmoteBindModeActive()) {
+  if (isEmoteBindInteractionModeActive()) {
     cancelActiveDrag();
     return;
   }
@@ -668,16 +721,16 @@ function cleanupDrag({
 }) {
   if (!activeDrag) return;
 
-	const {
-		item,
-		ghostItem,
-		section,
-		list,
-		placeholder,
-		startOrder,
-		frameId,
-		autoScrollFrameId,
-	} = activeDrag;
+  const {
+    item,
+    ghostItem,
+    section,
+    list,
+    placeholder,
+    startOrder,
+    frameId,
+    autoScrollFrameId,
+  } = activeDrag;
 
   if (frameId) {
     cancelAnimationFrame(frameId);
@@ -691,7 +744,6 @@ function cleanupDrag({
   document.removeEventListener('pointerup', handlePointerUp, true);
   document.removeEventListener('pointercancel', handlePointerCancel, true);
 
-
   if (ghostItem?.isConnected) {
     ghostItem.remove();
   }
@@ -700,13 +752,13 @@ function cleanupDrag({
     placeholder.replaceWith(item);
   }
 
-	resetDraggedItem(item);
+  resetDraggedItem(item);
 
-	section.classList.remove(DRAG_ACTIVE_CLASS);
-	item.classList.remove(DRAGGING_ITEM_CLASS);
-	document.documentElement.classList.remove(DRAG_CURSOR_LOCK_CLASS);
-	
-	clearInlineAnimationState(list);
+  section.classList.remove(DRAG_ACTIVE_CLASS);
+  item.classList.remove(DRAGGING_ITEM_CLASS);
+  document.documentElement.classList.remove(DRAG_CURSOR_LOCK_CLASS);
+
+  clearInlineAnimationState(list);
 
   if (restoreOrder) {
     restoreFavoriteGroupOrder({
@@ -760,31 +812,31 @@ function createDragGhostItem({
   ghost.setAttribute('aria-hidden', 'true');
   ghost.setAttribute('draggable', 'false');
 
-	Object.assign(ghost.style, {
-		position: 'fixed',
-		left: '0',
-		top: '0',
-		right: 'auto',
-		bottom: 'auto',
-		width: `${widthNumber}px`,
-		height: `${heightNumber}px`,
-		minWidth: `${widthNumber}px`,
-		minHeight: `${heightNumber}px`,
-		maxWidth: `${widthNumber}px`,
-		maxHeight: `${heightNumber}px`,
-		boxSizing: 'border-box',
-		zIndex: '2147483647',
-		margin: '0',
+  Object.assign(ghost.style, {
+    position: 'fixed',
+    left: '0',
+    top: '0',
+    right: 'auto',
+    bottom: 'auto',
+    width: `${widthNumber}px`,
+    height: `${heightNumber}px`,
+    minWidth: `${widthNumber}px`,
+    minHeight: `${heightNumber}px`,
+    maxWidth: `${widthNumber}px`,
+    maxHeight: `${heightNumber}px`,
+    boxSizing: 'border-box',
+    zIndex: '2147483647',
+    margin: '0',
 
-		pointerEvents: 'none',
+    pointerEvents: 'none',
 
-		userSelect: 'none',
-		touchAction: 'none',
-		transition: 'none',
-		transform: '',
-		opacity: '0.96',
-		filter: 'drop-shadow(0 6px 10px rgba(0, 0, 0, 0.38))',
-	});
+    userSelect: 'none',
+    touchAction: 'none',
+    transition: 'none',
+    transform: '',
+    opacity: '0.96',
+    filter: 'drop-shadow(0 6px 10px rgba(0, 0, 0, 0.38))',
+  });
 
   return ghost;
 }
@@ -879,7 +931,7 @@ function getSortableItems(list) {
       return (
         isElementVisibleForOrdering(item) &&
         isDraggableFavoriteItem(item)
-      );  
+      );
     });
 }
 
@@ -921,17 +973,67 @@ function animateFavoriteReflow(list, previousRects) {
 
     if (deltaX === 0 && deltaY === 0) return;
 
-    item.style.transition = 'none';
-    item.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0)`;
-  });
-
-  requestAnimationFrame(() => {
-    items.forEach((item) => {
-      item.style.transition =
-        `transform ${REORDER_DURATION_MS}ms ${REORDER_EASING}`;
-      item.style.transform = '';
+    item.getAnimations().forEach((animation) => {
+      animation.cancel();
     });
+
+    if (isLongWrapReflow({
+      deltaX,
+      deltaY,
+      rect: nextRect,
+    })) {
+      animateWrapReflow(item);
+      return;
+    }
+
+    item.animate(
+      [
+        {
+          transform: `translate3d(${deltaX}px, ${deltaY}px, 0)`,
+        },
+        {
+          transform: 'translate3d(0, 0, 0)',
+        },
+      ],
+      {
+        duration: REORDER_DURATION_MS,
+        easing: REORDER_EASING,
+      }
+    );
   });
+}
+
+function isLongWrapReflow({
+  deltaX,
+  deltaY,
+  rect,
+}) {
+  const width = Math.max(1, rect.width);
+  const height = Math.max(1, rect.height);
+
+  return (
+    Math.abs(deltaX) > width * 1.8 &&
+    Math.abs(deltaY) > height * 0.5
+  );
+}
+
+function animateWrapReflow(item) {
+  item.animate(
+    [
+      {
+        opacity: '0.72',
+        transform: 'scale(0.94)',
+      },
+      {
+        opacity: '1',
+        transform: 'scale(1)',
+      },
+    ],
+    {
+      duration: 90,
+      easing: REORDER_EASING,
+    }
+  );
 }
 
 function clearInlineAnimationState(list) {
@@ -1125,7 +1227,9 @@ function getAutoScrollVelocityY({
       max: 1,
     });
 
-    return -AUTO_SCROLL_MAX_SPEED_PX_PER_SECOND * ratio;
+    const easedRatio = ratio * ratio;
+
+    return -AUTO_SCROLL_MAX_SPEED_PX_PER_SECOND * easedRatio;
   }
 
   if (clientY > bottomEdge) {
@@ -1135,7 +1239,9 @@ function getAutoScrollVelocityY({
       max: 1,
     });
 
-    return AUTO_SCROLL_MAX_SPEED_PX_PER_SECOND * ratio;
+    const easedRatio = ratio * ratio;
+
+    return AUTO_SCROLL_MAX_SPEED_PX_PER_SECOND * easedRatio;
   }
 
   return 0;
@@ -1271,4 +1377,22 @@ function disableNativeDraggableChildren(root) {
     .forEach((element) => {
       element.setAttribute('draggable', 'false');
     });
+}
+
+function isEmoteBindInteractionModeActive() {
+  return (
+    isEmoteBindAssignMode() ||
+    isEmoteBindClearMode()
+  );
+}
+
+function exitShortcutSetRenameModeBeforeDragIfNeeded() {
+  const bindState = getEmoteBindModeState();
+
+  if (bindState.mode !== EMOTE_BIND_MODE_RENAME) {
+    return false;
+  }
+
+  exitShortcutSetRenameMode();
+  return true;
 }

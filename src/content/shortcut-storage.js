@@ -17,7 +17,7 @@ export const SHORTCUT_PHASE_BOTH = 'both';
 export const SHORTCUT_BINDING_SET_OFF = 'off';
 
 export const SHORTCUT_BINDING_SET_MIN_COUNT = 1;
-export const SHORTCUT_BINDING_SET_MAX_COUNT = 10;
+export const SHORTCUT_BINDING_SET_MAX_COUNT = 9;
 export const SHORTCUT_BINDING_SET_DEFAULT_COUNT = 3;
 
 /*
@@ -479,7 +479,7 @@ function normalizeShortcutBindingSetState({
       sets: [
         {
           id: createShortcutBindingSetId(1),
-          label: '1',
+          label: '',
           bindings: storedValue,
         },
       ],
@@ -566,8 +566,10 @@ function normalizeShortcutBindingSets(sets) {
 
     setById.set(setId, {
       id: setId,
-      label: normalizeShortcutBindingSetLabel(set?.label) ||
-        getShortcutBindingSetDefaultLabel(setId),
+      label: normalizeShortcutBindingSetLabel({
+        setId,
+        label: set?.label,
+      }),
       bindings: normalizeShortcutBindings(set?.bindings),
     });
   });
@@ -575,8 +577,27 @@ function normalizeShortcutBindingSets(sets) {
   return sortShortcutBindingSets(Array.from(setById.values()));
 }
 
-function normalizeShortcutBindingSetLabel(label) {
-  return String(label ?? '').trim();
+function normalizeShortcutBindingSetLabel({
+  setId,
+  label,
+}) {
+  const normalizedLabel = String(label ?? '').trim();
+  const defaultLabel = getShortcutBindingSetDefaultLabel(setId);
+
+  if (!normalizedLabel) {
+    return '';
+  }
+
+  /*
+   * 기존 저장 데이터 호환:
+   * set_1 label "1", set_2 label "2" 같은 자동 기본 숫자는
+   * 사용자 지정 이름으로 보지 않고 빈 label로 정규화한다.
+   */
+  if (normalizedLabel === defaultLabel) {
+    return '';
+  }
+
+  return normalizedLabel;
 }
 
 function getShortcutBindingSetDefaultLabel(setId) {
@@ -637,7 +658,7 @@ function setShortcutBindingsForActiveSet({
   if (!found) {
     nextSets.push({
       id: activeSetId,
-      label: getShortcutBindingSetDefaultLabel(activeSetId),
+      label: '',
       bindings: normalizedBindings,
     });
   }
@@ -889,8 +910,12 @@ function shouldPersistShortcutBindingSet(set) {
     return true;
   }
 
-  return normalizeShortcutBindingSetLabel(set.label) !==
-    getShortcutBindingSetDefaultLabel(set.id);
+  return Boolean(
+    normalizeShortcutBindingSetLabel({
+      setId: set.id,
+      label: set.label,
+    })
+  );
 }
 
 async function removeShortcutBindingsFromStorage() {
@@ -964,4 +989,73 @@ function dispatchShortcutBindingsChanged() {
       },
     })
   );
+}
+
+export async function renameShortcutBindingSet({
+  setId,
+  label,
+}) {
+  const normalizedSetId = normalizeShortcutBindingSetId(setId);
+  const normalizedLabel = normalizeShortcutBindingSetLabel({
+    setId: normalizedSetId,
+    label,
+  });
+
+  if (
+    !normalizedSetId ||
+    normalizedSetId === SHORTCUT_BINDING_SET_OFF
+  ) {
+    return getCachedShortcutBindingSetState();
+  }
+
+  const sets = normalizeShortcutBindingSets(
+    cachedShortcutBindingSetState.sets
+  );
+
+  let found = false;
+
+  const nextSets = sets.map((set) => {
+    if (set.id !== normalizedSetId) {
+      return set;
+    }
+
+    found = true;
+
+    return {
+      ...set,
+      label: normalizedLabel,
+    };
+  });
+
+  if (!found && normalizedLabel) {
+    nextSets.push({
+      id: normalizedSetId,
+      label: normalizedLabel,
+      bindings: [],
+    });
+  }
+
+	const previousState = cachedShortcutBindingSetState;
+
+	cachedShortcutBindingSetState = normalizeShortcutBindingSetStateValue({
+		...cachedShortcutBindingSetState,
+		sets: nextSets,
+	});
+
+	if (isSameShortcutBindingSetState(previousState, cachedShortcutBindingSetState)) {
+		return getCachedShortcutBindingSetState();
+	}
+
+	await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
+
+	dispatchShortcutBindingsChanged();
+
+	return getCachedShortcutBindingSetState();
+
+  return getCachedShortcutBindingSetState();
+}
+
+function isSameShortcutBindingSetState(a, b) {
+  return JSON.stringify(createShortcutBindingSetStorageValue(a)) ===
+    JSON.stringify(createShortcutBindingSetStorageValue(b));
 }

@@ -315,22 +315,29 @@ function createGroupedBadgeAssignment(group) {
     ? `${primaryItem.label} +${extraCount}`
     : primaryItem.label;
 
-  return {
-    emojiId: group.emojiId,
-    label,
-    title: getShortcutBadgeTitle(items),
-    code: primaryItem.code,
-    phase: primaryItem.phase,
-    source: primaryItem.source,
-    items,
-  };
+	return {
+		emojiId: group.emojiId,
+		label,
+		title: getShortcutBadgeTitle(items),
+		code: primaryItem.code,
+		phase: primaryItem.phase,
+		source: primaryItem.source,
+		items,
+		detailLabels: getShortcutBadgeDetailLabels(items),
+	};
 }
 
 function getShortcutBadgeTitle(items) {
   return items
     .map((item) => item.label)
     .filter(Boolean)
-    .join(', ');
+    .join('\n');
+}
+
+function getShortcutBadgeDetailLabels(items) {
+  return items
+    .map((item) => item.label)
+    .filter(Boolean);
 }
 
 function mergePhaseItems(items) {

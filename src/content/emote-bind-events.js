@@ -27,11 +27,9 @@ import {
   isEmoteBindAssignMode,
   isEmoteBindClearMode,
   isEmoteBindKeyListening,
-  isEmoteBindModeActive,
   selectEmoteBindTarget,
   setEmoteBindCode,
   startEmoteBindKeyListening,
-  stopEmoteBindKeyListening,
   toggleEmoteBindClearSelection,
 } from './emote-bind-mode-state.js';
 
@@ -97,15 +95,11 @@ export function detachEmoteBindEvents() {
 }
 
 function handleBindModePointerDown(event) {
-  if (
-    isEmoteBindModeActive() &&
-    isTypingTarget(event.target)
-  ) {
+	if (
+		isEmoteBindInteractionModeActive() &&
+		isTypingTarget(event.target)
+	) {
     exitCurrentBindMode();
-
-    scheduleFavoriteEmoteSectionRender();
-    scheduleBadgeUpdate();
-
     return;
   }
 
@@ -127,9 +121,9 @@ function handleBindModeDragStart(event) {
 }
 
 function handleBindModeClick(event) {
-  if (!isEmoteBindModeActive()) {
-    return;
-  }
+	if (!isEmoteBindInteractionModeActive()) {
+		return;
+	}
 
   if (isBadgeEvent(event)) {
     blockEvent(event);
@@ -148,9 +142,9 @@ function handleBindModeClick(event) {
 }
 
 function handleBindModeKeyDown(event) {
-  if (!isEmoteBindModeActive()) {
-    return;
-  }
+	if (!isEmoteBindInteractionModeActive()) {
+		return;
+	}
 
   if (shouldIgnoreBindControlKeyDown(event)) {
     return;
@@ -280,10 +274,10 @@ function canSelectClearEmojiId(emojiId) {
 }
 
 function handleBindModeChanged() {
-  if (!isEmoteBindModeActive()) {
-    bindModePanelSignature = '';
-    return;
-  }
+	if (!isEmoteBindInteractionModeActive()) {
+		bindModePanelSignature = '';
+		return;
+	}
 
   scheduleBindBoundaryCheck({
     resetSignatureIfEmpty: false,
@@ -294,9 +288,9 @@ function startBindBoundaryObserver() {
   if (observer) return;
 
   observer = new MutationObserver(() => {
-    if (!isEmoteBindModeActive()) {
-      return;
-    }
+		if (!isEmoteBindInteractionModeActive()) {
+			return;
+		}
 
     scheduleBindBoundaryCheck({
       resetSignatureIfEmpty: false,
@@ -340,11 +334,10 @@ function scheduleBindBoundaryCheck({
 function checkBindModeBoundary({
   resetSignatureIfEmpty = false,
 } = {}) {
-  if (!isEmoteBindModeActive()) {
-    bindModePanelSignature = '';
-    return;
-  }
-
+	if (!isEmoteBindInteractionModeActive()) {
+		bindModePanelSignature = '';
+		return;
+	}
   const panel = findEmotePanel();
 
   if (!panel || !isPanelVisible(panel)) {
@@ -481,6 +474,13 @@ function isPanelVisible(panel) {
   const rect = panel.getBoundingClientRect();
 
   return rect.width > 0 && rect.height > 0;
+}
+
+function isEmoteBindInteractionModeActive() {
+  return (
+    isEmoteBindAssignMode() ||
+    isEmoteBindClearMode()
+  );
 }
 
 function shouldRejectBindShortcutKey(event) {

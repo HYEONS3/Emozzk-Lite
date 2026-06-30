@@ -24,7 +24,7 @@ import {
 } from './emote-bind-mode-state.js';
 
 import {
-	normalizeShortcutPhase,
+  normalizeShortcutPhase,
   SHORTCUT_BINDINGS_CHANGED_EVENT,
   SHORTCUT_PHASE_BOTH,
   SHORTCUT_PHASE_DOWN,
