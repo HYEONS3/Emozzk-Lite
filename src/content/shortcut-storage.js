@@ -18,7 +18,7 @@ export const SHORTCUT_BINDING_SET_OFF = 'off';
 
 export const SHORTCUT_BINDING_SET_MIN_COUNT = 1;
 export const SHORTCUT_BINDING_SET_MAX_COUNT = 9;
-export const SHORTCUT_BINDING_SET_DEFAULT_COUNT = 3;
+export const SHORTCUT_BINDING_SET_DEFAULT_COUNT = 2;
 
 /*
  * 기존 import 호환용.
@@ -1058,4 +1058,22 @@ export async function renameShortcutBindingSet({
 function isSameShortcutBindingSetState(a, b) {
   return JSON.stringify(createShortcutBindingSetStorageValue(a)) ===
     JSON.stringify(createShortcutBindingSetStorageValue(b));
+}
+
+export function hasShortcutBindingForEmojiIdInAnySet({
+  emojiId,
+} = {}) {
+  const normalizedEmojiId = normalizeEmojiId(emojiId);
+
+  if (!normalizedEmojiId) {
+    return false;
+  }
+
+  return normalizeShortcutBindingSets(
+    cachedShortcutBindingSetState.sets
+  ).some((set) => {
+    return getEditableShortcutBindings(set.bindings).some((binding) => {
+      return getBindingEmojiId(binding) === normalizedEmojiId;
+    });
+  });
 }

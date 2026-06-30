@@ -7,48 +7,6 @@ export const SHORTCUT_ACTION_SELECT_EMOTE = 'selectEmote';
 export const SHORTCUT_TARGET_TYPE_INDEX = 'index';
 export const SHORTCUT_TARGET_TYPE_EMOJI_ID = 'emojiId';
 
-export const DEFAULT_BINDINGS = [
-  {
-    code: 'F1',
-    index: 0,
-  },
-  {
-    code: 'F2',
-    index: 1,
-  },
-  {
-    code: 'F3',
-    index: 2,
-  },
-  {
-    code: 'F4',
-    index: 3,
-  },
-  {
-    code: 'F5',
-    index: 4,
-  },
-  {
-    code: 'F6',
-    index: 5,
-  },
-  {
-    code: 'F7',
-    index: 6,
-  },
-  {
-    code: 'F8',
-    index: 7,
-  },
-  {
-    code: 'F9',
-    index: 8,
-  },
-  {
-    code: 'F10',
-    index: 9,
-  },
-];
 
 const SHORTCUT_PHASE_DOWN = 'down';
 const SHORTCUT_PHASE_UP = 'up';
@@ -65,17 +23,6 @@ const DEFAULT_SHORTCUT_INTERCEPTION = {
   keydown: true,
   keyup: true,
 };
-
-export function getDefaultShortcutBindings() {
-  return DEFAULT_BINDINGS
-    .map(({ code, index }) => {
-      return createDefaultShortcutBinding({
-        code,
-        index,
-      });
-    })
-    .filter(Boolean);
-}
 
 export function createSelectEmoteAction(index) {
   return createSelectEmoteIndexAction(index);
@@ -161,36 +108,6 @@ export function isShortcutKeyupEnabled(binding) {
   }
 
   return Boolean(normalizedBinding.onUp);
-}
-
-function createDefaultShortcutBinding({
-  code,
-  index,
-}) {
-  const normalizedCode = normalizeShortcutCode(code);
-  const actionConfig = createSelectEmoteIndexAction(index);
-
-  if (
-    !normalizedCode ||
-    !actionConfig
-  ) {
-    return null;
-  }
-
-  return {
-    id: `default__${normalizedCode}__${SHORTCUT_PHASE_DOWN}`,
-    source: 'default',
-    code: normalizedCode,
-    phase: SHORTCUT_PHASE_DOWN,
-    actionConfig,
-    options: {
-      ...DEFAULT_SHORTCUT_OPTIONS,
-    },
-    interception: {
-      ...DEFAULT_SHORTCUT_INTERCEPTION,
-      keyup: false,
-    },
-  };
 }
 
 function normalizeModernShortcutBinding(binding) {

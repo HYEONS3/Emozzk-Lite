@@ -29,7 +29,6 @@ import {
 } from './emote-favorites-render.js';
 
 import {
-  getDefaultShortcutBindings,
   isSameShortcutTrigger,
   normalizeShortcutBinding,
 } from './shortcut-bindings.js';
@@ -69,7 +68,7 @@ const EVENT_PHASE_KEYUP = 'keyup';
 const activePresses = new Map();
 
 let attached = false;
-let shortcutBindings = getDefaultShortcutBindings();
+let shortcutBindings = [];
 let activeShortcutBindingSetId = '';
 let suppressNextRenameEscapeKeyUp = false;
 
@@ -117,15 +116,13 @@ export function setShortcutBindings(bindings, {
    * normalizeShortcutBindings([])를 쓰면 빈 배열이 기본 F1~F10으로 되돌아갈 수 있다.
    * 사용자 설정에서는 "단축키 없음"도 유효한 상태이므로 여기서는 직접 정규화한다.
    */
-  if (!Array.isArray(bindings)) {
-    shortcutBindings = getDefaultShortcutBindings()
-      .map(normalizeControllerBinding)
-      .filter(Boolean);
-  } else {
-    shortcutBindings = bindings
-      .map(normalizeControllerBinding)
-      .filter(Boolean);
-  }
+	if (!Array.isArray(bindings)) {
+		shortcutBindings = [];
+	} else {
+		shortcutBindings = bindings
+			.map(normalizeControllerBinding)
+			.filter(Boolean);
+	}
 
   activeShortcutBindingSetId = normalizeText(activeSetId);
 
