@@ -1920,9 +1920,16 @@ function createAssignSaveButton(bindState) {
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
 
-    if (!canSave || isSaving) return;
+		const currentState = getEmoteBindModeState();
 
-    void saveAssignState(bindState)
+		if (
+			!canSaveAssignState(currentState) ||
+			isEmoteBindSaving()
+		) {
+			return;
+		}
+
+		void saveAssignState(currentState)
       .catch((error) => {
         console.error('[Emozzk Lite] failed to save shortcut binding:', error);
       });
@@ -1980,9 +1987,16 @@ function createClearSaveButton(bindState) {
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
 
-    if (!canSave || isSaving) return;
+		const currentState = getEmoteBindModeState();
 
-    void saveClearState(bindState)
+		if (
+			!canSaveAssignState(currentState) ||
+			isEmoteBindSaving()
+		) {
+			return;
+		}
+
+		void saveAssignState(currentState)
       .catch((error) => {
         console.error('[Emozzk Lite] failed to clear shortcut bindings:', error);
       });

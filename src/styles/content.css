@@ -467,11 +467,7 @@ button[data-emzk-lite-badge-target="true"] {
   );
   border-radius: var(--emzk-lite-bind-radius);
 
-  box-shadow:
-    inset 0 0 0 1px var(
-      --Border-Neutral-Alpha-Weak,
-      var(--emzk-lite-bind-active-border)
-    );
+
 
   pointer-events: none;
 
