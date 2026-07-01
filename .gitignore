@@ -82,6 +82,7 @@ out
 .nuxt
 dist
 .output
+.zip
 
 # Gatsby files
 .cache/
@@ -142,5 +143,3 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
-# built files
-.zip
