@@ -1,16 +1,17 @@
+import {
+  DEFAULT_RECENT_STORAGE_LIMIT,
+  normalizeRecentStorageLimit,
+} from './shared/recent-storage-limit.js';
+
 const RECENT_EMOTE_KEY_PREFIX = 'livechat-emoticon#';
 
 const RECENT_STORAGE_LIMIT_MESSAGE =
   'EMZK_LITE_RECENT_STORAGE_LIMIT_CHANGED';
 
-const DEFAULT_RECENT_STORAGE_LIMIT = 60;
-const MIN_RECENT_STORAGE_LIMIT = 50;
-const MAX_RECENT_STORAGE_LIMIT = 200;
 const PATCH_FLAG = '__EMZK_LITE_RECENT_EMOTE_STORAGE_PATCHED__';
 
 let recentStorageLimit = DEFAULT_RECENT_STORAGE_LIMIT;
 let favoriteRecentEmoteIds = new Set();
-
 
 installRecentEmoteStorageLimitPatch();
 
@@ -89,8 +90,7 @@ function installRecentEmoteStorageLimitPatch() {
     }
   };
 
-	window[PATCH_FLAG] = true;
-
+  window[PATCH_FLAG] = true;
 }
 
 function isRecentEmoteStorageKey(key) {
@@ -202,19 +202,6 @@ function getRecentEmoteId(emote) {
     emote.emoji?.emojiId ??
     emote.emote?.emoteId ??
     ''
-  );
-}
-
-function normalizeRecentStorageLimit(value) {
-  const number = Number(value);
-
-  if (!Number.isFinite(number)) {
-    return DEFAULT_RECENT_STORAGE_LIMIT;
-  }
-
-  return Math.min(
-    MAX_RECENT_STORAGE_LIMIT,
-    Math.max(MIN_RECENT_STORAGE_LIMIT, Math.round(number))
   );
 }
 

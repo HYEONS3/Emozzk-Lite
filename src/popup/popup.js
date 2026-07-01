@@ -1,9 +1,12 @@
+import {
+  DEFAULT_RECENT_STORAGE_LIMIT,
+  getRecentStorageLimitFromRangeValue,
+  getRecentStorageLimitRangeValue,
+  normalizeRecentStorageLimit,
+} from '../shared/recent-storage-limit.js';
+
 const EXTENSION_SETTINGS_STORAGE_KEY = 'emzk_lite_extension_settings_v1';
 const SHORTCUT_BINDINGS_STORAGE_KEY = 'emzk_lite_shortcut_bindings_v1';
-
-const MIN_RECENT_STORAGE_LIMIT = 50;
-const MAX_RECENT_STORAGE_LIMIT = 200;
-const DEFAULT_RECENT_STORAGE_LIMIT = 60;
 
 const MIN_SHORTCUT_SET_COUNT = 1;
 const MAX_SHORTCUT_SET_COUNT = 9;
@@ -11,6 +14,9 @@ const DEFAULT_SHORTCUT_SET_COUNT = 2;
 
 const SHORTCUT_BINDING_SETS_VERSION = 4;
 const SHORTCUT_BINDING_SET_OFF = 'off';
+
+const RECENT_STORAGE_LIMIT_CHANGED_MESSAGE =
+  'EMZK_LITE_RECENT_STORAGE_LIMIT_CHANGED';
 
 const DEFAULT_SETTINGS = {
   experimentalKeyupEnabled: false,
@@ -92,7 +98,9 @@ async function handleShortcutSetCountChange() {
 }
 
 function handleRecentLimitInput() {
-  updateRecentStorageLimitLabel(recentStorageLimitRange.value);
+  updateRecentStorageLimitLabel(
+    getRecentStorageLimitFromRangeValue(recentStorageLimitRange.value)
+  );
 }
 
 async function handleSettingsChange() {
@@ -150,7 +158,9 @@ function getSettingsFromControls() {
     experimentalBothPhaseEnabled:
       experimentalKeyupEnabled &&
       Boolean(bothCheckbox.checked),
-    recentStorageLimit: recentStorageLimitRange.value,
+    recentStorageLimit: getRecentStorageLimitFromRangeValue(
+      recentStorageLimitRange.value
+    ),
   });
 }
 
@@ -161,7 +171,9 @@ function applySettingsToControls(settings) {
   bothCheckbox.checked = normalizedSettings.experimentalBothPhaseEnabled;
   bothCheckbox.disabled = !normalizedSettings.experimentalKeyupEnabled;
 
-  recentStorageLimitRange.value = String(normalizedSettings.recentStorageLimit);
+  recentStorageLimitRange.value = String(
+    getRecentStorageLimitRangeValue(normalizedSettings.recentStorageLimit)
+  );
   updateRecentStorageLimitLabel(normalizedSettings.recentStorageLimit);
 }
 
@@ -337,20 +349,6 @@ function normalizeShortcutSetCount(value) {
     Math.round(number),
     MIN_SHORTCUT_SET_COUNT,
     MAX_SHORTCUT_SET_COUNT
-  );
-}
-
-function normalizeRecentStorageLimit(value) {
-  const number = Number(value);
-
-  if (!Number.isFinite(number)) {
-    return DEFAULT_RECENT_STORAGE_LIMIT;
-  }
-
-  return clampNumber(
-    Math.round(number),
-    MIN_RECENT_STORAGE_LIMIT,
-    MAX_RECENT_STORAGE_LIMIT
   );
 }
 

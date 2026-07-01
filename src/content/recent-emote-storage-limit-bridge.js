@@ -6,14 +6,15 @@ import {
   getFavoriteRecentEmoteIds,
 } from './favorite-recent-emote-storage.js';
 
+import {
+  DEFAULT_RECENT_STORAGE_LIMIT,
+  normalizeRecentStorageLimit,
+} from '../shared/recent-storage-limit.js';
+
 const EXTENSION_SETTINGS_STORAGE_KEY = 'emzk_lite_extension_settings_v1';
 
 const RECENT_STORAGE_LIMIT_MESSAGE =
   'EMZK_LITE_RECENT_STORAGE_LIMIT_CHANGED';
-
-const DEFAULT_RECENT_STORAGE_LIMIT = 60;
-const MIN_RECENT_STORAGE_LIMIT = 50;
-const MAX_RECENT_STORAGE_LIMIT = 200;
 
 let started = false;
 let injected = false;
@@ -140,17 +141,4 @@ function postRecentStorageLimitToPage(limit) {
     limit: normalizeRecentStorageLimit(limit),
     favoriteIds: getFavoriteRecentEmoteIds(),
   }, window.location.origin);
-}
-
-function normalizeRecentStorageLimit(value) {
-  const number = Number(value);
-
-  if (!Number.isFinite(number)) {
-    return DEFAULT_RECENT_STORAGE_LIMIT;
-  }
-
-  return Math.min(
-    MAX_RECENT_STORAGE_LIMIT,
-    Math.max(MIN_RECENT_STORAGE_LIMIT, Math.round(number))
-  );
 }

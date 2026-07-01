@@ -27,6 +27,8 @@
   --emzk-lite-motion-mask: 60ms ease-out;
   --emzk-lite-motion-fast: 120ms ease;
   --emzk-lite-motion-normal: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  --emzk-lite-motion-floating-fast: 90ms cubic-bezier(0.16, 1, 0.3, 1);
+  --emzk-lite-motion-floating-normal: 140ms cubic-bezier(0.16, 1, 0.3, 1);
 
   --emzk-lite-press-scale: 0.95;
   --emzk-lite-keylike-press-scale: 0.95;
@@ -300,6 +302,7 @@ button[data-emzk-lite-badge-target="true"] {
 
 .emzk-lite-favorites-section {
   box-sizing: border-box;
+  overflow: visible;
 }
 
 .emzk-lite-favorites-section[hidden] {
@@ -383,13 +386,20 @@ button[data-emzk-lite-badge-target="true"] {
   flex: 0 0 auto;
 }
 
-.emzk-lite-favorites-title:not([data-emzk-lite-bind-mode="assign"]):not([data-emzk-lite-bind-mode="clear"]):not([data-emzk-lite-bind-mode="rename"])
-  .emzk-lite-shortcut-set-switch
-  + .emzk-lite-bind-button
-  + .emzk-lite-bind-button {
-  margin-left: auto;
+.emzk-lite-header-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
+.emzk-lite-shortcut-set-menu-wrap {
+  position: relative;
+
+  flex: 0 0 auto;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .emzk-lite-rename-input {
   flex: 1 1 auto;
@@ -568,7 +578,10 @@ button[data-emzk-lite-badge-target="true"] {
   position: fixed;
   z-index: 2147483647;
 
-  transform: translate(-50%, -100%);
+  transform:
+    translate(-50%, -100%)
+    translateY(-4px)
+    scale(1);
 
   display: grid;
   place-items: center;
@@ -589,11 +602,27 @@ button[data-emzk-lite-badge-target="true"] {
   text-align: center;
   white-space: nowrap;
 
+  opacity: 1;
+
   box-shadow:
     0 4px 12px rgba(0, 0, 0, 0.34);
 
   pointer-events: none;
   user-select: none;
+
+  transition:
+    opacity var(--emzk-lite-motion-floating-fast),
+    transform var(--emzk-lite-motion-floating-fast);
+}
+
+.emzk-lite-shortcut-set-drag-preview[data-state="enter"],
+.emzk-lite-shortcut-set-drag-preview[data-state="leave"] {
+  opacity: 0;
+
+  transform:
+    translate(-50%, -100%)
+    translateY(2px)
+    scale(0.94);
 }
 
 .emzk-lite-shortcut-set-drag-preview[hidden] {
@@ -695,6 +724,121 @@ button[data-emzk-lite-badge-target="true"] {
 .emzk-lite-favorites-actions .emzk-lite-bind-icon {
   width: var(--emzk-lite-bind-header-icon-size);
   height: var(--emzk-lite-bind-header-icon-size);
+}
+
+/* ========================================================================== */
+/* Shortcut set menu                                                          */
+/* ========================================================================== */
+
+.emzk-lite-favorites-actions {
+  position: relative;
+}
+
+.emzk-lite-shortcut-set-menu-button {
+  position: relative;
+}
+
+.emzk-lite-shortcut-set-menu-button.emzk-lite-shortcut-set-menu-open {
+  color: var(--emzk-lite-bind-active-text);
+  background: var(--emzk-lite-bind-active-bg);
+  border-color: var(--emzk-lite-bind-active-border);
+}
+
+.emzk-lite-shortcut-set-menu {
+  position: absolute;
+  z-index: 20;
+
+  top: calc(100% + 5px);
+  left: 0;
+
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+
+  min-width: 132px;
+  padding: 4px;
+  box-sizing: border-box;
+
+  color: var(--emzk-lite-bind-text);
+  background: rgba(var(--color-bg-overlay-rgb, 32, 32, 36), 0.96);
+  border: 1px solid var(--emzk-lite-bind-border);
+  border-radius: var(--emzk-lite-bind-radius);
+
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(var(--color-content-rgb, 255, 255, 255), 0.08);
+
+  font-family: var(--emzk-lite-font-family);
+
+  opacity: 0;
+  transform: translateY(-4px) scale(0.96);
+  transform-origin: top left;
+  pointer-events: none;
+  will-change: opacity, transform;
+
+  transition:
+    opacity var(--emzk-lite-motion-floating-normal),
+    transform var(--emzk-lite-motion-floating-normal);
+
+  user-select: none;
+}
+
+.emzk-lite-shortcut-set-menu-wrap[data-open="true"]
+  > .emzk-lite-shortcut-set-menu {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.emzk-lite-shortcut-set-menu[data-closing="true"] {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.96);
+  pointer-events: none;
+}
+
+.emzk-lite-shortcut-set-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+
+  width: 100%;
+  min-height: 26px;
+  padding: 0 8px;
+  box-sizing: border-box;
+
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--emzk-lite-bind-radius) - 2px);
+
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+
+  cursor: pointer;
+
+  transition:
+    color var(--emzk-lite-motion-fast),
+    background-color var(--emzk-lite-motion-fast),
+    opacity var(--emzk-lite-motion-fast);
+}
+
+.emzk-lite-shortcut-set-menu-item:hover {
+  background: var(--emzk-lite-bind-hover-bg);
+}
+
+.emzk-lite-shortcut-set-menu-item:disabled,
+.emzk-lite-shortcut-set-menu-item.emzk-lite-bind-button-disabled {
+  opacity: var(--emzk-lite-bind-disabled-opacity);
+  cursor: not-allowed;
+}
+
+.emzk-lite-shortcut-set-menu-item:disabled:hover,
+.emzk-lite-shortcut-set-menu-item.emzk-lite-bind-button-disabled:hover {
+  background: transparent;
 }
 
 /* ========================================================================== */
@@ -1180,6 +1324,26 @@ button[data-emzk-lite-badge-target="true"] {
     transform 80ms ease-out;
 }
 
+.emzk-lite-favorites-drag-ghost {
+  will-change: transform, opacity, filter;
+
+  animation:
+    emzk-lite-favorites-drag-ghost-enter
+    var(--emzk-lite-motion-floating-fast);
+}
+
+@keyframes emzk-lite-favorites-drag-ghost-enter {
+  from {
+    opacity: 0;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
+  }
+
+  to {
+    opacity: 0.96;
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.38));
+  }
+}
+
 .emzk-lite-favorites-dragging-item {
   opacity: 0.86;
   filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.28));
@@ -1205,7 +1369,30 @@ button[data-emzk-lite-badge-target="true"] {
   outline: 1px dashed var(--emzk-lite-drag-placeholder-outline);
   outline-offset: -2px;
 
+  transform: scale(0.96);
+
+  animation:
+    emzk-lite-favorites-placeholder-enter
+    var(--emzk-lite-motion-floating-fast);
+
+  transition:
+    opacity var(--emzk-lite-motion-floating-fast),
+    background-color var(--emzk-lite-motion-floating-fast),
+    outline-color var(--emzk-lite-motion-floating-fast);
+
   pointer-events: none;
+}
+
+@keyframes emzk-lite-favorites-placeholder-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+
+  to {
+    opacity: 0.42;
+    transform: scale(0.96);
+  }
 }
 
 /* ========================================================================== */
@@ -1244,6 +1431,12 @@ button[data-emzk-lite-badge-target="true"] {
 /* Favorite emote drag cursor lock */
 html.emzk-lite-favorites-drag-cursor-lock,
 html.emzk-lite-favorites-drag-cursor-lock * {
+  cursor: grabbing !important;
+}
+
+/* Shortcut set drag cursor lock */
+html.emzk-lite-shortcut-set-dragging,
+html.emzk-lite-shortcut-set-dragging * {
   cursor: grabbing !important;
 }
 
@@ -1289,6 +1482,9 @@ html.emzk-lite-favorites-drag-cursor-lock * {
   .emzk-lite-bind-phase-button,
   .emzk-lite-bind-emote-preview,
   .emzk-lite-shortcut-set-button,
+  .emzk-lite-shortcut-set-drag-preview,
+  .emzk-lite-shortcut-set-menu,
+  .emzk-lite-favorites-drag-ghost,
   .emzk-lite-favorites-dragging-item,
   .emzk-lite-favorites-drag-placeholder,
   .emzk-lite-shortcut-set-switch::before {

@@ -8,10 +8,13 @@ import {
 } from './emote-favorite-groups.js';
 
 const FAVORITE_RECENT_EMOTES_STORAGE_KEY = 'emozzk_lite_favorite_recent_emotes_v1';
+const FAVORITE_RECENT_EMOTES_STORAGE_VERSION = 2;
 const MAX_FAVORITE_RECENT_EMOTE_COUNT = 200;
 
 let favoriteEmotesCache = [];
+let favoriteSetOrdersCache = {};
 let initialized = false;
+
 let initializePromise = null;
 let storageSyncStarted = false;
 
@@ -21,12 +24,15 @@ export function initFavoriteRecentEmoteStorage() {
   }
 
   initializePromise = readStorage()
-    .then((storage) => {
-      favoriteEmotesCache = normalizeFavoriteRecentEmotes(
-        storage[FAVORITE_RECENT_EMOTES_STORAGE_KEY]
-      );
+					.then((storage) => {
+			const normalizedStorage = normalizeFavoriteRecentEmoteStorage(
+				storage[FAVORITE_RECENT_EMOTES_STORAGE_KEY]
+			);
 
-      initialized = true;
+			favoriteEmotesCache = normalizedStorage.favorites;
+			favoriteSetOrdersCache = normalizedStorage.setOrders;
+
+			initialized = true;
 
       return getCachedFavoriteRecentEmotes();
     })
@@ -36,9 +42,9 @@ export function initFavoriteRecentEmoteStorage() {
         error
       );
 
-      favoriteEmotesCache = [];
-      initialized = true;
-
+			favoriteEmotesCache = [];
+			favoriteSetOrdersCache = {};
+			initialized = true;
       return [];
     });
 
@@ -61,8 +67,11 @@ export function startFavoriteRecentEmoteStorageSync() {
 
     if (!change) return;
 
-    favoriteEmotesCache = normalizeFavoriteRecentEmotes(change.newValue);
-    initialized = true;
+		const normalizedStorage = normalizeFavoriteRecentEmoteStorage(change.newValue);
+
+		favoriteEmotesCache = normalizedStorage.favorites;
+		favoriteSetOrdersCache = normalizedStorage.setOrders;
+		initialized = true;
   });
 }
 
@@ -79,15 +88,113 @@ export async function getFavoriteRecentEmotes() {
 export async function setFavoriteRecentEmotes(emotes) {
   await ensureInitialized();
 
-  const normalized = normalizeFavoriteRecentEmotes(emotes);
-
-  await writeStorage({
-    [FAVORITE_RECENT_EMOTES_STORAGE_KEY]: normalized,
+  const snapshot = await writeFavoriteRecentEmoteStorage({
+    favorites: emotes,
+    setOrders: favoriteSetOrdersCache,
   });
 
-  favoriteEmotesCache = normalized;
+  favoriteEmotesCache = snapshot.favorites;
+  favoriteSetOrdersCache = snapshot.setOrders;
 
   return getCachedFavoriteRecentEmotes();
+}
+
+export async function setFavoriteRecentSetOrder(setId, order) {
+  await ensureInitialized();
+
+  const id = normalizeSetId(setId);
+
+  if (!id) {
+    return {
+      changed: false,
+      setOrders: getCachedFavoriteRecentSetOrders(),
+    };
+  }
+
+  const nextSetOrders = {
+    ...favoriteSetOrdersCache,
+    [id]: normalizeFavoriteRecentSetOrder(
+      order,
+      getFavoriteRecentEmoteIds()
+    ),
+  };
+
+  const snapshot = await writeFavoriteRecentEmoteStorage({
+    favorites: favoriteEmotesCache,
+    setOrders: nextSetOrders,
+  });
+
+  favoriteEmotesCache = snapshot.favorites;
+  favoriteSetOrdersCache = snapshot.setOrders;
+
+  return {
+    changed: true,
+    setOrders: getCachedFavoriteRecentSetOrders(),
+  };
+}
+
+export async function resetFavoriteRecentSetOrder(setId) {
+  await ensureInitialized();
+
+  const id = normalizeSetId(setId);
+
+  if (!id || !favoriteSetOrdersCache[id]) {
+    return {
+      changed: false,
+      setOrders: getCachedFavoriteRecentSetOrders(),
+    };
+  }
+
+  const nextSetOrders = {
+    ...favoriteSetOrdersCache,
+  };
+
+  delete nextSetOrders[id];
+
+  const snapshot = await writeFavoriteRecentEmoteStorage({
+    favorites: favoriteEmotesCache,
+    setOrders: nextSetOrders,
+  });
+
+  favoriteEmotesCache = snapshot.favorites;
+  favoriteSetOrdersCache = snapshot.setOrders;
+
+  return {
+    changed: true,
+    setOrders: getCachedFavoriteRecentSetOrders(),
+  };
+}
+
+export function getCachedFavoriteRecentSetOrders() {
+  return cloneSetOrders(favoriteSetOrdersCache);
+}
+
+export async function getFavoriteRecentSetOrders() {
+  await ensureInitialized();
+
+  return getCachedFavoriteRecentSetOrders();
+}
+
+export function getCachedFavoriteRecentSetOrder(setId) {
+  const id = normalizeSetId(setId);
+
+  if (!id) return null;
+
+  return cloneSetOrder(favoriteSetOrdersCache[id] ?? null);
+}
+
+export async function getFavoriteRecentSetOrder(setId) {
+  await ensureInitialized();
+
+  return getCachedFavoriteRecentSetOrder(setId);
+}
+
+export function hasCustomFavoriteRecentSetOrder(setId) {
+  const id = normalizeSetId(setId);
+
+  if (!id) return false;
+
+  return favoriteSetOrdersCache[id]?.customized === true;
 }
 
 export async function reorderFavoriteRecentEmotesByIds(orderedIds) {
@@ -319,10 +426,11 @@ export function normalizeFavoriteRecentEmotes(emotes) {
 }
 
 async function ensureInitialized() {
-  if (initialized) return;
+  if (!initialized) {
+    await initFavoriteRecentEmoteStorage();
+  }
 
-  await initFavoriteRecentEmoteStorage();
-	startFavoriteRecentEmoteStorageSync();
+  startFavoriteRecentEmoteStorageSync();
 }
 
 function createToggleResult({
@@ -435,4 +543,178 @@ function writeStorage(value) {
 
 function getChromeLocalStorage() {
   return globalThis.chrome?.storage?.local ?? null;
+}
+
+function normalizeFavoriteRecentEmoteStorage(value) {
+  if (Array.isArray(value)) {
+    const favorites = normalizeFavoriteRecentEmotes(value);
+
+    return {
+      version: FAVORITE_RECENT_EMOTES_STORAGE_VERSION,
+      favorites,
+      setOrders: {},
+    };
+  }
+
+  if (!value || typeof value !== 'object') {
+    return {
+      version: FAVORITE_RECENT_EMOTES_STORAGE_VERSION,
+      favorites: [],
+      setOrders: {},
+    };
+  }
+
+  const favorites = normalizeFavoriteRecentEmotes(value.favorites);
+  const setOrders = normalizeFavoriteRecentSetOrders(
+    value.setOrders,
+    favorites
+  );
+
+  return {
+    version: FAVORITE_RECENT_EMOTES_STORAGE_VERSION,
+    favorites,
+    setOrders,
+  };
+}
+
+function normalizeFavoriteRecentSetOrders(setOrders, favorites) {
+  if (!setOrders || typeof setOrders !== 'object') {
+    return {};
+  }
+
+  const result = {};
+  const favoriteIds = favorites
+    .map(getRecentEmoteId)
+    .filter(Boolean);
+
+  Object.entries(setOrders).forEach(([setId, order]) => {
+    const normalizedSetId = normalizeSetId(setId);
+
+    if (!normalizedSetId) return;
+
+    const normalizedOrder = normalizeFavoriteRecentSetOrder(
+      order,
+      favoriteIds
+    );
+
+    if (!normalizedOrder.customized) return;
+
+    result[normalizedSetId] = normalizedOrder;
+  });
+
+  return result;
+}
+
+function normalizeFavoriteRecentSetOrder(order, favoriteIds) {
+  const allowedIds = new Set(
+    normalizeOrderedIds(favoriteIds)
+  );
+
+  const seen = new Set();
+
+  const bound = normalizeSetOrderIds(
+    order?.bound,
+    allowedIds,
+    seen
+  );
+
+  const unbound = normalizeSetOrderIds(
+    order?.unbound,
+    allowedIds,
+    seen
+  );
+
+  return {
+    customized: bound.length > 0 || unbound.length > 0,
+    bound,
+    unbound,
+  };
+}
+
+function normalizeSetOrderIds(ids, allowedIds, seen) {
+  if (!Array.isArray(ids)) {
+    return [];
+  }
+
+  const result = [];
+
+  ids.forEach((id) => {
+    const normalized = String(id ?? '').trim();
+
+    if (!normalized) return;
+    if (!allowedIds.has(normalized)) return;
+    if (seen.has(normalized)) return;
+
+    seen.add(normalized);
+    result.push(normalized);
+  });
+
+  return result;
+}
+
+function normalizeSetId(setId) {
+  const id = String(setId ?? '').trim();
+
+  if (!id) return '';
+  if (id.toLowerCase() === 'off') return '';
+
+  return id;
+}
+
+function cloneSetOrders(setOrders) {
+  if (!setOrders || typeof setOrders !== 'object') {
+    return {};
+  }
+
+  const result = {};
+
+  Object.entries(setOrders).forEach(([setId, order]) => {
+    result[setId] = cloneSetOrder(order);
+  });
+
+  return result;
+}
+
+function cloneSetOrder(order) {
+  if (!order || typeof order !== 'object') {
+    return null;
+  }
+
+  return {
+    customized: order.customized === true,
+    bound: Array.isArray(order.bound) ? [...order.bound] : [],
+    unbound: Array.isArray(order.unbound) ? [...order.unbound] : [],
+  };
+}
+
+function createFavoriteRecentEmoteStorageSnapshot({
+  favorites,
+  setOrders,
+}) {
+  const normalizedFavorites = normalizeFavoriteRecentEmotes(favorites);
+
+  return {
+    version: FAVORITE_RECENT_EMOTES_STORAGE_VERSION,
+    favorites: normalizedFavorites,
+    setOrders: normalizeFavoriteRecentSetOrders(
+      setOrders,
+      normalizedFavorites
+    ),
+  };
+}
+
+async function writeFavoriteRecentEmoteStorage({
+  favorites,
+  setOrders,
+}) {
+  const snapshot = createFavoriteRecentEmoteStorageSnapshot({
+    favorites,
+    setOrders,
+  });
+
+  await writeStorage({
+    [FAVORITE_RECENT_EMOTES_STORAGE_KEY]: snapshot,
+  });
+
+  return snapshot;
 }

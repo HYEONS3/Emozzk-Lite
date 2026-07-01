@@ -1,9 +1,10 @@
+import {
+  DEFAULT_RECENT_STORAGE_LIMIT,
+  normalizeRecentStorageLimit,
+} from '../shared/recent-storage-limit.js';
+
 export const EXTENSION_SETTINGS_STORAGE_KEY = 'emzk_lite_extension_settings_v1';
 export const EXTENSION_SETTINGS_CHANGED_EVENT = 'emzk-lite-extension-settings-changed';
-
-const DEFAULT_RECENT_STORAGE_LIMIT = 60;
-const MIN_RECENT_STORAGE_LIMIT = 50;
-const MAX_RECENT_STORAGE_LIMIT = 200;
 
 const DEFAULT_EXTENSION_SETTINGS = {
   experimentalKeyupEnabled: false,
@@ -48,15 +49,15 @@ export function startExtensionSettingsStorageSync() {
       return;
     }
 
-		const nextSettings = normalizeExtensionSettings(change.newValue);
+    const nextSettings = normalizeExtensionSettings(change.newValue);
 
-		if (isSameExtensionSettings(cachedExtensionSettings, nextSettings)) {
-			return;
-		}
+    if (isSameExtensionSettings(cachedExtensionSettings, nextSettings)) {
+      return;
+    }
 
-		cachedExtensionSettings = nextSettings;
+    cachedExtensionSettings = nextSettings;
 
-		dispatchExtensionSettingsChanged();
+    dispatchExtensionSettingsChanged();
   });
 }
 
@@ -164,19 +165,6 @@ function normalizeExtensionSettings(settings) {
       settings?.recentStorageLimit
     ),
   };
-}
-
-function normalizeRecentStorageLimit(value) {
-  const number = Number(value);
-
-  if (!Number.isFinite(number)) {
-    return DEFAULT_RECENT_STORAGE_LIMIT;
-  }
-
-  return Math.min(
-    MAX_RECENT_STORAGE_LIMIT,
-    Math.max(MIN_RECENT_STORAGE_LIMIT, Math.round(number))
-  );
 }
 
 function dispatchExtensionSettingsChanged() {

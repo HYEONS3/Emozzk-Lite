@@ -10,7 +10,9 @@ import {
 } from './recent-emote-storage.js';
 
 import {
+  getCachedFavoriteRecentEmotes,
   reorderFavoriteRecentEmoteSubset,
+  setFavoriteRecentSetOrder,
 } from './favorite-recent-emote-storage.js';
 
 import {
@@ -42,6 +44,11 @@ import {
   isEmoteBindAssignMode,
   isEmoteBindClearMode,
 } from './emote-bind-mode-state.js';
+
+import {
+  getCachedActiveShortcutBindingSetId,
+  SHORTCUT_BINDING_SET_OFF,
+} from './shortcut-storage.js';
 
 const FAVORITES_LIST_SELECTOR = '.emzk-lite-favorites-list';
 const FAVORITES_GROUP_ATTR = 'data-emzk-lite-favorite-group';
@@ -133,11 +140,12 @@ function handlePointerDown(event) {
 
   const itemRect = item.getBoundingClientRect();
 
-  activeDrag = {
-    pointerId: event.pointerId,
-    section,
-    list,
-    item,
+	activeDrag = {
+		pointerId: event.pointerId,
+		section,
+		list,
+		item,
+		activeSetId: getCachedActiveShortcutBindingSetId(),
 
     ghostItem: null,
     ghostMetrics: null,
@@ -245,10 +253,13 @@ function handlePointerUp(event) {
     return;
   }
 
-  saveFavoriteSubsetOrder({
-    subsetEmojiIds: context.startOrder,
-    reorderedSubsetEmojiIds: nextOrder,
-  });
+	void saveFavoriteDragOrder({
+		list: context.list,
+		group: context.group,
+		activeSetId: context.activeSetId,
+		subsetEmojiIds: context.startOrder,
+		reorderedSubsetEmojiIds: nextOrder,
+	});
 }
 
 function handlePointerCancel(event) {
@@ -1114,7 +1125,75 @@ function getFavoriteIdFromItem(item) {
   return getRecentEmoteIdFromAlt(alt);
 }
 
-async function saveFavoriteSubsetOrder({
+async function saveSetFavoriteGroupOrder({
+  list,
+  setId,
+  group,
+}) {
+  if (!isFavoriteGroup(group)) {
+    return;
+  }
+
+  try {
+    const bound = getFavoriteIdsFromListByGroup({
+      list,
+      group: FAVORITE_GROUP_BOUND,
+    });
+
+    const unbound = getFavoriteIdsFromListByGroup({
+      list,
+      group: FAVORITE_GROUP_UNBOUND,
+    });
+
+    const result = await setFavoriteRecentSetOrder(setId, {
+      customized: true,
+      bound,
+      unbound,
+    });
+
+    if (!result.changed) {
+      return;
+    }
+
+    dispatchFavoritesChanged({
+      reordered: true,
+      changed: true,
+      favorites: getCachedFavoriteRecentEmotes(),
+    });
+
+    scheduleBadgeUpdate();
+  } catch (error) {
+    console.error('[Emozzk Lite] failed to reorder favorite set order:', error);
+  }
+}
+
+async function saveFavoriteDragOrder({
+  list,
+  group,
+  activeSetId,
+  subsetEmojiIds,
+  reorderedSubsetEmojiIds,
+}) {
+  if (
+    !activeSetId ||
+    activeSetId === SHORTCUT_BINDING_SET_OFF
+  ) {
+    await saveOffFavoriteSubsetOrder({
+      subsetEmojiIds,
+      reorderedSubsetEmojiIds,
+    });
+
+    return;
+  }
+
+  await saveSetFavoriteGroupOrder({
+    list,
+    setId: activeSetId,
+    group,
+  });
+}
+
+async function saveOffFavoriteSubsetOrder({
   subsetEmojiIds,
   reorderedSubsetEmojiIds,
 }) {

@@ -26,10 +26,12 @@ const MANIFEST_SOURCE = 'manifest.json';
 const MANIFEST_OUTFILE = path.join(DIST_DIR, 'manifest.json');
 
 const POPUP_SOURCE_DIR = path.join('src', 'popup');
-const POPUP_FILES = [
+const POPUP_ENTRY = path.join(POPUP_SOURCE_DIR, 'popup.js');
+const POPUP_OUTFILE = path.join(DIST_DIR, 'popup.js');
+
+const POPUP_STATIC_FILES = [
   'popup.html',
   'popup.css',
-  'popup.js',
 ];
 
 const ICONS_SOURCE_DIR = 'icons';
@@ -39,6 +41,7 @@ cleanDist();
 
 await buildContentScript();
 await buildInjectScript();
+await buildPopupScript();
 
 copyStaticFiles();
 
@@ -93,6 +96,24 @@ async function buildInjectScript() {
     format: 'iife',
     target: ['chrome114'],
     outfile: INJECT_OUTFILE,
+    sourcemap: !isProd,
+    minify: isProd,
+    legalComments: 'none',
+    charset: 'utf8',
+    treeShaking: true,
+    drop: isProd ? ['debugger'] : [],
+  });
+}
+
+async function buildPopupScript() {
+  assertSourceFile(POPUP_ENTRY);
+
+  await esbuild.build({
+    entryPoints: [POPUP_ENTRY],
+    bundle: true,
+    format: 'iife',
+    target: ['chrome114'],
+    outfile: POPUP_OUTFILE,
     sourcemap: !isProd,
     minify: isProd,
     legalComments: 'none',
@@ -187,7 +208,7 @@ function ensureInjectWebAccessibleResource(manifest) {
 }
 
 function copyPopupFiles() {
-  POPUP_FILES.forEach((fileName) => {
+  POPUP_STATIC_FILES.forEach((fileName) => {
     copyFile({
       from: path.join(POPUP_SOURCE_DIR, fileName),
       to: path.join(DIST_DIR, fileName),
@@ -305,6 +326,7 @@ function validateManifestReferencedFiles(manifest) {
   assertDistFile('content.js');
   assertDistFile('content.css');
   assertDistFile('inject.js');
+  assertDistFile('popup.js');
 
   validateContentScripts(manifest);
   validateActionFiles(manifest);

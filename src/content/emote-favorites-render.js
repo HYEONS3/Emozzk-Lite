@@ -15,10 +15,12 @@ import {
 import {
   ensureFavoriteRecentEmoteAppended,
   getCachedFavoriteRecentEmotes,
+  getCachedFavoriteRecentSetOrders,
+  hasCustomFavoriteRecentSetOrder,
+  resetFavoriteRecentSetOrder,
 } from './favorite-recent-emote-storage.js';
 
 import {
-  getRecentEmoteId,
   getRecentEmoteIdFromAlt,
   readRecentEmotes,
   writeRecentEmotes,
@@ -34,9 +36,22 @@ import {
 } from './emote-favorites-drag.js';
 
 import {
+  attachShortcutSetSwitchController,
+  clearShortcutSetSwitchFloatingUi,
+  isShortcutSetClickSuppressed,
+} from './shortcut-set-switch-controller.js';
+
+import {
+  closeShortcutSetMenus,
+  createShortcutSetMenuControl,
+  SHORTCUT_SET_MENU_BUTTON_CLASS,
+  SHORTCUT_SET_MENU_CLASS,
+} from './shortcut-set-menu-controller.js';
+
+import {
   FAVORITE_GROUP_BOUND,
   FAVORITE_GROUP_UNBOUND,
-  splitFavoriteEmotesByBindings,
+  getFavoriteGroupsForActiveSet,
 } from './emote-favorite-groups.js';
 
 import {
@@ -63,7 +78,7 @@ import {
 
 import {
   assignShortcutBindingTarget,
-  clearShortcutBindingsByEmojiIds ,
+  clearShortcutBindingsByEmojiIds,
   getCachedShortcutBindings,
   createShortcutBindingSetId,
   getCachedActiveShortcutBindingSetId,
@@ -110,6 +125,7 @@ const SHORTCUT_SET_SWITCH_CLASS = 'emzk-lite-shortcut-set-switch';
 const SHORTCUT_SET_BUTTON_CLASS = 'emzk-lite-shortcut-set-button';
 const SHORTCUT_SET_BUTTON_ACTIVE_CLASS = 'emzk-lite-shortcut-set-button-active';
 
+const HEADER_SPACER_CLASS = 'emzk-lite-header-spacer';
 const BIND_BUTTON_CLASS = 'emzk-lite-bind-button';
 const BIND_BUTTON_ACTIVE_CLASS = 'emzk-lite-bind-button-active';
 const BIND_BUTTON_DISABLED_CLASS = 'emzk-lite-bind-button-disabled';
@@ -140,17 +156,6 @@ const FAVORITES_RENDER_STATE_READY = 'ready';
 
 const BADGE_CLASS = 'emzk-lite-badge';
 const BADGE_TARGET_ATTR = 'data-emzk-lite-badge-target';
-
-const SHORTCUT_SET_DRAG_SUPPRESS_CLICK_ATTR =
-  'data-emzk-lite-shortcut-set-suppress-click';
-
-const SHORTCUT_SET_DRAGGING_ATTR =
-  'data-emzk-lite-shortcut-set-dragging';
-
-const SHORTCUT_SET_DRAG_THRESHOLD = 3;
-
-const SHORTCUT_SET_DRAG_PREVIEW_CLASS =
-  'emzk-lite-shortcut-set-drag-preview';
 
 let started = false;
 let rafId = 0;
@@ -213,7 +218,7 @@ export function stopFavoriteEmoteSectionRenderer() {
   clearFavoriteRenderState();
   exitShortcutSetRenameModeSilently();
   removeFavoriteSection();
-  removeShortcutSetDragPreview();
+  clearShortcutSetFloatingUi();
 }
 
 export function scheduleFavoriteEmoteSectionRender() {
@@ -229,6 +234,7 @@ export function renderFavoriteEmoteSection() {
   const panel = findEmotePanel();
 
   if (!panel) {
+    clearShortcutSetFloatingUi();
     exitShortcutSetRenameModeSilently();
     return;
   }
@@ -236,11 +242,13 @@ export function renderFavoriteEmoteSection() {
   const area = getEmojiArea(panel);
 
   if (!area) {
-		exitShortcutSetRenameModeSilently();
+    clearShortcutSetFloatingUi();
+    exitShortcutSetRenameModeSilently();
     return;
   }
 
   if (!isRecentEmoteCategoryActive(panel)) {
+    clearShortcutSetFloatingUi();
     exitShortcutSetRenameModeSilently();
 
     removeFavoriteSection(area);
@@ -316,24 +324,24 @@ export function renderFavoriteEmoteSection() {
     return;
   }
 
-  const favoriteEmotes = getCachedFavoriteRecentEmotes();
-  const favoriteGroups = splitFavoriteEmotesByBindings({
-    favorites: favoriteEmotes,
-    bindings: getCachedShortcutBindings(),
-  });
+	const favoriteEmotes = getCachedFavoriteRecentEmotes();
 
-  const boundFavoriteIds = favoriteGroups.bound
-    .map(getRecentEmoteId)
-    .filter(Boolean);
+	const favoriteGroups = getFavoriteGroupsForActiveSet({
+		favorites: favoriteEmotes,
+		activeSetId: getCachedActiveShortcutBindingSetId(),
+		bindings: getCachedShortcutBindings(),
+		setOrders: getCachedFavoriteRecentSetOrders(),
+	});
 
-  const unboundFavoriteIds = favoriteGroups.unbound
-    .map(getRecentEmoteId)
-    .filter(Boolean);
+	const boundFavoriteIds = favoriteGroups.mode === 'set'
+		? favoriteGroups.boundIds
+		: [];
 
-  const favoriteIds = [
-    ...boundFavoriteIds,
-    ...unboundFavoriteIds,
-  ];
+	const unboundFavoriteIds = favoriteGroups.mode === 'set'
+		? favoriteGroups.unboundIds
+		: favoriteGroups.itemIds;
+
+	const favoriteIds = favoriteGroups.itemIds;
 
   const favoriteIdSet = new Set(favoriteIds);
 
@@ -406,8 +414,11 @@ function handlePossibleFavoriteRender(event) {
     if (target.closest(`.${BIND_BUTTON_CLASS}`)) return;
     if (target.closest(`.${BIND_PHASE_BUTTON_CLASS}`)) return;
     if (target.closest(`.${SHORTCUT_SET_BUTTON_CLASS}`)) return;
+    if (target.closest(`.${SHORTCUT_SET_MENU_BUTTON_CLASS}`)) return;
+    if (target.closest(`.${SHORTCUT_SET_MENU_CLASS}`)) return;
     if (target.closest(`.${RENAME_INPUT_CLASS}`)) return;
 
+    closeShortcutSetMenus();
     exitShortcutSetRenameModeOnPanelClick(target);
   }
 
@@ -643,16 +654,8 @@ function createDefaultTitleContent(bindState) {
 
   actions.append(
     createShortcutSetSwitch(),
-    createHeaderIconButton({
-      icon: 'edit',
-      label: '세트 이름 변경',
-      title: shortcutsOff
-        ? 'OFF 상태에서는 세트 이름을 변경할 수 없습니다.'
-        : '세트 이름 변경',
-      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_RENAME,
-      disabled: shortcutsOff,
-      onClick: startShortcutSetRenameMode,
-    }),
+    createShortcutSetMenuControl(getShortcutSetMenuControlOptions()),
+    createHeaderSpacer(),
     createHeaderIconButton({
       icon: 'link',
       label: '키 지정',
@@ -739,7 +742,13 @@ function createShortcutSetSwitch() {
     wrapper.appendChild(button);
   });
 
-  attachShortcutSetSwitchPointerEvents(wrapper);
+  attachShortcutSetSwitchController({
+    wrapper,
+    getSets: getShortcutSetSwitchOptions,
+    getActiveSetId: getCachedActiveShortcutBindingSetId,
+    switchSet: switchShortcutSet,
+    closeMenu: closeShortcutSetMenus,
+  });
 
   return wrapper;
 }
@@ -843,6 +852,11 @@ function syncShortcutSetSwitchMetrics({
   wrapper.setAttribute(
     'data-emzk-lite-active-shortcut-set',
     String(activeIndex)
+  );
+
+  wrapper.parentElement?.style.setProperty(
+    '--emzk-lite-shortcut-set-count',
+    String(sets.length)
   );
 }
 
@@ -966,85 +980,10 @@ function syncDefaultHeaderActionButtons({
 }) {
   const shortcutsOff = isShortcutBindingOff();
 
-  const buttons = Array.from(
-    actions.querySelectorAll(`:scope > .${BIND_BUTTON_CLASS}`)
-  );
-
-  const hasRenameButton = buttons.some((button) => {
-    return button.getAttribute('aria-label') === '세트 이름 변경';
-  });
-
-  const hasAssignButton = buttons.some((button) => {
-    return button.getAttribute('aria-label') === '키 지정';
-  });
-
-  const hasClearButton = buttons.some((button) => {
-    const label = button.getAttribute('aria-label');
-
-    return label === '해제' || label === '해제 중';
-  });
-
-  if (
-    hasRenameButton &&
-    hasAssignButton &&
-    hasClearButton
-  ) {
-    buttons.forEach((button) => {
-      const label = button.getAttribute('aria-label');
-
-      if (label === '세트 이름 변경') {
-        syncHeaderIconButtonState(button, {
-          label: '세트 이름 변경',
-          title: shortcutsOff
-            ? 'OFF 상태에서는 세트 이름을 변경할 수 없습니다.'
-            : '세트 이름 변경',
-          active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_RENAME,
-          disabled: shortcutsOff,
-        });
-      }
-
-      if (label === '키 지정') {
-        syncHeaderIconButtonState(button, {
-          label: '키 지정',
-          title: shortcutsOff
-            ? 'OFF 상태에서는 키 지정할 수 없습니다.'
-            : '키 지정',
-          active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_ASSIGN,
-          disabled: shortcutsOff,
-        });
-      }
-
-      if (label === '해제' || label === '해제 중') {
-        const clearLabel = bindState.mode === EMOTE_BIND_MODE_CLEAR
-          ? '해제 중'
-          : '해제';
-
-        syncHeaderIconButtonState(button, {
-          label: clearLabel,
-          title: shortcutsOff
-            ? 'OFF 상태에서는 단축키를 해제할 수 없습니다.'
-            : clearLabel,
-          active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_CLEAR,
-          disabled: shortcutsOff,
-        });
-      }
-    });
-
-    return;
-  }
-
   actions.replaceChildren(
     createShortcutSetSwitch(),
-    createHeaderIconButton({
-      icon: 'edit',
-      label: '세트 이름 변경',
-      title: shortcutsOff
-        ? 'OFF 상태에서는 세트 이름을 변경할 수 없습니다.'
-        : '세트 이름 변경',
-      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_RENAME,
-      disabled: shortcutsOff,
-      onClick: startShortcutSetRenameMode,
-    }),
+    createShortcutSetMenuControl(getShortcutSetMenuControlOptions()),
+    createHeaderSpacer(),
     createHeaderIconButton({
       icon: 'link',
       label: '키 지정',
@@ -1070,19 +1009,6 @@ function syncDefaultHeaderActionButtons({
   );
 }
 
-function syncHeaderIconButtonState(button, {
-  label,
-  title,
-  active,
-  disabled,
-}) {
-  button.disabled = Boolean(disabled);
-  button.setAttribute('aria-label', label);
-  button.setAttribute('title', title || label);
-  button.setAttribute('aria-pressed', active ? 'true' : 'false');
-  button.classList.toggle(BIND_BUTTON_ACTIVE_CLASS, Boolean(active));
-  button.classList.toggle(BIND_BUTTON_DISABLED_CLASS, Boolean(disabled));
-}
 
 function createShortcutSetButton({
   setId,
@@ -1212,272 +1138,6 @@ function createShortcutSetOffIcon() {
   return svg;
 }
 
-function attachShortcutSetSwitchPointerEvents(wrapper) {
-  let dragging = false;
-  let startClientX = 0;
-  let lastSetId = '';
-  let hasDragged = false;
-
-  wrapper.addEventListener('pointerdown', (event) => {
-    if (
-      event.pointerType === 'mouse' &&
-      event.button !== 0
-    ) {
-      return;
-    }
-
-    stopControlEvent(event);
-
-    dragging = true;
-    startClientX = event.clientX;
-    lastSetId = '';
-    hasDragged = false;
-
-    setShortcutSetDragging(wrapper, false);
-
-    wrapper.setPointerCapture?.(event.pointerId);
-
-    switchShortcutSetByPointer({
-      wrapper,
-      clientX: event.clientX,
-      lastSetId,
-      onSetIdChange: (setId) => {
-        lastSetId = setId;
-      },
-    });
-  });
-
-  wrapper.addEventListener('pointermove', (event) => {
-    if (!dragging) {
-      return;
-    }
-
-    stopControlEvent(event);
-
-    if (
-      Math.abs(event.clientX - startClientX) >=
-      SHORTCUT_SET_DRAG_THRESHOLD
-    ) {
-      hasDragged = true;
-      setShortcutSetDragging(wrapper, true);
-    }
-
-    switchShortcutSetByPointer({
-      wrapper,
-      clientX: event.clientX,
-      lastSetId,
-      onSetIdChange: (setId) => {
-        lastSetId = setId;
-      },
-    });
-  });
-
-  wrapper.addEventListener('pointerup', (event) => {
-    if (!dragging) {
-      return;
-    }
-
-    stopControlEvent(event);
-
-    dragging = false;
-    wrapper.releasePointerCapture?.(event.pointerId);
-    hideShortcutSetDragPreview();
-    setShortcutSetDragging(wrapper, false);
-
-    if (hasDragged) {
-      suppressNextShortcutSetClick(wrapper);
-    }
-  });
-
-  wrapper.addEventListener('pointercancel', () => {
-    dragging = false;
-    hasDragged = false;
-
-    hideShortcutSetDragPreview();
-    setShortcutSetDragging(wrapper, false);
-  });
-}
-
-function setShortcutSetDragging(wrapper, dragging) {
-  if (!(wrapper instanceof Element)) {
-    return;
-  }
-
-  if (dragging) {
-    wrapper.setAttribute(SHORTCUT_SET_DRAGGING_ATTR, 'true');
-    return;
-  }
-
-  wrapper.removeAttribute(SHORTCUT_SET_DRAGGING_ATTR);
-}
-
-function switchShortcutSetByPointer({
-  wrapper,
-  clientX,
-  lastSetId,
-  onSetIdChange,
-}) {
-  const shortcutSet = getShortcutSetFromPointerPosition({
-    wrapper,
-    clientX,
-  });
-
-  if (!shortcutSet) {
-    return;
-  }
-
-  showShortcutSetDragPreview({
-    wrapper,
-    shortcutSet,
-  });
-
-  const setId = shortcutSet.setId;
-
-  if (!setId || setId === lastSetId) {
-    return;
-  }
-
-  onSetIdChange(setId);
-
-  if (isShortcutSetButtonCurrentlyActive(setId)) {
-    return;
-  }
-
-  void switchShortcutSet(setId)
-    .catch((error) => {
-      console.error('[Emozzk Lite] failed to switch shortcut set:', error);
-    });
-}
-
-function getShortcutSetFromPointerPosition({
-  wrapper,
-  clientX,
-}) {
-  const sets = getShortcutSetSwitchOptions();
-
-  if (!sets.length) {
-    return null;
-  }
-
-  const rect = wrapper.getBoundingClientRect();
-
-  if (!rect.width) {
-    return null;
-  }
-
-  const clampedClientX = Math.min(
-    rect.right - 0.1,
-    Math.max(rect.left, clientX)
-  );
-
-  const ratio = (clampedClientX - rect.left) / rect.width;
-
-  const index = Math.min(
-    sets.length - 1,
-    Math.max(0, Math.floor(ratio * sets.length))
-  );
-
-  const set = sets[index];
-  const setId = normalizeShortcutSetId(set?.id);
-
-  if (!setId) {
-    return null;
-  }
-
-  return {
-    setId,
-    previewLabel: normalizeText(set?.previewLabel) ||
-      getShortcutSetPreviewLabel({
-        setId,
-        label: set?.label,
-      }),
-    index,
-  };
-}
-
-function getShortcutSetDragPreview() {
-  let preview = document.querySelector(
-    `.${SHORTCUT_SET_DRAG_PREVIEW_CLASS}`
-  );
-
-  if (preview instanceof HTMLElement) {
-    return preview;
-  }
-
-  preview = document.createElement('span');
-  preview.className = SHORTCUT_SET_DRAG_PREVIEW_CLASS;
-  preview.hidden = true;
-  preview.setAttribute('aria-hidden', 'true');
-
-  document.body.appendChild(preview);
-
-  return preview;
-}
-
-function showShortcutSetDragPreview({
-  wrapper,
-  shortcutSet,
-}) {
-  const preview = getShortcutSetDragPreview();
-  const rect = wrapper.getBoundingClientRect();
-  const setCount = Math.max(1, getShortcutSetSwitchOptions().length);
-  const slotWidth = rect.width / setCount;
-
-  const label = shortcutSet?.setId === SHORTCUT_BINDING_SET_OFF
-    ? 'OFF'
-    : normalizeText(shortcutSet?.previewLabel) ||
-      getShortcutSetFallbackLabel(shortcutSet?.setId);
-
-  const left = rect.left + slotWidth * shortcutSet.index + slotWidth / 2;
-  const top = rect.top - 7;
-
-  preview.textContent = label;
-  preview.hidden = false;
-
-  preview.style.left = `${left}px`;
-  preview.style.top = `${top}px`;
-}
-
-function hideShortcutSetDragPreview() {
-  const preview = document.querySelector(
-    `.${SHORTCUT_SET_DRAG_PREVIEW_CLASS}`
-  );
-
-  if (!(preview instanceof HTMLElement)) {
-    return;
-  }
-
-  preview.hidden = true;
-}
-
-function removeShortcutSetDragPreview() {
-  document
-    .querySelectorAll(`.${SHORTCUT_SET_DRAG_PREVIEW_CLASS}`)
-    .forEach((preview) => {
-      preview.remove();
-    });
-
-  document
-    .querySelectorAll(`[${SHORTCUT_SET_DRAGGING_ATTR}]`)
-    .forEach((element) => {
-      element.removeAttribute(SHORTCUT_SET_DRAGGING_ATTR);
-    });
-}
-
-function suppressNextShortcutSetClick(wrapper) {
-  wrapper.setAttribute(SHORTCUT_SET_DRAG_SUPPRESS_CLICK_ATTR, 'true');
-
-  window.setTimeout(() => {
-    wrapper.removeAttribute(SHORTCUT_SET_DRAG_SUPPRESS_CLICK_ATTR);
-  }, 80);
-}
-
-function isShortcutSetClickSuppressed(button) {
-  const wrapper = button.closest(`.${SHORTCUT_SET_SWITCH_CLASS}`);
-
-  return wrapper?.getAttribute(SHORTCUT_SET_DRAG_SUPPRESS_CLICK_ATTR) === 'true';
-}
-
 function isShortcutSetButtonCurrentlyActive(setId) {
   return getCachedActiveShortcutBindingSetId() === normalizeShortcutSetId(setId);
 }
@@ -1489,6 +1149,7 @@ async function switchShortcutSet(setId) {
     return;
   }
 
+  closeShortcutSetMenus();
   exitEmoteBindMode();
 
   await setActiveShortcutBindingSet(normalizedSetId);
@@ -1600,6 +1261,7 @@ function isShortcutBindingOff() {
 function toggleAssignModeIfShortcutEnabled() {
   if (isShortcutBindingOff()) return;
 
+  closeShortcutSetMenus();
   exitShortcutSetRenameModeSilently();
   toggleEmoteBindAssignMode();
 }
@@ -1607,6 +1269,7 @@ function toggleAssignModeIfShortcutEnabled() {
 function toggleClearModeIfShortcutEnabled() {
   if (isShortcutBindingOff()) return;
 
+  closeShortcutSetMenus();
   exitShortcutSetRenameModeSilently();
   toggleEmoteBindClearMode();
 }
@@ -2311,6 +1974,30 @@ function createCancelXIcon() {
   svg.appendChild(path);
 
   return svg;
+}
+
+function createHeaderSpacer() {
+  const spacer = document.createElement('span');
+
+  spacer.className = HEADER_SPACER_CLASS;
+  spacer.setAttribute('aria-hidden', 'true');
+
+  return spacer;
+}
+
+function getShortcutSetMenuControlOptions() {
+  const shortcutsOff = isShortcutBindingOff();
+  const activeSetId = getCachedActiveShortcutBindingSetId();
+
+  return {
+    disabled: shortcutsOff,
+    disabledTitle: 'OFF 상태에서는 세트 메뉴를 사용할 수 없습니다.',
+    activeSetId,
+    hasCustomOrder: hasCustomFavoriteRecentSetOrder(activeSetId),
+    onRename: startShortcutSetRenameMode,
+    onResetOrder: resetShortcutSetFavoriteOrder,
+    stopControlEvent,
+  };
 }
 
 function createHeaderIconButton({
@@ -3062,4 +2749,33 @@ function exitShortcutSetRenameModeSilently() {
 
   exitShortcutSetRenameMode();
   return true;
+}
+
+async function resetShortcutSetFavoriteOrder(setId) {
+  if (
+    !setId ||
+    setId === SHORTCUT_BINDING_SET_OFF
+  ) {
+    return;
+  }
+
+  const result = await resetFavoriteRecentSetOrder(setId);
+
+  if (!result.changed) {
+    return;
+  }
+
+  dispatchFavoritesChanged({
+    reordered: true,
+    changed: true,
+    favorites: getCachedFavoriteRecentEmotes(),
+  });
+
+  scheduleFavoriteEmoteSectionRender();
+  scheduleBadgeUpdate();
+}
+
+function clearShortcutSetFloatingUi() {
+  closeShortcutSetMenus();
+  clearShortcutSetSwitchFloatingUi();
 }
