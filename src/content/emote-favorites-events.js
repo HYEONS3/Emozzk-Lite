@@ -52,6 +52,8 @@ import {
 import {
   getBindingEmojiId,
   getCachedShortcutBindingSetState,
+  getShortcutBindingSetIndex,
+  normalizeShortcutBindingSetCount,
 } from './shortcut-storage.js';
 
 const FAVORITES_SECTION_SELECTOR = '.emzk-lite-favorites-section';
@@ -61,7 +63,13 @@ const SHORTCUT_SET_FLASH_VISIBLE_TIME = 1400;
 
 let shortcutSetFlashTimer = 0;
 
+let attached = false;
+
 export function attachEmoteFavoriteEvents() {
+  if (attached) return;
+
+  attached = true;
+
   document.addEventListener('mousedown', handleFavoriteMouseDown, true);
   document.addEventListener('click', handleFavoriteClick, true);
 }
@@ -70,9 +78,9 @@ function handleFavoriteMouseDown(event) {
   if (isEmoteBindInteractionModeActive()) return;
   if (!isFavoriteToggleEvent(event)) return;
 
-  const button = getOriginalEmoteButtonFromEvent(event);
+  const context = getFavoriteToggleContext(event);
 
-  if (!button) return;
+  if (!context) return;
 
   blockEvent(event);
 }
@@ -81,22 +89,17 @@ async function handleFavoriteClick(event) {
   if (isEmoteBindInteractionModeActive()) return;
   if (!isFavoriteToggleEvent(event)) return;
 
-  const button = getOriginalEmoteButtonFromEvent(event);
+  const context = getFavoriteToggleContext(event);
 
-  if (!button) return;
+  if (!context) return;
+
+  const {
+    button,
+    panel,
+    isFavoriteItem,
+  } = context;
 
   blockEvent(event);
-
-  const panel = findEmotePanel();
-
-  if (!panel) return;
-
-  const isRecentItem = isElementInRecentEmoteSection(button, panel);
-  const isFavoriteItem = isElementInFavoriteSection(button, panel);
-
-  if (!isRecentItem && !isFavoriteItem) {
-    return;
-  }
 
   const alt = getEmoteAltFromButton(button);
   const recentEmote = getRecentEmoteFromButton(button);
@@ -118,19 +121,18 @@ async function handleFavoriteClick(event) {
       return getRecentEmoteId(favoriteEmote) === emojiId;
     });
 
-    const boundSetIds = getShortcutBindingSetIdsForEmojiId(emojiId);
+    if (willRemoveFavorite) {
+			const boundSetIds = getShortcutBindingSetIdsForEmojiId(emojiId);
 
-    if (
-      willRemoveFavorite &&
-      boundSetIds.length > 0
-    ) {
-      flashShortcutSetButtons({
-        panel,
-        setIds: boundSetIds,
-      });
+			if (boundSetIds.length > 0) {
+				flashShortcutSetButtons({
+					panel,
+					setIds: boundSetIds,
+				});
 
-      return;
-    }
+				return;
+			}
+		}
 
     const result = await toggleFavoriteRecentEmote(recentEmote);
 
@@ -159,6 +161,31 @@ async function handleFavoriteClick(event) {
   } catch (error) {
     console.error('[Emozzk Lite] failed to toggle favorite recent emote:', error);
   }
+}
+
+function getFavoriteToggleContext(event) {
+  const button = getOriginalEmoteButtonFromEvent(event);
+
+  if (!button) return null;
+
+  const panel = findEmotePanel();
+
+  if (!panel || !panel.contains(button)) {
+    return null;
+  }
+
+  const isRecentItem = isElementInRecentEmoteSection(button, panel);
+  const isFavoriteItem = isElementInFavoriteSection(button, panel);
+
+  if (!isRecentItem && !isFavoriteItem) {
+    return null;
+  }
+
+  return {
+    button,
+    panel,
+    isFavoriteItem,
+  };
 }
 
 function isFavoriteToggleEvent(event) {
@@ -242,77 +269,6 @@ function syncRecentLocalStorageWithFavorites({
 
   return merged;
 }
-function hasShortcutBindingForEmojiIdInAnySet(emojiId) {
-  const normalizedEmojiId = String(emojiId ?? '').trim();
-
-  if (!normalizedEmojiId) {
-    return false;
-  }
-
-  const state = getCachedShortcutBindingSetState();
-
-  return state.sets.some((set) => {
-    if (!Array.isArray(set.bindings)) {
-      return false;
-    }
-
-    return set.bindings.some((binding) => {
-      return getBindingEmojiId(binding) === normalizedEmojiId;
-    });
-  });
-}
-
-function showFavoriteToast({
-  panel,
-  message,
-}) {
-  if (!(panel instanceof HTMLElement)) return;
-
-  const emojiArea = panel.querySelector('#emoji_area');
-
-  if (!(emojiArea instanceof HTMLElement)) return;
-
-  panel.classList.add('emzk-lite-toast-anchor');
-
-  let toast = panel.querySelector(`.${FAVORITE_TOAST_CLASS}`);
-
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.className = FAVORITE_TOAST_CLASS;
-    toast.setAttribute('role', 'status');
-    toast.setAttribute('aria-live', 'polite');
-
-    panel.appendChild(toast);
-  }
-
-  const panelRect = panel.getBoundingClientRect();
-  const emojiAreaRect = emojiArea.getBoundingClientRect();
-
-  const top = emojiAreaRect.top - panelRect.top + 36;
-  const left = emojiAreaRect.left - panelRect.left + emojiAreaRect.width / 2;
-
-  toast.style.top = `${top}px`;
-  toast.style.left = `${left}px`;
-  toast.textContent = message;
-
-  if (favoriteToastTimer) {
-    window.clearTimeout(favoriteToastTimer);
-  }
-
-  requestAnimationFrame(() => {
-    toast.dataset.visible = 'true';
-  });
-
-  favoriteToastTimer = window.setTimeout(() => {
-    toast.dataset.visible = 'false';
-
-    window.setTimeout(() => {
-      if (toast.parentNode) {
-        toast.remove();
-      }
-    }, FAVORITE_TOAST_REMOVE_DELAY);
-  }, FAVORITE_TOAST_VISIBLE_TIME);
-}
 
 function blockEvent(event) {
   event.preventDefault();
@@ -328,8 +284,17 @@ function getShortcutBindingSetIdsForEmojiId(emojiId) {
   }
 
   const state = getCachedShortcutBindingSetState();
+  const setCount = normalizeShortcutBindingSetCount(state?.setCount);
 
   return state.sets
+    .filter((set) => {
+      const setIndex = getShortcutBindingSetIndex(set?.id);
+
+      return (
+        setIndex >= 1 &&
+        setIndex <= setCount
+      );
+    })
     .filter((set) => {
       if (!Array.isArray(set.bindings)) {
         return false;

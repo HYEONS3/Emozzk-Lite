@@ -213,20 +213,6 @@ export function focusChatInputAfterEmote() {
   return isFocused(input);
 }
 
-export function scheduleChatInputNormalizeAfterEmote() {
-  requestAnimationFrame(() => {
-    focusChatInputAfterEmote();
-  });
-}
-
-export function scheduleChatInputNormalizeAfterEmoteSettle() {
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      focusChatInputAfterEmote();
-    });
-  });
-}
-
 function cleanupQuickInsertInputAfterClick() {
   const input = findChatContentEditableInput();
 

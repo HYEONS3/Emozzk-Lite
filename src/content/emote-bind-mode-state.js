@@ -102,7 +102,17 @@ export function refreshEmoteBindModeStateForSettings() {
 export function enterEmoteBindAssignMode() {
   return setEmoteBindModeState({
     mode: EMOTE_BIND_MODE_ASSIGN,
+
+    selectedEmojiId: '',
+    selectedEmojiLabel: '',
+    selectedEmojiImageUrl: '',
+    selectedCode: '',
+    selectedPhase: SHORTCUT_PHASE_DOWN,
+
     selectedClearEmojiIds: [],
+    renameValue: '',
+    renameSaving: false,
+
     keyListening: false,
     isSaving: false,
   });
@@ -207,7 +217,7 @@ export function setEmoteBindCode(code) {
     previousState.mode !== EMOTE_BIND_MODE_ASSIGN ||
     !selectedCode
   ) {
-    return;
+    return getEmoteBindModeState();
   }
 
   setEmoteBindModeState({
@@ -227,7 +237,7 @@ export function setEmoteBindPhase(phase) {
   const previousState = getEmoteBindModeState();
 
   if (previousState.mode !== EMOTE_BIND_MODE_ASSIGN) {
-    return;
+    return getEmoteBindModeState();
   }
 
   setEmoteBindModeState({

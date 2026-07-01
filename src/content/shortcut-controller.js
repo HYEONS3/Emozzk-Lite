@@ -25,7 +25,7 @@ import {
 } from './emote-panel-ready.js';
 
 import {
-  renderFavoriteEmoteSection,
+  scheduleFavoriteEmoteSectionRender,
 } from './emote-favorites-render.js';
 
 import {
@@ -112,10 +112,9 @@ export function setShortcutBindings(bindings, {
   activeSetId = activeShortcutBindingSetId,
 } = {}) {
   /*
-   * 주의:
-   * normalizeShortcutBindings([])를 쓰면 빈 배열이 기본 F1~F10으로 되돌아갈 수 있다.
-   * 사용자 설정에서는 "단축키 없음"도 유효한 상태이므로 여기서는 직접 정규화한다.
-   */
+  * 사용자 설정에서는 "단축키 없음"도 유효한 상태다.
+  * bindings가 배열이 아니면 빈 단축키 목록으로 처리한다.
+  */
 	if (!Array.isArray(bindings)) {
 		shortcutBindings = [];
 	} else {
@@ -182,18 +181,18 @@ function handleShortcutEvent(event) {
     return;
   }
 
-  const state = getShortcutContext(event);
+	const state = getShortcutContext(event);
 
-  if (handleEscapeCloseShortcut({
-    event,
-    state,
-  })) {
-    return;
-  }
+	if (state.isNonChatTyping) {
+		return;
+	}
 
-  if (state.isNonChatTyping) {
-    return;
-  }
+	if (handleEscapeCloseShortcut({
+		event,
+		state,
+	})) {
+		return;
+	}
 
   if (handleShortcutKeyDown({
     event,
@@ -792,8 +791,7 @@ function openPanelFromShortcut() {
     .then((readyState) => {
       if (!readyState?.panel) return;
 
-      renderFavoriteEmoteSection();
-
+      scheduleFavoriteEmoteSectionRender();
       scheduleChatInputFocus();
       scheduleBadgeUpdate();
     })

@@ -25,7 +25,7 @@ import {
 } from './badge-overlay.js';
 
 import {
-  renderFavoriteEmoteSection,
+  scheduleFavoriteEmoteSectionRender,
 } from './emote-favorites-render.js';
 
 import {
@@ -112,13 +112,7 @@ export function quickInsertEmoteByTarget(actionArgs) {
     return false;
   }
 
-  const readyPanelPromise = ensureEmotePanelReady();
-
-  if (!readyPanelPromise) {
-    console.debug('[Emozzk Lite] emote panel could not be opened for quick insert:', target);
-    removeInsertItem(item);
-    return false;
-  }
+	void ensureEmotePanelReady();
 
   scheduleInsertQueueExecution();
 
@@ -157,13 +151,6 @@ function enqueueInsertItem(target) {
   return item;
 }
 
-function removeInsertItem(item) {
-  if (!item) return;
-
-  insertQueue = insertQueue.filter((queuedItem) => {
-    return queuedItem.id !== item.id;
-  });
-}
 
 function clearInsertQueue() {
   insertQueue = [];
@@ -254,13 +241,15 @@ async function executeInsertQueue() {
     return;
   }
 
-  /*
-   * 패널을 방금 연 경우, CHZZK DOM과 Emozzk 즐겨찾기 섹션이
-   * 같은 프레임 안에서 흔들릴 수 있다.
-   */
-  renderFavoriteEmoteSection();
+	/*
+	* 패널을 방금 연 경우, CHZZK DOM과 Emozzk 즐겨찾기 섹션이
+	* 같은 프레임 안에서 흔들릴 수 있다.
+	*
+	* 직접 렌더하지 않고 다음 프레임으로 합쳐서 처리한다.
+	*/
+	scheduleFavoriteEmoteSectionRender();
 
-  await waitAnimationFrames(PANEL_OPEN_SETTLE_FRAMES);
+	await waitAnimationFrames(PANEL_OPEN_SETTLE_FRAMES);
 
   while (insertQueue.length) {
     /*
@@ -292,7 +281,7 @@ async function executeInsertItem({
   item,
   panel,
 }) {
-  for (let attempt = 0; attempt <= INSERT_RETRY_COUNT; attempt += 1) {
+  for (let attempt = 0; attempt < INSERT_RETRY_COUNT; attempt += 1) {
     /*
      * retry 루프 안에서도 매번 제한을 본다.
      * 버튼을 못 찾아 retry하던 중 입력창이 10개가 될 수 있다.
@@ -378,11 +367,11 @@ async function executeInsertItem({
      * 버튼을 아직 못 찾은 경우만 retry한다.
      * target_not_found는 패널 렌더/즐겨찾기 재배치 직후에 일시적으로 발생할 수 있다.
      */
-    if (attempt >= INSERT_RETRY_COUNT) {
-      break;
-    }
+		if (attempt >= INSERT_RETRY_COUNT - 1) {
+			break;
+		}
 
-    await waitRetryInterval();
+		await waitRetryInterval();
   }
 
   console.debug('[Emozzk Lite] quick insert target not found after retry:', {

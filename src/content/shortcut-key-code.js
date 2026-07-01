@@ -12,6 +12,8 @@ const MODIFIER_CODES = new Set([
 const BLOCKED_BASE_CODES = new Set([
   'Escape',
   'Tab',
+  'Enter',
+  'NumpadEnter',
   'CapsLock',
   'ContextMenu',
   'HangulMode',
@@ -100,6 +102,15 @@ const BASE_CODE_LABELS = new Map([
   ['ArrowRight', '→'],
 ]);
 
+const NUMPAD_CODE_ALIASES = new Map([
+  ['numpadadd', 'NumpadAdd'],
+  ['numpadsubtract', 'NumpadSubtract'],
+  ['numpadmultiply', 'NumpadMultiply'],
+  ['numpaddivide', 'NumpadDivide'],
+  ['numpaddecimal', 'NumpadDecimal'],
+  ['numpadenter', 'NumpadEnter'],
+]);
+
 const NAMED_BASE_CODES = new Set(BASE_CODE_LABELS.keys());
 
 export function getShortcutCodeFromKeyboardEvent(event) {
@@ -131,10 +142,31 @@ export function getShortcutCodeFromKeyboardEvent(event) {
     modifiers.push('Meta');
   }
 
+	if (
+		!hasCommandModifier(event) &&
+		isKoreanTextKeyEvent(event)
+	) {
+		return '';
+	}
+
   return [
     ...modifiers,
     baseCode,
   ].join('+');
+}
+
+function isKoreanTextKeyEvent(event) {
+  const key = normalizeText(event?.key);
+
+  return /^[ㄱ-ㅎㅏ-ㅣ가-힣]$/.test(key);
+}
+
+function hasCommandModifier(event) {
+  return Boolean(
+    event?.ctrlKey ||
+    event?.altKey ||
+    event?.metaKey
+  );
 }
 
 export function normalizeStoredShortcutCode(code) {
@@ -225,7 +257,7 @@ function normalizeModifierPart(part) {
   }
 
   const lowerPart = normalizedPart.toLowerCase();
-
+	
   if (lowerPart === 'ctrl' || lowerPart === 'control') {
     return 'Ctrl';
   }
@@ -259,6 +291,12 @@ function normalizeBaseCodePart(part) {
 
   if (CODE_ALIASES.has(normalizedPart)) {
     return CODE_ALIASES.get(normalizedPart);
+  }
+  
+	const lowerPart = normalizedPart.toLowerCase();
+
+  if (NUMPAD_CODE_ALIASES.has(lowerPart)) {
+    return NUMPAD_CODE_ALIASES.get(lowerPart);
   }
 
   if (/^Key[A-Za-z]$/.test(normalizedPart)) {

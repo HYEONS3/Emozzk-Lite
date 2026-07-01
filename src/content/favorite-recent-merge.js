@@ -4,6 +4,7 @@ import {
 } from './recent-emote-storage.js';
 
 const DEFAULT_MAX_RECENT_EMOTE_COUNT = 60;
+const MAX_RECENT_EMOTE_COUNT = 200;
 
 export function mergeFavoriteAndRecentEmotes({
   favorites,
@@ -76,12 +77,6 @@ export function isRecentEmoteInFavorites({
   });
 }
 
-export function getRecentEmoteIds(emotes) {
-  return normalizeRecentEmotes(emotes)
-    .map(getRecentEmoteId)
-    .filter(Boolean);
-}
-
 function normalizeMaxCount(value) {
   const count = Number(value);
 
@@ -89,5 +84,8 @@ function normalizeMaxCount(value) {
     return DEFAULT_MAX_RECENT_EMOTE_COUNT;
   }
 
-  return Math.max(0, Math.floor(count));
+  return Math.min(
+		MAX_RECENT_EMOTE_COUNT,
+		Math.max(0, Math.floor(count))
+	);
 }

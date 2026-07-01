@@ -7,7 +7,6 @@ export const SHORTCUT_ACTION_SELECT_EMOTE = 'selectEmote';
 export const SHORTCUT_TARGET_TYPE_INDEX = 'index';
 export const SHORTCUT_TARGET_TYPE_EMOJI_ID = 'emojiId';
 
-
 const SHORTCUT_PHASE_DOWN = 'down';
 const SHORTCUT_PHASE_UP = 'up';
 
@@ -201,10 +200,7 @@ function normalizeShortcutActionArgs(actionArgs) {
     return null;
   }
 
-  const targetType = normalizeText(
-    actionArgs.targetType ||
-    actionArgs.type
-  );
+  const targetType = getActionTargetType(actionArgs);
 
   if (
     targetType === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
@@ -258,28 +254,6 @@ function normalizeShortcutTrigger(trigger) {
     alt: Boolean(trigger.alt),
     shift: Boolean(trigger.shift),
     meta: Boolean(trigger.meta),
-  };
-}
-
-function createShortcutTrigger({
-  code,
-  ctrl = false,
-  alt = false,
-  shift = false,
-  meta = false,
-}) {
-  const normalizedCode = normalizeShortcutCode(code);
-
-  if (!normalizedCode) {
-    return null;
-  }
-
-  return {
-    code: normalizedCode,
-    ctrl: Boolean(ctrl),
-    alt: Boolean(alt),
-    shift: Boolean(shift),
-    meta: Boolean(meta),
   };
 }
 
@@ -366,4 +340,26 @@ function normalizeIndex(value) {
 
 function normalizeText(value) {
   return String(value ?? '').trim();
+}
+
+function getActionTargetType(actionArgs) {
+  const targetType = normalizeText(actionArgs?.targetType);
+
+  if (
+    targetType === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
+    targetType === SHORTCUT_TARGET_TYPE_INDEX
+  ) {
+    return targetType;
+  }
+
+  const type = normalizeText(actionArgs?.type);
+
+  if (
+    type === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
+    type === SHORTCUT_TARGET_TYPE_INDEX
+  ) {
+    return type;
+  }
+
+  return '';
 }

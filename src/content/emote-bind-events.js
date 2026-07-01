@@ -188,6 +188,10 @@ function handleKeyListeningKeyDown(event) {
   const shortcutCode = getShortcutCodeFromKeyboardEvent(event);
 
   if (!shortcutCode) {
+    if (!isModifierOnlyCode(event.code)) {
+      blockEvent(event);
+    }
+
     return;
   }
 
@@ -286,11 +290,12 @@ function handleBindModeChanged() {
 
 function startBindBoundaryObserver() {
   if (observer) return;
+  if (!document.body) return;
 
   observer = new MutationObserver(() => {
-		if (!isEmoteBindInteractionModeActive()) {
-			return;
-		}
+    if (!isEmoteBindInteractionModeActive()) {
+      return;
+    }
 
     scheduleBindBoundaryCheck({
       resetSignatureIfEmpty: false,

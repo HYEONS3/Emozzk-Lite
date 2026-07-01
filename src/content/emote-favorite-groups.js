@@ -86,9 +86,16 @@ export function mergeReorderedFavoriteSubset({
     return normalizedFavorites;
   }
 
-  const itemById = new Map(
-    normalizedFavorites.map((item) => [getRecentEmoteId(item), item])
-  );
+	const itemById = new Map();
+
+	normalizedFavorites.forEach((item) => {
+		const emojiId = getRecentEmoteId(item);
+
+		if (!emojiId) return;
+		if (itemById.has(emojiId)) return;
+
+		itemById.set(emojiId, item);
+	});
 
   const subsetSet = new Set(normalizedSubsetIds);
   const reorderedSubsetSet = new Set(normalizedReorderedIds);

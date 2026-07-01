@@ -35,12 +35,15 @@ export function startRecentEmoteStorageLimitBridge() {
     handleFavoritesChanged
   );
 
-  chrome.runtime.onMessage.addListener(handleRuntimeMessage);
   chrome.storage.onChanged.addListener(handleStorageChanged);
 }
 
 export function getCachedRecentStorageLimit() {
   return cachedRecentStorageLimit;
+}
+
+export function syncRecentStorageLimitBridgeState() {
+  postRecentStorageLimitToPage(cachedRecentStorageLimit);
 }
 
 function injectPageScript() {
@@ -74,8 +77,12 @@ async function syncRecentStorageLimitFromSettings() {
   const settings = await readExtensionSettings();
   const limit = normalizeRecentStorageLimit(settings?.recentStorageLimit);
 
-  setCachedRecentStorageLimit(limit);
-  postRecentStorageLimitToPage(limit);
+  if (setCachedRecentStorageLimit(limit)) {
+    postRecentStorageLimitToPage(limit);
+    return;
+  }
+
+  postRecentStorageLimitToPage(cachedRecentStorageLimit);
 }
 
 async function readExtensionSettings() {
@@ -87,17 +94,6 @@ async function readExtensionSettings() {
     console.error('[Emozzk Lite] failed to read extension settings:', error);
     return {};
   }
-}
-
-function handleRuntimeMessage(message) {
-  if (message?.type !== RECENT_STORAGE_LIMIT_MESSAGE) {
-    return;
-  }
-
-  const limit = normalizeRecentStorageLimit(message.limit);
-
-  setCachedRecentStorageLimit(limit);
-  postRecentStorageLimitToPage(limit);
 }
 
 function handleStorageChanged(changes, areaName) {
@@ -115,20 +111,35 @@ function handleStorageChanged(changes, areaName) {
     change.newValue?.recentStorageLimit
   );
 
-  setCachedRecentStorageLimit(limit);
+  if (!setCachedRecentStorageLimit(limit)) {
+    return;
+  }
+
   postRecentStorageLimitToPage(limit);
 }
 
+function handleFavoritesChanged() {
+  postRecentStorageLimitToPage(cachedRecentStorageLimit);
+}
+
 function setCachedRecentStorageLimit(limit) {
-  cachedRecentStorageLimit = normalizeRecentStorageLimit(limit);
+  const normalizedLimit = normalizeRecentStorageLimit(limit);
+
+  if (cachedRecentStorageLimit === normalizedLimit) {
+    return false;
+  }
+
+  cachedRecentStorageLimit = normalizedLimit;
+  return true;
 }
 
 function postRecentStorageLimitToPage(limit) {
   window.postMessage({
+    source: 'emzk-lite',
     type: RECENT_STORAGE_LIMIT_MESSAGE,
     limit: normalizeRecentStorageLimit(limit),
     favoriteIds: getFavoriteRecentEmoteIds(),
-  }, '*');
+  }, window.location.origin);
 }
 
 function normalizeRecentStorageLimit(value) {
@@ -142,12 +153,4 @@ function normalizeRecentStorageLimit(value) {
     MAX_RECENT_STORAGE_LIMIT,
     Math.max(MIN_RECENT_STORAGE_LIMIT, Math.round(number))
   );
-}
-
-export function syncRecentStorageLimitBridgeState() {
-  postRecentStorageLimitToPage(cachedRecentStorageLimit);
-}
-
-function handleFavoritesChanged() {
-  postRecentStorageLimitToPage(cachedRecentStorageLimit);
 }

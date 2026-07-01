@@ -31,7 +31,12 @@ import {
 import {
   getRecentEmoteStorageKey,
   readRecentEmotes,
+  writeRecentEmotes,
 } from './recent-emote-storage.js';
+
+import {
+  mergeFavoriteAndRecentEmotes,
+} from './favorite-recent-merge.js';
 
 import {
   initFavoriteRecentEmoteStorage,
@@ -44,17 +49,20 @@ import {
 } from './shortcut-storage.js';
 
 import {
+  EXTENSION_SETTINGS_CHANGED_EVENT,
+  getCachedExtensionSettings,
   initExtensionSettingsStorage,
-  startExtensionSettingsStorageSync,
 } from './extension-settings-storage.js';
+
+import {
+  refreshEmoteBindModeStateForSettings,
+} from './emote-bind-mode-state.js';
 
 const DEBUG = false;
 
 startContentScript();
 
 function startContentScript() {
-  console.log('[Emozzk Lite] content script loaded');
-
   /*
    * page context inject는 최대한 빨리 넣는다.
    * CHZZK가 livechat-emoticon#... 을 저장하기 전에
@@ -64,23 +72,25 @@ function startContentScript() {
 
   startBadgeOverlay();
 
-  attachEmoteFavoriteEvents();
-  attachEmoteClickFocusRestore();
-  attachEmoteBindEvents();
+	attachEmoteFavoriteEvents();
+	attachEmoteClickFocusRestore();
+	attachEmoteBindEvents();
+	attachExtensionSettingsChangedHandler();
 
-  initializeStorages()
-    .finally(() => {
-      syncRecentStorageLimitBridgeState();
+	initializeStorages()
+		.finally(() => {
+			syncRecentLocalStorageWithFavoriteCache();
+			syncRecentStorageLimitBridgeState();
 
-      setShortcutBindings(getCachedShortcutBindings());
-      attachShortcutController();
+			setShortcutBindings(getCachedShortcutBindings());
+			attachShortcutController();
 
-      startFavoriteEmoteSectionRenderer();
+			startFavoriteEmoteSectionRenderer();
 
-      if (DEBUG) {
-        logStorageSnapshot();
-      }
-    });
+			if (DEBUG) {
+				logStorageSnapshot();
+			}
+		});
 }
 
 async function initializeStorages() {
@@ -89,8 +99,6 @@ async function initializeStorages() {
     initFavoriteRecentEmoteStorage(),
     initShortcutBindingsStorage(),
   ]);
-
-  startExtensionSettingsStorageSync();
 
   const [
     extensionSettingsStorageResult,
@@ -179,4 +187,34 @@ function logShortcutBindingsStorageSnapshot() {
       error
     );
   }
+}
+
+function attachExtensionSettingsChangedHandler() {
+  window.addEventListener(
+    EXTENSION_SETTINGS_CHANGED_EVENT,
+    handleExtensionSettingsChanged
+  );
+}
+
+function handleExtensionSettingsChanged() {
+  refreshEmoteBindModeStateForSettings();
+}
+
+function syncRecentLocalStorageWithFavoriteCache() {
+  const favorites = getCachedFavoriteRecentEmotes();
+
+  if (!favorites.length) {
+    return;
+  }
+
+  const recent = readRecentEmotes();
+  const settings = getCachedExtensionSettings();
+
+  const merged = mergeFavoriteAndRecentEmotes({
+    favorites,
+    recent,
+    maxRecentEmoteCount: settings.recentStorageLimit,
+  });
+
+  writeRecentEmotes(merged);
 }

@@ -1,3 +1,8 @@
+import {
+  getAssignableEmoteButtons,
+  getEmoteIdFromButton,
+} from './emote-buttons.js';
+
 const BADGE_CLASS = 'emzk-lite-badge';
 const BADGE_SHORTCUT_CLASS = 'emzk-lite-badge-shortcut';
 const BADGE_UNLINK_CLASS = 'emzk-lite-badge-unlink';
@@ -122,9 +127,9 @@ function getBadgeTargetsFromAssignments({
   const usedEmojiIds = new Set();
 
   buttons.forEach((button) => {
-    const emojiId = getEmojiIdFromButton(button);
-
-    if (!emojiId) return;
+    const emojiId = getEmoteIdFromButton(button);
+    
+		if (!emojiId) return;
     if (usedEmojiIds.has(emojiId)) return;
 
     const assignment = assignmentMap.get(emojiId);
@@ -197,35 +202,7 @@ function createAssignmentMap(assignments) {
 }
 
 function getAssignableBadgeButtons(panel) {
-  if (!panel) return [];
-
-  return Array.from(
-    panel.querySelectorAll('button[type="button"]')
-  ).filter((button) => {
-    return (
-      button instanceof HTMLElement &&
-      button.isConnected &&
-      Boolean(getEmojiIdFromButton(button))
-    );
-  });
-}
-
-function getEmojiIdFromButton(button) {
-  const alt = getEmoteAltFromButton(button);
-
-  return getEmojiIdFromAlt(alt);
-}
-
-function getEmoteAltFromButton(button) {
-  const image = button?.querySelector?.('img');
-
-  return image?.getAttribute('alt') ?? '';
-}
-
-function getEmojiIdFromAlt(alt) {
-  const match = String(alt ?? '').match(/^\{:([^:]+):\}$/);
-
-  return match?.[1] ?? '';
+  return getAssignableEmoteButtons(panel);
 }
 
 function removeStaleBadges(targetButtonSet) {

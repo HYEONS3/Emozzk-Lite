@@ -1,6 +1,9 @@
+const MODAL_PANEL_SELECTOR =
+  '[role="alertdialog"][aria-modal="true"], [role="dialog"][aria-modal="true"]';
+	
 export function findEmotePanel() {
   const candidates = Array.from(
-    document.querySelectorAll('[role="alertdialog"][aria-modal="true"], [role="dialog"][aria-modal="true"]')
+    document.querySelectorAll(MODAL_PANEL_SELECTOR)
   ).filter(isVisibleElement);
 
   return candidates.find(isRealEmotePanel) ?? null;

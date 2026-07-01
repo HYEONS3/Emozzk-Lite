@@ -5,31 +5,12 @@ export function isTypingTarget(target = document.activeElement) {
 
   return Boolean(
     isEditableElement(element) ||
-    element.closest?.('[contenteditable="true"]') ||
-    element.closest?.('[contenteditable="plaintext-only"]') ||
+    element.closest?.('[contenteditable]') ||
     element.closest?.('[role="textbox"]') ||
     element.closest?.('input, textarea, select')
   );
 }
 
-export function shouldIgnoreShortcut(event) {
-  if (!event) return true;
-  if (event.defaultPrevented) return true;
-  if (hasBlockingModifier(event)) return true;
-
-  return (
-    isTypingTarget(event.target) ||
-    isTypingTarget(document.activeElement)
-  );
-}
-
-function hasBlockingModifier(event) {
-  return (
-    event.ctrlKey ||
-    event.altKey ||
-    event.metaKey
-  );
-}
 
 function isEditableElement(element) {
   if (!(element instanceof HTMLElement)) {

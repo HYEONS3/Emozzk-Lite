@@ -60,24 +60,36 @@ export function startShortcutBindingsStorageSync() {
     return;
   }
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== 'local') {
-      return;
-    }
 
-    const change = changes[SHORTCUT_BINDINGS_STORAGE_KEY];
+	chrome.storage.onChanged.addListener((changes, areaName) => {
+		if (areaName !== 'local') {
+			return;
+		}
 
-    if (!change) {
-      return;
-    }
+		const change = changes[SHORTCUT_BINDINGS_STORAGE_KEY];
 
-    cachedShortcutBindingSetState = normalizeShortcutBindingSetState({
-      storedValue: change.newValue,
-      hasStoredValue: Boolean(change.newValue),
-    });
+		if (!change) {
+			return;
+		}
 
-    dispatchShortcutBindingsChanged();
-  });
+		const nextState = normalizeShortcutBindingSetState({
+			storedValue: change.newValue,
+			hasStoredValue: Boolean(change.newValue),
+		});
+
+		if (isSameShortcutBindingSetState(
+			cachedShortcutBindingSetState,
+			nextState
+		)) {
+			return;
+		}
+
+		cachedShortcutBindingSetState = nextState;
+
+		dispatchShortcutBindingsChanged();
+	});
+
+
 }
 
 export function getCachedShortcutBindings() {
@@ -292,50 +304,26 @@ export async function clearShortcutBindingsByEmojiId({
   return setShortcutBindings(nextBindings);
 }
 
-
-export async function clearShortcutBindingsByEmojiIdFromAllSets({
-  emojiId,
+export async function clearShortcutBindingsByEmojiIds({
+  emojiIds,
 }) {
-  const normalizedEmojiId = normalizeEmojiId(emojiId);
+  const targetEmojiIds = new Set(
+    Array.isArray(emojiIds)
+      ? emojiIds.map(normalizeEmojiId).filter(Boolean)
+      : []
+  );
 
-  if (!normalizedEmojiId) {
+  if (!targetEmojiIds.size) {
     return getCachedShortcutBindings();
   }
 
-  let changed = false;
+  const baseBindings = getEditableShortcutBindings(getCachedShortcutBindings());
 
-  const nextSets = normalizeShortcutBindingSets(
-    cachedShortcutBindingSetState.sets
-  ).map((set) => {
-    const baseBindings = getEditableShortcutBindings(set.bindings);
-    const nextBindings = baseBindings.filter((binding) => {
-      return getBindingEmojiId(binding) !== normalizedEmojiId;
-    });
-
-    if (nextBindings.length !== baseBindings.length) {
-      changed = true;
-    }
-
-    return {
-      ...set,
-      bindings: nextBindings,
-    };
+  const nextBindings = baseBindings.filter((binding) => {
+    return !targetEmojiIds.has(getBindingEmojiId(binding));
   });
 
-  if (!changed) {
-    return getCachedShortcutBindings();
-  }
-
-  cachedShortcutBindingSetState = normalizeShortcutBindingSetStateValue({
-    ...cachedShortcutBindingSetState,
-    sets: nextSets,
-  });
-
-  await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
-
-  dispatchShortcutBindingsChanged();
-
-  return getCachedShortcutBindings();
+  return setShortcutBindings(nextBindings);
 }
 
 export function createShortcutBindingSetId(index) {
@@ -726,8 +714,7 @@ function createShortcutBindingId({
 }
 
 /*
- * 사용자 편집 시점에는 현재 화면에 적용 중인 binding 전체를 기준으로 처리한다.
- * source가 default인 binding도 unbind/replace 대상이 될 수 있어야 한다.
+ * 사용자 편집 시점에는 현재 세트의 binding 전체를 기준으로 처리한다.
  * 저장 시에는 user binding만 남기되, 빈 배열도 명시적 사용자 설정으로 저장한다.
  */
 function getEditableShortcutBindings(bindings) {
@@ -1051,8 +1038,6 @@ export async function renameShortcutBindingSet({
 	dispatchShortcutBindingsChanged();
 
 	return getCachedShortcutBindingSetState();
-
-  return getCachedShortcutBindingSetState();
 }
 
 function isSameShortcutBindingSetState(a, b) {

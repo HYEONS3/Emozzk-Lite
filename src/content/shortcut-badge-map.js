@@ -434,10 +434,11 @@ function getActionArgs(actionConfig) {
 }
 
 function getDirectEmojiIdFromActionArgs(actionArgs) {
+  const targetType = getActionTargetType(actionArgs);
+
   if (
-    actionArgs.targetType === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
-    actionArgs.type === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
-    (!actionArgs.targetType && !actionArgs.type && 'emojiId' in actionArgs)
+    targetType === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
+    (!targetType && 'emojiId' in actionArgs)
   ) {
     return normalizeEmojiId(actionArgs.emojiId);
   }
@@ -449,10 +450,11 @@ function getIndexEmojiIdFromActionArgs({
   actionArgs,
   buttons,
 }) {
+  const targetType = getActionTargetType(actionArgs);
+
   if (
-    actionArgs.targetType !== SHORTCUT_TARGET_TYPE_INDEX &&
-    actionArgs.type !== SHORTCUT_TARGET_TYPE_INDEX &&
-    !(!actionArgs.targetType && !actionArgs.type && 'index' in actionArgs)
+    targetType !== SHORTCUT_TARGET_TYPE_INDEX &&
+    !(!targetType && 'index' in actionArgs)
   ) {
     return '';
   }
@@ -540,4 +542,26 @@ function normalizeIndex(value) {
   if (number < 0) return -1;
 
   return number;
+}
+
+function getActionTargetType(actionArgs) {
+  const targetType = String(actionArgs?.targetType ?? '').trim();
+
+  if (
+    targetType === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
+    targetType === SHORTCUT_TARGET_TYPE_INDEX
+  ) {
+    return targetType;
+  }
+
+  const type = String(actionArgs?.type ?? '').trim();
+
+  if (
+    type === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
+    type === SHORTCUT_TARGET_TYPE_INDEX
+  ) {
+    return type;
+  }
+
+  return '';
 }

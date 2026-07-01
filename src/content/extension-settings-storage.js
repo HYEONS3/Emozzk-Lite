@@ -1,9 +1,14 @@
 export const EXTENSION_SETTINGS_STORAGE_KEY = 'emzk_lite_extension_settings_v1';
 export const EXTENSION_SETTINGS_CHANGED_EVENT = 'emzk-lite-extension-settings-changed';
 
+const DEFAULT_RECENT_STORAGE_LIMIT = 60;
+const MIN_RECENT_STORAGE_LIMIT = 50;
+const MAX_RECENT_STORAGE_LIMIT = 200;
+
 const DEFAULT_EXTENSION_SETTINGS = {
   experimentalKeyupEnabled: false,
   experimentalBothPhaseEnabled: false,
+  recentStorageLimit: DEFAULT_RECENT_STORAGE_LIMIT,
 };
 
 let cachedExtensionSettings = {
@@ -15,6 +20,7 @@ let storageSyncStarted = false;
 export async function initExtensionSettingsStorage() {
   cachedExtensionSettings = await readExtensionSettingsFromStorage();
 
+  startExtensionSettingsStorageSync();
   dispatchExtensionSettingsChanged();
 
   return getCachedExtensionSettings();
@@ -42,9 +48,15 @@ export function startExtensionSettingsStorageSync() {
       return;
     }
 
-    cachedExtensionSettings = normalizeExtensionSettings(change.newValue);
+		const nextSettings = normalizeExtensionSettings(change.newValue);
 
-    dispatchExtensionSettingsChanged();
+		if (isSameExtensionSettings(cachedExtensionSettings, nextSettings)) {
+			return;
+		}
+
+		cachedExtensionSettings = nextSettings;
+
+		dispatchExtensionSettingsChanged();
   });
 }
 
@@ -55,10 +67,16 @@ export function getCachedExtensionSettings() {
 }
 
 export async function setExtensionSettings(nextSettings = {}) {
-  cachedExtensionSettings = normalizeExtensionSettings({
+  const normalizedSettings = normalizeExtensionSettings({
     ...cachedExtensionSettings,
     ...nextSettings,
   });
+
+  if (isSameExtensionSettings(cachedExtensionSettings, normalizedSettings)) {
+    return getCachedExtensionSettings();
+  }
+
+  cachedExtensionSettings = normalizedSettings;
 
   await writeExtensionSettingsToStorage(cachedExtensionSettings);
 
@@ -142,7 +160,23 @@ function normalizeExtensionSettings(settings) {
       experimentalKeyupEnabled &&
       settings?.experimentalBothPhaseEnabled
     ),
+    recentStorageLimit: normalizeRecentStorageLimit(
+      settings?.recentStorageLimit
+    ),
   };
+}
+
+function normalizeRecentStorageLimit(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return DEFAULT_RECENT_STORAGE_LIMIT;
+  }
+
+  return Math.min(
+    MAX_RECENT_STORAGE_LIMIT,
+    Math.max(MIN_RECENT_STORAGE_LIMIT, Math.round(number))
+  );
 }
 
 function dispatchExtensionSettingsChanged() {
@@ -159,5 +193,19 @@ function isChromeStorageAvailable() {
   return Boolean(
     globalThis.chrome?.storage?.local?.get &&
     globalThis.chrome?.storage?.local?.set
+  );
+}
+
+function isSameExtensionSettings(left, right) {
+  const normalizedLeft = normalizeExtensionSettings(left);
+  const normalizedRight = normalizeExtensionSettings(right);
+
+  return (
+    normalizedLeft.experimentalKeyupEnabled ===
+      normalizedRight.experimentalKeyupEnabled &&
+    normalizedLeft.experimentalBothPhaseEnabled ===
+      normalizedRight.experimentalBothPhaseEnabled &&
+    normalizedLeft.recentStorageLimit ===
+      normalizedRight.recentStorageLimit
   );
 }

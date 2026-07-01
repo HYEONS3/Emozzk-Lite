@@ -12,9 +12,6 @@ const DEFAULT_SHORTCUT_SET_COUNT = 2;
 const SHORTCUT_BINDING_SETS_VERSION = 4;
 const SHORTCUT_BINDING_SET_OFF = 'off';
 
-const RECENT_STORAGE_LIMIT_CHANGED_MESSAGE =
-  'EMZK_LITE_RECENT_STORAGE_LIMIT_CHANGED';
-
 const DEFAULT_SETTINGS = {
   experimentalKeyupEnabled: false,
   experimentalBothPhaseEnabled: false,
@@ -27,8 +24,8 @@ const shortcutSetCountRange = document.getElementById('shortcutSetCountRange');
 const shortcutSetCountValue = document.getElementById('shortcutSetCountValue');
 const recentStorageLimitRange = document.getElementById('recentStorageLimitRange');
 const recentStorageLimitValue = document.getElementById('recentStorageLimitValue');
-const reloadButton = document.getElementById('reloadButton');
 const statusText = document.getElementById('statusText');
+const versionText = document.querySelector('.popup-version');
 
 let currentSettings = normalizeSettings(DEFAULT_SETTINGS);
 let currentShortcutSetState = createDefaultShortcutBindingSetState();
@@ -36,6 +33,8 @@ let currentShortcutSetState = createDefaultShortcutBindingSetState();
 initPopup();
 
 async function initPopup() {
+  renderPopupVersion();
+
   const [
     settings,
     shortcutSetState,
@@ -58,8 +57,6 @@ async function initPopup() {
 
   recentStorageLimitRange.addEventListener('input', handleRecentLimitInput);
   recentStorageLimitRange.addEventListener('change', handleSettingsChange);
-
-  reloadButton.addEventListener('click', reloadCurrentChzzkTab);
 }
 
 function handleShortcutSetCountInput() {
@@ -67,24 +64,31 @@ function handleShortcutSetCountInput() {
 }
 
 async function handleShortcutSetCountChange() {
-  const currentState = await readShortcutBindingSetState();
-  const setCount = normalizeShortcutSetCount(shortcutSetCountRange.value);
+  try {
+    const currentState = await readShortcutBindingSetState();
+    const setCount = normalizeShortcutSetCount(shortcutSetCountRange.value);
 
-  const nextState = normalizeShortcutBindingSetState({
-    ...currentState,
-    setCount,
-    activeSetId: normalizeActiveSetIdForSetCount({
-      activeSetId: currentState.activeSetId,
+    const nextState = normalizeShortcutBindingSetState({
+      ...currentState,
       setCount,
-    }),
-  });
+      activeSetId: normalizeActiveSetIdForSetCount({
+        activeSetId: currentState.activeSetId,
+        setCount,
+      }),
+    });
 
-  await writeShortcutBindingSetState(nextState);
+    await writeShortcutBindingSetState(nextState);
 
-  currentShortcutSetState = nextState;
+    currentShortcutSetState = nextState;
 
-  applyShortcutSetStateToControls(nextState);
-  setStatus('저장됨. 열린 이모티콘 패널에 즉시 반영됩니다.');
+    applyShortcutSetStateToControls(nextState);
+    setStatus('저장됨. 열린 이모티콘 패널에 즉시 반영됩니다.');
+  } catch (error) {
+    console.debug('[Emozzk Lite] failed to save shortcut set count:', error);
+
+    applyShortcutSetStateToControls(currentShortcutSetState);
+    setStatus('저장에 실패했습니다.');
+  }
 }
 
 function handleRecentLimitInput() {
@@ -105,9 +109,7 @@ async function handleSettingsChange() {
   currentSettings = nextSettings;
 
   if (recentStorageLimitChanged) {
-    await notifyRecentStorageLimitChanged(nextSettings.recentStorageLimit);
-
-    setStatus('저장됨. 현재 치지직 탭을 새로고침하면 반영됩니다.');
+    setStatus('저장됨. 새 이모티콘 사용 또는 페이지 새로고침 후 반영됩니다.');
     return;
   }
 
@@ -238,8 +240,10 @@ function normalizeShortcutBindingSet(set) {
 
   return {
     id: setId,
-    label: normalizeShortcutBindingSetLabel(set?.label) ||
-      String(getShortcutBindingSetIndex(setId)),
+    label: normalizeShortcutBindingSetLabel({
+      setId,
+      label: set?.label,
+    }),
     bindings: Array.isArray(set?.bindings)
       ? set.bindings
       : [],
@@ -258,8 +262,22 @@ function normalizeShortcutBindingSetId(setId) {
   return createShortcutBindingSetId(index);
 }
 
-function normalizeShortcutBindingSetLabel(label) {
-  return String(label ?? '').trim();
+function normalizeShortcutBindingSetLabel({
+  setId,
+  label,
+}) {
+  const normalizedLabel = String(label ?? '').trim();
+  const defaultLabel = String(getShortcutBindingSetIndex(setId) || '');
+
+  if (!normalizedLabel) {
+    return '';
+  }
+
+  if (normalizedLabel === defaultLabel) {
+    return '';
+  }
+
+  return normalizedLabel;
 }
 
 function normalizeActiveSetIdForSetCount({
@@ -339,11 +357,15 @@ function normalizeRecentStorageLimit(value) {
 function updateShortcutSetCountLabel(value) {
   shortcutSetCountValue.textContent =
     `${normalizeShortcutSetCount(value)}개`;
+
+  updateRangeProgress(shortcutSetCountRange);
 }
 
 function updateRecentStorageLimitLabel(value) {
   recentStorageLimitValue.textContent =
     `${normalizeRecentStorageLimit(value)}개`;
+
+  updateRangeProgress(recentStorageLimitRange);
 }
 
 function clampNumber(value, min, max) {
@@ -353,58 +375,6 @@ function clampNumber(value, min, max) {
   );
 }
 
-async function notifyRecentStorageLimitChanged(limit) {
-  const normalizedLimit = normalizeRecentStorageLimit(limit);
-
-  try {
-    const tabs = await chrome.tabs.query({
-      url: [
-        'https://chzzk.naver.com/*',
-        'https://*.chzzk.naver.com/*',
-      ],
-    });
-
-    await Promise.allSettled(
-      tabs.map((tab) => {
-        if (!tab?.id) {
-          return Promise.resolve();
-        }
-
-        return chrome.tabs.sendMessage(tab.id, {
-          type: RECENT_STORAGE_LIMIT_CHANGED_MESSAGE,
-          limit: normalizedLimit,
-        });
-      })
-    );
-  } catch (error) {
-    console.debug('[Emozzk Lite] failed to notify recent storage limit:', error);
-  }
-}
-
-async function reloadCurrentChzzkTab() {
-  const [tab] = await chrome.tabs.query({
-    active: true,
-    currentWindow: true,
-  });
-
-  if (!tab?.id) {
-    setStatus('현재 탭을 찾을 수 없습니다.');
-    return;
-  }
-
-  if (!isChzzkUrl(tab.url)) {
-    setStatus('치지직 탭에서만 새로고침할 수 있습니다.');
-    return;
-  }
-
-  await chrome.tabs.reload(tab.id);
-
-  setStatus('새로고침했습니다.');
-}
-
-function isChzzkUrl(url) {
-  return /^https:\/\/chzzk\.naver\.com\//.test(String(url || ''));
-}
 
 function setStatus(message) {
   statusText.textContent = message;
@@ -414,4 +384,35 @@ function setStatus(message) {
       statusText.textContent = '';
     }
   }, 2200);
+}
+
+function renderPopupVersion() {
+  if (!versionText) return;
+
+  try {
+    const version = chrome.runtime.getManifest?.().version;
+
+    versionText.textContent = version
+      ? `v${version}`
+      : '';
+  } catch {
+    versionText.textContent = '';
+  }
+}
+
+function updateRangeProgress(range) {
+  if (!(range instanceof HTMLInputElement)) return;
+
+  const min = Number(range.min || 0);
+  const max = Number(range.max || 100);
+  const value = Number(range.value || min);
+
+  const progress = max > min
+    ? ((value - min) / (max - min)) * 100
+    : 0;
+
+  range.style.setProperty(
+    '--popup-range-progress',
+    `${clampNumber(progress, 0, 100)}%`
+  );
 }

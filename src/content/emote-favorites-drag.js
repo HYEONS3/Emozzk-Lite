@@ -611,24 +611,6 @@ function getBeforeElementForInsertAfter({
   });
 }
 
-function getDraggableItemsForOrdering({
-  list,
-  placeholder,
-  draggedItem,
-  group,
-}) {
-  return Array.from(list.querySelectorAll(':scope > li'))
-    .filter((item) => {
-      return (
-        item instanceof HTMLElement &&
-        item !== placeholder &&
-        item !== draggedItem &&
-        isElementVisibleForOrdering(item) &&
-        isDraggableFavoriteItem(item) &&
-        (!group || getFavoriteGroupFromItem(item) === group)
-      );
-    });
-}
 
 function movePlaceholder({
   list,
@@ -1286,6 +1268,14 @@ function ensureBindModeListener() {
 
 function suppressClickAfterDrag(event) {
   if (Date.now() > suppressClickUntil) return;
+
+  const target = event.target;
+
+  if (!(target instanceof Element)) return;
+
+  if (!target.closest(FAVORITES_SECTION_SELECTOR)) {
+    return;
+  }
 
   event.preventDefault();
   event.stopPropagation();

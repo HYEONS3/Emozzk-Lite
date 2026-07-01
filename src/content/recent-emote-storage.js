@@ -78,7 +78,7 @@ export function writeRecentEmotesByKey(key, emotes) {
     const normalized = normalizeRecentEmotes(emotes);
     const serialized = JSON.stringify(normalized);
 
-    safeSetLocalStorageItem(key, serialized);
+    setLocalStorageItem(key, serialized);
 
     return true;
   } catch (error) {
@@ -152,7 +152,7 @@ export function getRecentEmoteId(emote) {
 }
 
 export function getRecentEmoteIdFromAlt(alt) {
-  const match = String(alt ?? '').match(/^\{:([^:]+):\}$/);
+  const match = String(alt ?? '').trim().match(/^\{:([^:]+):\}$/);
 
   return normalizeRecentEmoteId(match?.[1] ?? '');
 }
@@ -228,7 +228,7 @@ function safeGetLocalStorageItem(key) {
   }
 }
 
-function safeSetLocalStorageItem(key, value) {
+function setLocalStorageItem(key, value) {
   window.localStorage.setItem(key, value);
 }
 

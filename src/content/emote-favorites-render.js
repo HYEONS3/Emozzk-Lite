@@ -63,7 +63,7 @@ import {
 
 import {
   assignShortcutBindingTarget,
-  clearShortcutBindingsByEmojiId,
+  clearShortcutBindingsByEmojiIds ,
   getCachedShortcutBindings,
   createShortcutBindingSetId,
   getCachedActiveShortcutBindingSetId,
@@ -439,10 +439,15 @@ function handleShortcutBindingsChanged() {
   const bindState = getEmoteBindModeState();
 
   if (
-    isShortcutBindingOff() &&
+    bindState.mode === EMOTE_BIND_MODE_ASSIGN ||
+    bindState.mode === EMOTE_BIND_MODE_CLEAR ||
     bindState.mode === EMOTE_BIND_MODE_RENAME
   ) {
-    cancelShortcutSetRenameMode();
+    exitEmoteBindMode();
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+
     return;
   }
 
@@ -1484,7 +1489,7 @@ async function switchShortcutSet(setId) {
     return;
   }
 
-  exitShortcutSetRenameModeSilently();
+  exitEmoteBindMode();
 
   await setActiveShortcutBindingSet(normalizedSetId);
 
@@ -1920,34 +1925,16 @@ function createAssignSaveButton(bindState) {
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
 
-		const currentState = getEmoteBindModeState();
+    const currentState = getEmoteBindModeState();
 
-		if (
-			!canSaveAssignState(currentState) ||
-			isEmoteBindSaving()
-		) {
-			return;
-		}
-
-		void saveAssignState(currentState)
-      .catch((error) => {
-        console.error('[Emozzk Lite] failed to save shortcut binding:', error);
-      });
-  });
-
-  button.addEventListener('keydown', (event) => {
     if (
-      event.code !== 'Enter' &&
-      event.code !== 'Space'
+      !canSaveAssignState(currentState) ||
+      isEmoteBindSaving()
     ) {
       return;
     }
 
-    stopControlEvent(event);
-
-    if (!canSave || isSaving) return;
-
-    void saveAssignState(bindState)
+    void saveAssignState(currentState)
       .catch((error) => {
         console.error('[Emozzk Lite] failed to save shortcut binding:', error);
       });
@@ -1987,34 +1974,16 @@ function createClearSaveButton(bindState) {
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
 
-		const currentState = getEmoteBindModeState();
+    const currentState = getEmoteBindModeState();
 
-		if (
-			!canSaveAssignState(currentState) ||
-			isEmoteBindSaving()
-		) {
-			return;
-		}
-
-		void saveAssignState(currentState)
-      .catch((error) => {
-        console.error('[Emozzk Lite] failed to clear shortcut bindings:', error);
-      });
-  });
-
-  button.addEventListener('keydown', (event) => {
     if (
-      event.code !== 'Enter' &&
-      event.code !== 'Space'
+      !canSaveClearState(currentState) ||
+      isEmoteBindSaving()
     ) {
       return;
     }
 
-    stopControlEvent(event);
-
-    if (!canSave || isSaving) return;
-
-    void saveClearState(bindState)
+    void saveClearState(currentState)
       .catch((error) => {
         console.error('[Emozzk Lite] failed to clear shortcut bindings:', error);
       });
@@ -2181,11 +2150,9 @@ async function saveClearState(bindState) {
   scheduleBadgeUpdate();
 
   try {
-    for (const emojiId of emojiIds) {
-      await clearShortcutBindingsByEmojiId({
-        emojiId,
-      });
-    }
+    await clearShortcutBindingsByEmojiIds({
+			emojiIds,
+		});
 
     exitEmoteBindMode();
 
@@ -2697,7 +2664,7 @@ function startFavoriteSectionMutationObserver() {
 
     if (!hasRelevantMutation) return;
 
-    renderFavoriteEmoteSection();
+    scheduleFavoriteEmoteSectionRender();
   });
 
   observer.observe(document.body, {
@@ -2809,9 +2776,8 @@ function hasRelevantNodes(nodes) {
 
     return (
       isInsideEmotePanel(node) ||
-      Boolean(node.querySelector?.('#emoji_area')) ||
-      Boolean(node.querySelector?.('li[id^="emoji_"]')) ||
-      Boolean(node.querySelector?.('button[type="button"] img[alt^="{:"]'))
+      node.matches?.('#emoji_area') ||
+      Boolean(node.querySelector?.('#emoji_area'))
     );
   });
 }

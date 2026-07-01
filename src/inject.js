@@ -6,28 +6,39 @@ const RECENT_STORAGE_LIMIT_MESSAGE =
 const DEFAULT_RECENT_STORAGE_LIMIT = 60;
 const MIN_RECENT_STORAGE_LIMIT = 50;
 const MAX_RECENT_STORAGE_LIMIT = 200;
+const PATCH_FLAG = '__EMZK_LITE_RECENT_EMOTE_STORAGE_PATCHED__';
 
 let recentStorageLimit = DEFAULT_RECENT_STORAGE_LIMIT;
 let favoriteRecentEmoteIds = new Set();
-let patched = false;
+
 
 installRecentEmoteStorageLimitPatch();
 
 function installRecentEmoteStorageLimitPatch() {
-  if (patched) {
+  if (window[PATCH_FLAG]) {
     return;
   }
 
-  if (!window.localStorage?.setItem) {
+  if (
+    typeof Storage === 'undefined' ||
+    !Storage.prototype?.setItem ||
+    !window.localStorage
+  ) {
     return;
   }
 
-  patched = true;
-
-  const originalSetItem = window.localStorage.setItem;
+  const originalSetItem = Storage.prototype.setItem;
 
   window.addEventListener('message', (event) => {
     if (event.source !== window) {
+      return;
+    }
+
+    if (event.origin !== window.location.origin) {
+      return;
+    }
+
+    if (event.data?.source !== 'emzk-lite') {
       return;
     }
 
@@ -41,8 +52,11 @@ function installRecentEmoteStorageLimitPatch() {
     );
   });
 
-  window.localStorage.setItem = function patchedSetItem(key, value) {
-    if (!isRecentEmoteStorageKey(key)) {
+  Storage.prototype.setItem = function patchedSetItem(key, value) {
+    if (
+      this !== window.localStorage ||
+      !isRecentEmoteStorageKey(key)
+    ) {
       return originalSetItem.apply(this, arguments);
     }
 
@@ -74,6 +88,9 @@ function installRecentEmoteStorageLimitPatch() {
       return originalSetItem.apply(this, arguments);
     }
   };
+
+	window[PATCH_FLAG] = true;
+
 }
 
 function isRecentEmoteStorageKey(key) {
