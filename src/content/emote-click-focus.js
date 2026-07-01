@@ -1,5 +1,5 @@
 import {
-  scheduleChatInputNormalizeAfterEmote,
+  scheduleChatInputFocusEnd,
 } from './chat-input.js';
 
 import {
@@ -7,7 +7,8 @@ import {
 } from './emote-buttons.js';
 
 import {
-  isEmoteBindModeActive,
+  isEmoteBindAssignMode,
+  isEmoteBindClearMode,
 } from './emote-bind-mode-state.js';
 
 import {
@@ -27,7 +28,7 @@ export function attachEmoteClickFocusRestore() {
 }
 
 function handleEmoteClick(event) {
-  if (isEmoteBindModeActive()) return;
+  if (isEmoteBindInteractionModeActive()) return;
   if (isFavoriteToggleEvent(event)) return;
 
   const button = getRealEmoteButtonFromEvent(event);
@@ -42,11 +43,14 @@ function handleEmoteClick(event) {
     return;
   }
 
-  /*
-   * CHZZK의 기본 이모티콘 삽입 click handler가 먼저 실행되게 둔다.
-   * 그 직후 선두 filler <br> 정리 + caret 위치 보정.
-   */
-  scheduleChatInputNormalizeAfterEmote();
+  scheduleChatInputFocusEnd();
+}
+
+function isEmoteBindInteractionModeActive() {
+  return (
+    isEmoteBindAssignMode() ||
+    isEmoteBindClearMode()
+  );
 }
 
 function getRealEmoteButtonFromEvent(event) {

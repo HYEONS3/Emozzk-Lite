@@ -16,6 +16,11 @@ import {
   SHORTCUT_PHASE_UP,
 } from './shortcut-storage.js';
 
+import {
+  getShortcutCodeLabel,
+  normalizeStoredShortcutCode,
+} from './shortcut-key-code.js';
+
 export function getShortcutBadgeAssignments(panel) {
   const bindings = getCachedShortcutBindings();
 
@@ -62,18 +67,19 @@ export function getShortcutBadgeLabel({
 }) {
   const normalizedCode = normalizeCode(code);
   const normalizedPhase = normalizePhase(phase);
+  const codeLabel = getShortcutCodeLabel(normalizedCode);
 
-  if (!normalizedCode) return '';
+  if (!codeLabel) return '';
 
   if (normalizedPhase === SHORTCUT_PHASE_BOTH) {
-    return `${normalizedCode}↓↑`;
+    return `${codeLabel}↓↑`;
   }
 
   if (normalizedPhase === SHORTCUT_PHASE_UP) {
-    return `${normalizedCode}↑`;
+    return `${codeLabel}↑`;
   }
 
-  return `${normalizedCode}↓`;
+  return `${codeLabel}↓`;
 }
 
 export function findShortcutBadgeAssignmentByEmojiId({
@@ -140,16 +146,18 @@ function collectBadgeAssignmentsFromBinding({
   /*
    * 기존/호환 구조:
    * {
-   *   trigger: { code },
+   *   trigger: { code, ctrl, alt, shift, meta },
    *   onDown,
    *   onUp
    * }
    */
+  const legacyCode = getShortcutCodeFromLegacyTrigger(binding?.trigger);
+
   collectBadgeAssignment({
     rawAssignments,
     binding,
     actionConfig: binding?.onDown,
-    code: binding?.trigger?.code,
+    code: legacyCode,
     phase: SHORTCUT_PHASE_DOWN,
     buttons,
   });
@@ -158,7 +166,7 @@ function collectBadgeAssignmentsFromBinding({
     rawAssignments,
     binding,
     actionConfig: binding?.onUp,
-    code: binding?.trigger?.code,
+    code: legacyCode,
     phase: SHORTCUT_PHASE_UP,
     buttons,
   });
@@ -307,22 +315,29 @@ function createGroupedBadgeAssignment(group) {
     ? `${primaryItem.label} +${extraCount}`
     : primaryItem.label;
 
-  return {
-    emojiId: group.emojiId,
-    label,
-    title: getShortcutBadgeTitle(items),
-    code: primaryItem.code,
-    phase: primaryItem.phase,
-    source: primaryItem.source,
-    items,
-  };
+	return {
+		emojiId: group.emojiId,
+		label,
+		title: getShortcutBadgeTitle(items),
+		code: primaryItem.code,
+		phase: primaryItem.phase,
+		source: primaryItem.source,
+		items,
+		detailLabels: getShortcutBadgeDetailLabels(items),
+	};
 }
 
 function getShortcutBadgeTitle(items) {
   return items
     .map((item) => item.label)
     .filter(Boolean)
-    .join(', ');
+    .join('\n');
+}
+
+function getShortcutBadgeDetailLabels(items) {
+  return items
+    .map((item) => item.label)
+    .filter(Boolean);
 }
 
 function mergePhaseItems(items) {
@@ -419,10 +434,11 @@ function getActionArgs(actionConfig) {
 }
 
 function getDirectEmojiIdFromActionArgs(actionArgs) {
+  const targetType = getActionTargetType(actionArgs);
+
   if (
-    actionArgs.targetType === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
-    actionArgs.type === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
-    (!actionArgs.targetType && !actionArgs.type && 'emojiId' in actionArgs)
+    targetType === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
+    (!targetType && 'emojiId' in actionArgs)
   ) {
     return normalizeEmojiId(actionArgs.emojiId);
   }
@@ -434,10 +450,11 @@ function getIndexEmojiIdFromActionArgs({
   actionArgs,
   buttons,
 }) {
+  const targetType = getActionTargetType(actionArgs);
+
   if (
-    actionArgs.targetType !== SHORTCUT_TARGET_TYPE_INDEX &&
-    actionArgs.type !== SHORTCUT_TARGET_TYPE_INDEX &&
-    !(!actionArgs.targetType && !actionArgs.type && 'index' in actionArgs)
+    targetType !== SHORTCUT_TARGET_TYPE_INDEX &&
+    !(!targetType && 'index' in actionArgs)
   ) {
     return '';
   }
@@ -455,6 +472,28 @@ function getIndexEmojiIdFromActionArgs({
   }
 
   return normalizeEmojiId(getEmoteIdFromButton(button));
+}
+
+function getShortcutCodeFromLegacyTrigger(trigger) {
+  if (!trigger || typeof trigger !== 'object') {
+    return '';
+  }
+
+  const code = normalizeCode(trigger.code);
+
+  if (!code) {
+    return '';
+  }
+
+  return normalizeStoredShortcutCode([
+    trigger.ctrl ? 'Ctrl' : '',
+    trigger.alt ? 'Alt' : '',
+    trigger.shift ? 'Shift' : '',
+    trigger.meta ? 'Meta' : '',
+    code,
+  ]
+    .filter(Boolean)
+    .join('+'));
 }
 
 function isSelectEmoteAction(actionConfig) {
@@ -489,7 +528,7 @@ function normalizeStoragePhase(phase) {
 }
 
 function normalizeCode(value) {
-  return String(value ?? '').trim();
+  return normalizeStoredShortcutCode(value);
 }
 
 function normalizeEmojiId(value) {
@@ -503,4 +542,26 @@ function normalizeIndex(value) {
   if (number < 0) return -1;
 
   return number;
+}
+
+function getActionTargetType(actionArgs) {
+  const targetType = String(actionArgs?.targetType ?? '').trim();
+
+  if (
+    targetType === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
+    targetType === SHORTCUT_TARGET_TYPE_INDEX
+  ) {
+    return targetType;
+  }
+
+  const type = String(actionArgs?.type ?? '').trim();
+
+  if (
+    type === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
+    type === SHORTCUT_TARGET_TYPE_INDEX
+  ) {
+    return type;
+  }
+
+  return '';
 }

@@ -1,6 +1,9 @@
+const MODAL_PANEL_SELECTOR =
+  '[role="alertdialog"][aria-modal="true"], [role="dialog"][aria-modal="true"]';
+	
 export function findEmotePanel() {
   const candidates = Array.from(
-    document.querySelectorAll('[role="alertdialog"][aria-modal="true"], [role="dialog"][aria-modal="true"]')
+    document.querySelectorAll(MODAL_PANEL_SELECTOR)
   ).filter(isVisibleElement);
 
   return candidates.find(isRealEmotePanel) ?? null;
@@ -24,16 +27,26 @@ function normalizeText(value) {
 }
 
 function isVisibleElement(element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+
+  if (!element.isConnected) {
+    return false;
+  }
+
   const rect = element.getBoundingClientRect();
+
+  if (
+    rect.width <= 0 ||
+    rect.height <= 0
+  ) {
+    return false;
+  }
+
   const style = window.getComputedStyle(element);
 
   return (
-    rect.width > 0 &&
-    rect.height > 0 &&
-    rect.bottom > 0 &&
-    rect.right > 0 &&
-    rect.top < window.innerHeight &&
-    rect.left < window.innerWidth &&
     style.display !== 'none' &&
     style.visibility !== 'hidden' &&
     style.opacity !== '0'

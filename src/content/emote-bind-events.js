@@ -6,6 +6,10 @@ import {
 } from './emote-buttons.js';
 
 import {
+  isTypingTarget,
+} from './shortcut-guard.js';
+
+import {
   findEmotePanel,
 } from './emote-panel.js';
 
@@ -23,15 +27,20 @@ import {
   isEmoteBindAssignMode,
   isEmoteBindClearMode,
   isEmoteBindKeyListening,
-  isEmoteBindModeActive,
   selectEmoteBindTarget,
   setEmoteBindCode,
+  startEmoteBindKeyListening,
   toggleEmoteBindClearSelection,
 } from './emote-bind-mode-state.js';
 
 import {
   findShortcutBadgeAssignmentByEmojiId,
 } from './shortcut-badge-map.js';
+
+import {
+  getShortcutCodeFromKeyboardEvent,
+  isImeKeyboardEvent,
+} from './shortcut-key-code.js';
 
 const BADGE_CLASS = 'emzk-lite-badge';
 
@@ -86,6 +95,14 @@ export function detachEmoteBindEvents() {
 }
 
 function handleBindModePointerDown(event) {
+	if (
+		isEmoteBindInteractionModeActive() &&
+		isTypingTarget(event.target)
+	) {
+    exitCurrentBindMode();
+    return;
+  }
+
   if (!isEmoteBindClearMode()) {
     return;
   }
@@ -104,9 +121,9 @@ function handleBindModeDragStart(event) {
 }
 
 function handleBindModeClick(event) {
-  if (!isEmoteBindModeActive()) {
-    return;
-  }
+	if (!isEmoteBindInteractionModeActive()) {
+		return;
+	}
 
   if (isBadgeEvent(event)) {
     blockEvent(event);
@@ -119,18 +136,17 @@ function handleBindModeClick(event) {
     return;
   }
 
-  if (isEmoteBindKeyListening()) {
-    blockEvent(event);
-    return;
-  }
-
   blockEvent(event);
 
   handleBindModeEmoteButtonClick(button);
 }
 
 function handleBindModeKeyDown(event) {
-  if (!isEmoteBindModeActive()) {
+	if (!isEmoteBindInteractionModeActive()) {
+		return;
+	}
+
+  if (shouldIgnoreBindControlKeyDown(event)) {
     return;
   }
 
@@ -155,20 +171,36 @@ function handleBindModeKeyDown(event) {
 }
 
 function handleKeyListeningKeyDown(event) {
-  blockEvent(event);
-
-  if (event.code === 'Escape') {
+  if (
+    event.code === 'Escape' &&
+    !hasAnyModifier(event)
+  ) {
+    blockEvent(event);
     exitCurrentBindMode();
     return;
   }
 
-  if (isIgnoredListeningCode(event.code)) {
+  if (shouldRejectBindShortcutKey(event)) {
+    blockEvent(event);
     return;
   }
 
-  setEmoteBindCode(event.code);
+  const shortcutCode = getShortcutCodeFromKeyboardEvent(event);
+
+  if (!shortcutCode) {
+    if (!isModifierOnlyCode(event.code)) {
+      blockEvent(event);
+    }
+
+    return;
+  }
+
+  blockEvent(event);
+
+  setEmoteBindCode(shortcutCode);
 
   scheduleFavoriteEmoteSectionRender();
+  scheduleBadgeUpdate();
 }
 
 function handleBindModeEmoteButtonClick(button) {
@@ -207,6 +239,8 @@ function handleAssignModeClick({
     emojiImageUrl,
   });
 
+  startEmoteBindKeyListening();
+
   scheduleFavoriteEmoteSectionRender();
   scheduleBadgeUpdate();
 }
@@ -244,10 +278,10 @@ function canSelectClearEmojiId(emojiId) {
 }
 
 function handleBindModeChanged() {
-  if (!isEmoteBindModeActive()) {
-    bindModePanelSignature = '';
-    return;
-  }
+	if (!isEmoteBindInteractionModeActive()) {
+		bindModePanelSignature = '';
+		return;
+	}
 
   scheduleBindBoundaryCheck({
     resetSignatureIfEmpty: false,
@@ -256,9 +290,10 @@ function handleBindModeChanged() {
 
 function startBindBoundaryObserver() {
   if (observer) return;
+  if (!document.body) return;
 
   observer = new MutationObserver(() => {
-    if (!isEmoteBindModeActive()) {
+    if (!isEmoteBindInteractionModeActive()) {
       return;
     }
 
@@ -304,11 +339,10 @@ function scheduleBindBoundaryCheck({
 function checkBindModeBoundary({
   resetSignatureIfEmpty = false,
 } = {}) {
-  if (!isEmoteBindModeActive()) {
-    bindModePanelSignature = '';
-    return;
-  }
-
+	if (!isEmoteBindInteractionModeActive()) {
+		bindModePanelSignature = '';
+		return;
+	}
   const panel = findEmotePanel();
 
   if (!panel || !isPanelVisible(panel)) {
@@ -447,7 +481,33 @@ function isPanelVisible(panel) {
   return rect.width > 0 && rect.height > 0;
 }
 
+function isEmoteBindInteractionModeActive() {
+  return (
+    isEmoteBindAssignMode() ||
+    isEmoteBindClearMode()
+  );
+}
+
+function shouldRejectBindShortcutKey(event) {
+  if (isImeKeyboardEvent(event)) {
+    return true;
+  }
+
+  if (
+    event.code === 'Space' ||
+    event.code === 'Enter'
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function shouldBlockBindModeKeyDown(event) {
+  if (isImeKeyboardEvent(event)) {
+    return false;
+  }
+
   if (
     event.ctrlKey ||
     event.altKey ||
@@ -457,6 +517,39 @@ function shouldBlockBindModeKeyDown(event) {
   }
 
   if (isModifierOnlyCode(event.code)) {
+    return false;
+  }
+
+  return true;
+}
+
+function shouldIgnoreBindControlKeyDown(event) {
+  const element = getElementFromTarget(event.target);
+
+  if (!element) {
+    return false;
+  }
+
+  const control = element.closest('button, [role="button"], [role="group"]');
+
+  if (!control) {
+    return false;
+  }
+
+  const panel = findEmotePanel();
+
+  if (!panel || !panel.contains(control)) {
+    return false;
+  }
+
+  /*
+   * 실제 이모티콘 버튼은 무시 대상이 아니다.
+   * 여기서 무시해야 하는 건 phase/save/cancel/set switch 같은 bind UI 컨트롤이다.
+   */
+  if (
+    control instanceof HTMLButtonElement &&
+    isRealEmoteButton(control)
+  ) {
     return false;
   }
 
@@ -478,25 +571,6 @@ function hasAnyModifier(event) {
   );
 }
 
-function isIgnoredListeningCode(code) {
-  return (
-    code === 'Tab' ||
-    code === 'CapsLock' ||
-    code === 'ContextMenu' ||
-
-    code === 'ShiftLeft' ||
-    code === 'ShiftRight' ||
-
-    code === 'ControlLeft' ||
-    code === 'ControlRight' ||
-
-    code === 'AltLeft' ||
-    code === 'AltRight' ||
-
-    code === 'MetaLeft' ||
-    code === 'MetaRight'
-  );
-}
 
 function isModifierOnlyCode(code) {
   return (

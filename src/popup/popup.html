@@ -12,11 +12,38 @@
         <strong class="popup-title">Emozzk Lite</strong>
         <span class="popup-version"></span>
       </header>
-
       <section class="popup-section">
-        <button id="reloadButton" class="popup-button" type="button">
-          현재 치지직 탭 새로고침
-        </button>
+        <div class="popup-section-header">
+          <div class="popup-section-heading">
+            <h2 class="popup-section-title">단축키 세트 수</h2>
+            <p class="popup-section-description">
+              이모티콘 패널 툴바에 표시할 단축키 세트 개수를 정합니다.
+            </p>
+          </div>
+
+          <strong
+            id="shortcutSetCountValue"
+            class="popup-range-value"
+            aria-live="polite"
+          >
+            2개
+          </strong>
+        </div>
+
+        <input
+          id="shortcutSetCountRange"
+          class="popup-range"
+          type="range"
+          min="1"
+          max="9"
+          step="1"
+          value="2"
+        />
+
+        <div class="popup-range-meta">
+          <span>1개</span>
+          <span>9개</span>
+        </div>
       </section>
 
       <section class="popup-section">

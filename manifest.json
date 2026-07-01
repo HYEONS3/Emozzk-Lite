@@ -4,11 +4,7 @@
   "version": "0.1.0",
   "description": "CHZZK emote shortcut helper",
   "permissions": [
-    "storage",
-    "tabs"
-  ],
-  "host_permissions": [
-    "https://chzzk.naver.com/*"
+    "storage"
   ],
   "action": {
     "default_title": "Emozzk Lite",
@@ -31,7 +27,6 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "icons/*",
         "inject.js"
       ],
       "matches": [

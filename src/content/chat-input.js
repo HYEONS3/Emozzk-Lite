@@ -1,3 +1,6 @@
+const QUICK_EMOTE_INPUT_READY_TIMEOUT_MS = 240;
+const QUICK_EMOTE_CLEANUP_DELAY_MS = 40;
+
 export function findChatInput() {
   const active = document.activeElement;
 
@@ -39,6 +42,137 @@ export function focusChatInputAtEnd() {
   return isFocused(input);
 }
 
+/*
+ * 단축키 이모티콘 삽입 전용.
+ *
+ * CHZZK 입력창은 상황에 따라 textarea와 pre[contenteditable]를 오간다.
+ * 단축키 삽입에서는 원본 이모티콘 button.click() 전에 입력창을 가능한 한
+ * rich input 쪽으로 준비하고 caret을 끝으로 둔다.
+ */
+export async function prepareChatInputForQuickEmoteInsert() {
+  const currentEditable = findChatContentEditableInput();
+
+  if (currentEditable) {
+    focusElement(currentEditable);
+    moveContentEditableCaretToEnd(currentEditable);
+
+    await waitAnimationFrame();
+
+    const settledEditable = findChatContentEditableInput() || currentEditable;
+
+    if (!settledEditable.isConnected) {
+      return false;
+    }
+
+    focusElement(settledEditable);
+    moveContentEditableCaretToEnd(settledEditable);
+
+    return isFocused(settledEditable);
+  }
+
+  const input = findChatInput();
+
+  if (!input) {
+    console.debug('[Emozzk Lite] chat input not found for quick insert prepare');
+    return false;
+  }
+
+  focusElement(input);
+  moveCaretToEnd(input);
+
+  const editable = await waitForChatContentEditableInput(
+    QUICK_EMOTE_INPUT_READY_TIMEOUT_MS
+  );
+
+  /*
+   * CHZZK가 textarea 상태를 유지하는 상황도 있으므로
+   * contenteditable을 못 찾았다고 즉시 실패 처리하지 않는다.
+   */
+  if (!editable) {
+    return isFocused(input);
+  }
+
+  focusElement(editable);
+  moveContentEditableCaretToEnd(editable);
+
+  await waitAnimationFrame();
+
+  const settledEditable = findChatContentEditableInput() || editable;
+
+  if (!settledEditable.isConnected) {
+    return false;
+  }
+
+  focusElement(settledEditable);
+  moveContentEditableCaretToEnd(settledEditable);
+
+  return isFocused(settledEditable);
+}
+
+/*
+ * 단축키 이모티콘 click 전 cleanup.
+ *
+ * 텍스트를 입력했다가 Backspace로 모두 지우면 CHZZK 입력창이
+ * 아래처럼 technical filler <br>만 가진 상태가 될 수 있다.
+ *
+ *   <pre contenteditable="true"><br></pre>
+ *
+ * 이 상태에서 이모티콘을 넣으면 CHZZK가 기존 <br>을 빈 값으로 보지 않고
+ * <br> 뒤에 img를 붙여 개행처럼 보이게 만든다.
+ */
+export function cleanupQuickInsertInputBeforeClick() {
+  const input = findChatContentEditableInput();
+
+  if (!input) {
+    return false;
+  }
+
+  const changed = removeTechnicalEmptyBreaks(input);
+
+  if (changed) {
+    dispatchInputEvent(input);
+  }
+
+  focusElement(input);
+  moveContentEditableCaretToEnd(input);
+
+  return changed;
+}
+
+/*
+ * 단축키 이모티콘 click 후 cleanup.
+ *
+ * 이모티콘 삽입 후 아래처럼 되면 선두 technical <br>을 제거한다.
+ *
+ *   <br><img ...>
+ *   <br><br><img ...>
+ */
+export function scheduleQuickInsertInputCleanupAfterClick() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        cleanupQuickInsertInputAfterClick();
+      }, QUICK_EMOTE_CLEANUP_DELAY_MS);
+    });
+  });
+}
+
+export function scheduleChatInputFocusEndAfterQuickInsert() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const input = findChatContentEditableInput();
+
+      if (input) {
+        focusElement(input);
+        moveContentEditableCaretToEnd(input);
+        return;
+      }
+
+      focusChatInputAtEnd();
+    });
+  });
+}
+
 export function scheduleChatInputFocus() {
   requestAnimationFrame(() => {
     focusChatInput();
@@ -61,37 +195,165 @@ export function scheduleChatInputFocusEndSoft() {
   });
 }
 
-export function normalizeChatInputAfterEmote() {
+export function focusChatInputAfterEmote() {
+  /*
+   * 기존 이름 호환용.
+   * 여기서는 contenteditable DOM normalize나 <br> 제거를 하지 않는다.
+   */
   const input = findChatInput();
 
   if (!input) {
-    console.debug('[Emozzk Lite] chat input not found for normalize');
+    console.debug('[Emozzk Lite] chat input not found after emote');
     return false;
   }
 
   focusElement(input);
-
-  if (isEditableElement(input)) {
-    removeLeadingFillerBreak(input);
-  }
-
   moveCaretToEnd(input);
 
   return isFocused(input);
 }
 
-export function scheduleChatInputNormalizeAfterEmote() {
-  requestAnimationFrame(() => {
-    normalizeChatInputAfterEmote();
-  });
+function cleanupQuickInsertInputAfterClick() {
+  const input = findChatContentEditableInput();
+
+  if (!input) {
+    return false;
+  }
+
+  const changed = removeLeadingBreaksBeforeMeaningfulContent(input);
+
+  if (changed) {
+    dispatchInputEvent(input);
+  }
+
+  focusElement(input);
+  moveContentEditableCaretToEnd(input);
+
+  return changed;
 }
 
-export function scheduleChatInputNormalizeAfterEmoteSettle() {
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      normalizeChatInputAfterEmote();
-    });
-  });
+function removeTechnicalEmptyBreaks(root) {
+  /*
+   * 의미 있는 내용이 없을 때만 제거한다.
+   *
+   * 대상:
+   *   <br>
+   *   <br><br>
+   *   #text("")<br>
+   *
+   * 비대상:
+   *   <br><img ...>
+   *   <br>text
+   */
+  if (hasMeaningfulContent(root)) {
+    return false;
+  }
+
+  let changed = false;
+
+  while (root.firstChild) {
+    const first = root.firstChild;
+
+    if (first instanceof HTMLBRElement || isEmptyTextNode(first)) {
+      first.remove();
+      changed = true;
+      continue;
+    }
+
+    break;
+  }
+
+  return changed;
+}
+
+function removeLeadingBreaksBeforeMeaningfulContent(root) {
+  /*
+   * 의미 있는 내용이 뒤에 있을 때만 선두 <br>/빈 텍스트를 제거한다.
+   *
+   * 대상:
+   *   <br><img ...>
+   *   <br><br><img ...>
+   *   #text("")<br><img ...>
+   *
+   * 비대상:
+   *   <br>
+   *   <br><br>
+   */
+  if (!hasMeaningfulContent(root)) {
+    return false;
+  }
+
+  let changed = false;
+
+  while (root.firstChild) {
+    const first = root.firstChild;
+
+    if (first instanceof HTMLBRElement || isEmptyTextNode(first)) {
+      first.remove();
+      changed = true;
+      continue;
+    }
+
+    break;
+  }
+
+  return changed;
+}
+
+function hasMeaningfulContent(root) {
+  for (const node of root.childNodes) {
+    if (isMeaningfulNode(node)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isMeaningfulNode(node) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return !isEmptyText(node.textContent);
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return false;
+  }
+
+  if (node instanceof HTMLBRElement) {
+    return false;
+  }
+
+  return true;
+}
+
+function isEmptyTextNode(node) {
+  return (
+    node.nodeType === Node.TEXT_NODE &&
+    isEmptyText(node.textContent)
+  );
+}
+
+function isEmptyText(value) {
+  return String(value ?? '')
+    .replace(/\u200B/g, '')
+    .replace(/\u00A0/g, ' ')
+    .trim() === '';
+}
+
+function dispatchInputEvent(element) {
+  try {
+    element.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
+      cancelable: false,
+      inputType: 'deleteContentBackward',
+      data: null,
+    }));
+  } catch {
+    element.dispatchEvent(new Event('input', {
+      bubbles: true,
+      cancelable: false,
+    }));
+  }
 }
 
 function getChatInputCandidates() {
@@ -104,6 +366,78 @@ function getChatInputCandidates() {
       '[role="textbox"]',
     ].join(', '))
   );
+}
+
+function findChatContentEditableInput() {
+  const active = document.activeElement;
+
+  if (
+    isEditableElement(active) &&
+    isVisible(active)
+  ) {
+    return active;
+  }
+
+  const candidates = getChatInputCandidates();
+
+  return candidates
+    .filter((element) => {
+      return (
+        isEditableElement(element) &&
+        isVisible(element) &&
+        isLikelyChatContentEditableInput(element)
+      );
+    })
+    .sort(compareChatInputPriority)[0] ?? null;
+}
+
+function isLikelyChatContentEditableInput(element) {
+  if (!isEditableElement(element)) {
+    return false;
+  }
+
+  const name = getInputName(element);
+
+  if (/채팅|chat/i.test(name)) {
+    return true;
+  }
+
+  if (document.activeElement === element) {
+    return true;
+  }
+
+  if (
+    element.matches?.('pre') &&
+    element.closest?.('[id="aside-chatting"], [class*="chat"], [class*="Chat"]')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+async function waitForChatContentEditableInput(timeoutMs) {
+  const startedAt = performance.now();
+
+  while (performance.now() - startedAt <= timeoutMs) {
+    const input = findChatContentEditableInput();
+
+    if (input) {
+      return input;
+    }
+
+    await waitAnimationFrame();
+  }
+
+  return null;
+}
+
+function waitAnimationFrame() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      resolve();
+    });
+  });
 }
 
 function isLikelyChatInput(element) {
@@ -191,16 +525,6 @@ function getChatInputPriority(element) {
     score += 50;
   }
 
-  const rect = element.getBoundingClientRect();
-
-  /*
-   * 채팅 입력창은 보통 화면 하단에 있으므로 약한 보정만 둔다.
-   * 절대 조건으로 쓰지 않는다.
-   */
-  if (rect.top > window.innerHeight * 0.4) {
-    score += 5;
-  }
-
   return score;
 }
 
@@ -260,73 +584,12 @@ function moveContentEditableCaretToEnd(element) {
   selection.addRange(range);
 }
 
-function removeLeadingFillerBreak(root) {
-  removeLeadingEmptyTextNodes(root);
-
-  const first = root.firstChild;
-
-  if (!(first instanceof HTMLBRElement)) return;
-
-  /*
-   * <br> 뒤에 실제 내용이 있을 때만 제거한다.
-   * 완전히 빈 contenteditable의 placeholder용 <br>은 건드리지 않는다.
-   */
-  if (!hasMeaningfulContentAfter(first)) return;
-
-  first.remove();
-
-  removeLeadingEmptyTextNodes(root);
-}
-
-function removeLeadingEmptyTextNodes(root) {
-  while (
-    root.firstChild &&
-    root.firstChild.nodeType === Node.TEXT_NODE &&
-    isEmptyText(root.firstChild.textContent)
-  ) {
-    root.firstChild.remove();
-  }
-}
-
-function hasMeaningfulContentAfter(node) {
-  let current = node.nextSibling;
-
-  while (current) {
-    if (isMeaningfulNode(current)) {
-      return true;
-    }
-
-    current = current.nextSibling;
-  }
-
-  return false;
-}
-
-function isMeaningfulNode(node) {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return !isEmptyText(node.textContent);
-  }
-
-  if (node.nodeType !== Node.ELEMENT_NODE) {
-    return false;
-  }
-
-  if (node instanceof HTMLBRElement) {
-    return false;
-  }
-
-  return true;
-}
-
-function isEmptyText(value) {
-  return String(value ?? '')
-    .replace(/\u200B/g, '')
-    .replace(/\u00A0/g, ' ')
-    .trim() === '';
-}
-
 function isVisible(element) {
   if (!(element instanceof Element)) {
+    return false;
+  }
+
+  if (!element.isConnected) {
     return false;
   }
 
@@ -334,11 +597,7 @@ function isVisible(element) {
 
   if (
     rect.width <= 0 ||
-    rect.height <= 0 ||
-    rect.bottom <= 0 ||
-    rect.right <= 0 ||
-    rect.top >= window.innerHeight ||
-    rect.left >= window.innerWidth
+    rect.height <= 0
   ) {
     return false;
   }
@@ -348,6 +607,7 @@ function isVisible(element) {
   return (
     style.display !== 'none' &&
     style.visibility !== 'hidden' &&
-    style.opacity !== '0'
+    style.visibility !== 'collapse' &&
+    Number.parseFloat(style.opacity || '1') > 0
   );
 }

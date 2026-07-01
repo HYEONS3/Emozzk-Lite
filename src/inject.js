@@ -6,27 +6,39 @@ const RECENT_STORAGE_LIMIT_MESSAGE =
 const DEFAULT_RECENT_STORAGE_LIMIT = 60;
 const MIN_RECENT_STORAGE_LIMIT = 50;
 const MAX_RECENT_STORAGE_LIMIT = 200;
+const PATCH_FLAG = '__EMZK_LITE_RECENT_EMOTE_STORAGE_PATCHED__';
 
 let recentStorageLimit = DEFAULT_RECENT_STORAGE_LIMIT;
-let patched = false;
+let favoriteRecentEmoteIds = new Set();
+
 
 installRecentEmoteStorageLimitPatch();
 
 function installRecentEmoteStorageLimitPatch() {
-  if (patched) {
+  if (window[PATCH_FLAG]) {
     return;
   }
 
-  if (!window.localStorage?.setItem) {
+  if (
+    typeof Storage === 'undefined' ||
+    !Storage.prototype?.setItem ||
+    !window.localStorage
+  ) {
     return;
   }
 
-  patched = true;
-
-  const originalSetItem = window.localStorage.setItem;
+  const originalSetItem = Storage.prototype.setItem;
 
   window.addEventListener('message', (event) => {
     if (event.source !== window) {
+      return;
+    }
+
+    if (event.origin !== window.location.origin) {
+      return;
+    }
+
+    if (event.data?.source !== 'emzk-lite') {
       return;
     }
 
@@ -35,10 +47,16 @@ function installRecentEmoteStorageLimitPatch() {
     }
 
     recentStorageLimit = normalizeRecentStorageLimit(event.data.limit);
+    favoriteRecentEmoteIds = normalizeFavoriteRecentEmoteIds(
+      event.data.favoriteIds
+    );
   });
 
-  window.localStorage.setItem = function patchedSetItem(key, value) {
-    if (!isRecentEmoteStorageKey(key)) {
+  Storage.prototype.setItem = function patchedSetItem(key, value) {
+    if (
+      this !== window.localStorage ||
+      !isRecentEmoteStorageKey(key)
+    ) {
       return originalSetItem.apply(this, arguments);
     }
 
@@ -53,7 +71,11 @@ function installRecentEmoteStorageLimitPatch() {
         ...currentStored,
       ]);
 
-      const limited = merged.slice(0, recentStorageLimit);
+      const limited = limitRecentEmotesWithFavorites({
+        emotes: merged,
+        maxNormalRecentCount: recentStorageLimit,
+        favoriteIds: favoriteRecentEmoteIds,
+      });
 
       return originalSetItem.call(
         this,
@@ -66,6 +88,9 @@ function installRecentEmoteStorageLimitPatch() {
       return originalSetItem.apply(this, arguments);
     }
   };
+
+	window[PATCH_FLAG] = true;
+
 }
 
 function isRecentEmoteStorageKey(key) {
@@ -109,6 +134,56 @@ function mergeRecentEmotes(emotes) {
   });
 
   return result;
+}
+
+function limitRecentEmotesWithFavorites({
+  emotes,
+  maxNormalRecentCount,
+  favoriteIds,
+}) {
+  const normalRecentLimit = normalizeRecentStorageLimit(maxNormalRecentCount);
+  const favoriteIdSet = favoriteIds instanceof Set
+    ? favoriteIds
+    : new Set();
+
+  const seen = new Set();
+  const favorites = [];
+  const normalRecent = [];
+
+  emotes.forEach((emote) => {
+    const id = getRecentEmoteId(emote);
+
+    if (!id) return;
+    if (seen.has(id)) return;
+
+    seen.add(id);
+
+    if (favoriteIdSet.has(id)) {
+      favorites.push(emote);
+      return;
+    }
+
+    if (normalRecent.length < normalRecentLimit) {
+      normalRecent.push(emote);
+    }
+  });
+
+  return [
+    ...favorites,
+    ...normalRecent,
+  ];
+}
+
+function normalizeFavoriteRecentEmoteIds(ids) {
+  if (!Array.isArray(ids)) {
+    return new Set();
+  }
+
+  return new Set(
+    ids
+      .map(normalizeText)
+      .filter(Boolean)
+  );
 }
 
 function isValidRecentEmoteObject(emote) {

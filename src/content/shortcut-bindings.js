@@ -1,50 +1,11 @@
+import {
+  normalizeStoredShortcutCode,
+} from './shortcut-key-code.js';
+
 export const SHORTCUT_ACTION_SELECT_EMOTE = 'selectEmote';
 
 export const SHORTCUT_TARGET_TYPE_INDEX = 'index';
 export const SHORTCUT_TARGET_TYPE_EMOJI_ID = 'emojiId';
-
-export const DEFAULT_BINDINGS = [
-  {
-    code: 'F1',
-    index: 0,
-  },
-  {
-    code: 'F2',
-    index: 1,
-  },
-  {
-    code: 'F3',
-    index: 2,
-  },
-  {
-    code: 'F4',
-    index: 3,
-  },
-  {
-    code: 'F5',
-    index: 4,
-  },
-  {
-    code: 'F6',
-    index: 5,
-  },
-  {
-    code: 'F7',
-    index: 6,
-  },
-  {
-    code: 'F8',
-    index: 7,
-  },
-  {
-    code: 'F9',
-    index: 8,
-  },
-  {
-    code: 'F10',
-    index: 9,
-  },
-];
 
 const SHORTCUT_PHASE_DOWN = 'down';
 const SHORTCUT_PHASE_UP = 'up';
@@ -61,17 +22,6 @@ const DEFAULT_SHORTCUT_INTERCEPTION = {
   keydown: true,
   keyup: true,
 };
-
-export function getDefaultShortcutBindings() {
-  return DEFAULT_BINDINGS
-    .map(({ code, index }) => {
-      return createDefaultShortcutBinding({
-        code,
-        index,
-      });
-    })
-    .filter(Boolean);
-}
 
 export function createSelectEmoteAction(index) {
   return createSelectEmoteIndexAction(index);
@@ -157,38 +107,6 @@ export function isShortcutKeyupEnabled(binding) {
   }
 
   return Boolean(normalizedBinding.onUp);
-}
-
-function createDefaultShortcutBinding({
-  code,
-  index,
-}) {
-  const normalizedCode = normalizeShortcutCode(code);
-  const actionConfig = createSelectEmoteIndexAction(index);
-
-  if (
-    !normalizedCode ||
-    !actionConfig
-  ) {
-    return null;
-  }
-
-  return {
-    id: `default__${normalizedCode}`,
-    source: 'default',
-    trigger: createShortcutTrigger({
-      code: normalizedCode,
-    }),
-    onDown: actionConfig,
-    onUp: null,
-    options: {
-      ...DEFAULT_SHORTCUT_OPTIONS,
-    },
-    interception: {
-      ...DEFAULT_SHORTCUT_INTERCEPTION,
-      keyup: false,
-    },
-  };
 }
 
 function normalizeModernShortcutBinding(binding) {
@@ -282,10 +200,7 @@ function normalizeShortcutActionArgs(actionArgs) {
     return null;
   }
 
-  const targetType = normalizeText(
-    actionArgs.targetType ||
-    actionArgs.type
-  );
+  const targetType = getActionTargetType(actionArgs);
 
   if (
     targetType === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
@@ -339,28 +254,6 @@ function normalizeShortcutTrigger(trigger) {
     alt: Boolean(trigger.alt),
     shift: Boolean(trigger.shift),
     meta: Boolean(trigger.meta),
-  };
-}
-
-function createShortcutTrigger({
-  code,
-  ctrl = false,
-  alt = false,
-  shift = false,
-  meta = false,
-}) {
-  const normalizedCode = normalizeShortcutCode(code);
-
-  if (!normalizedCode) {
-    return null;
-  }
-
-  return {
-    code: normalizedCode,
-    ctrl: Boolean(ctrl),
-    alt: Boolean(alt),
-    shift: Boolean(shift),
-    meta: Boolean(meta),
   };
 }
 
@@ -418,7 +311,7 @@ function normalizeBindingId(binding, {
 
 function isModernShortcutBindingShape(binding) {
   return Boolean(
-    normalizeText(binding?.code) &&
+    normalizeStoredShortcutCode(binding?.code) &&
     'phase' in binding &&
     binding?.actionConfig
   );
@@ -433,38 +326,7 @@ function normalizeStoragePhase(phase) {
 }
 
 function normalizeShortcutCode(code) {
-  const normalizedCode = normalizeText(code);
-
-  if (!normalizedCode) {
-    return '';
-  }
-
-  if (isBlockedShortcutCode(normalizedCode)) {
-    return '';
-  }
-
-  return normalizedCode;
-}
-
-function isBlockedShortcutCode(code) {
-  return (
-    code === 'Escape' ||
-    code === 'Tab' ||
-    code === 'CapsLock' ||
-    code === 'ContextMenu' ||
-
-    code === 'ShiftLeft' ||
-    code === 'ShiftRight' ||
-
-    code === 'ControlLeft' ||
-    code === 'ControlRight' ||
-
-    code === 'AltLeft' ||
-    code === 'AltRight' ||
-
-    code === 'MetaLeft' ||
-    code === 'MetaRight'
-  );
+  return normalizeStoredShortcutCode(code);
 }
 
 function normalizeIndex(value) {
@@ -478,4 +340,26 @@ function normalizeIndex(value) {
 
 function normalizeText(value) {
   return String(value ?? '').trim();
+}
+
+function getActionTargetType(actionArgs) {
+  const targetType = normalizeText(actionArgs?.targetType);
+
+  if (
+    targetType === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
+    targetType === SHORTCUT_TARGET_TYPE_INDEX
+  ) {
+    return targetType;
+  }
+
+  const type = normalizeText(actionArgs?.type);
+
+  if (
+    type === SHORTCUT_TARGET_TYPE_EMOJI_ID ||
+    type === SHORTCUT_TARGET_TYPE_INDEX
+  ) {
+    return type;
+  }
+
+  return '';
 }

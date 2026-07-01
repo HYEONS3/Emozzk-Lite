@@ -3,12 +3,17 @@ import {
   normalizeRecentEmotes,
 } from './recent-emote-storage.js';
 
+import {
+  mergeReorderedFavoriteSubset,
+} from './emote-favorite-groups.js';
+
 const FAVORITE_RECENT_EMOTES_STORAGE_KEY = 'emozzk_lite_favorite_recent_emotes_v1';
 const MAX_FAVORITE_RECENT_EMOTE_COUNT = 200;
 
 let favoriteEmotesCache = [];
 let initialized = false;
 let initializePromise = null;
+let storageSyncStarted = false;
 
 export function initFavoriteRecentEmoteStorage() {
   if (initializePromise) {
@@ -38,6 +43,27 @@ export function initFavoriteRecentEmoteStorage() {
     });
 
   return initializePromise;
+}
+
+export function startFavoriteRecentEmoteStorageSync() {
+  if (storageSyncStarted) return;
+
+  storageSyncStarted = true;
+
+  if (!globalThis.chrome?.storage?.onChanged?.addListener) {
+    return;
+  }
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local') return;
+
+    const change = changes[FAVORITE_RECENT_EMOTES_STORAGE_KEY];
+
+    if (!change) return;
+
+    favoriteEmotesCache = normalizeFavoriteRecentEmotes(change.newValue);
+    initialized = true;
+  });
 }
 
 export function getCachedFavoriteRecentEmotes() {
@@ -126,6 +152,69 @@ export async function reorderFavoriteRecentEmotesByIds(orderedIds) {
   });
 }
 
+
+export async function ensureFavoriteRecentEmoteAppended(emote) {
+  await ensureInitialized();
+
+  const id = getRecentEmoteId(emote);
+
+  if (!id) {
+    return createToggleResult({
+      changed: false,
+      added: false,
+      removed: false,
+    });
+  }
+
+  if (isFavoriteRecentEmoteId(id)) {
+    return createToggleResult({
+      changed: false,
+      added: false,
+      removed: false,
+    });
+  }
+
+  const next = normalizeFavoriteRecentEmotes([
+    ...favoriteEmotesCache,
+    emote,
+  ]);
+
+  await setFavoriteRecentEmotes(next);
+
+  return createToggleResult({
+    changed: true,
+    added: true,
+    removed: false,
+  });
+}
+
+export async function reorderFavoriteRecentEmoteSubset({
+  subsetEmojiIds,
+  reorderedSubsetEmojiIds,
+}) {
+  await ensureInitialized();
+
+  const next = normalizeFavoriteRecentEmotes(
+    mergeReorderedFavoriteSubset({
+      favorites: favoriteEmotesCache,
+      subsetEmojiIds,
+      reorderedSubsetEmojiIds,
+    })
+  );
+
+  if (isSameFavoriteOrder(favoriteEmotesCache, next)) {
+    return createReorderResult({
+      changed: false,
+    });
+  }
+
+  await setFavoriteRecentEmotes(next);
+
+  return createReorderResult({
+    changed: true,
+  });
+}
+
 export async function addFavoriteRecentEmote(emote) {
   await ensureInitialized();
 
@@ -158,8 +247,7 @@ export async function addFavoriteRecentEmote(emote) {
 export async function removeFavoriteRecentEmoteById(emoteId) {
   await ensureInitialized();
 
-  const id = String(emoteId || '');
-
+	const id = String(emoteId ?? '').trim();
   if (!id) {
     return createToggleResult({
       changed: false,
@@ -210,9 +298,9 @@ export async function toggleFavoriteRecentEmote(emote) {
 }
 
 export function isFavoriteRecentEmoteId(emoteId) {
-  const id = String(emoteId || '');
-
-  if (!id) return false;
+  const id = String(emoteId ?? '').trim();
+  
+	if (!id) return false;
 
   return favoriteEmotesCache.some((item) => {
     return getRecentEmoteId(item) === id;
@@ -234,6 +322,7 @@ async function ensureInitialized() {
   if (initialized) return;
 
   await initFavoriteRecentEmoteStorage();
+	startFavoriteRecentEmoteStorageSync();
 }
 
 function createToggleResult({

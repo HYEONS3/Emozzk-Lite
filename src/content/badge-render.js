@@ -1,11 +1,18 @@
+import {
+  getAssignableEmoteButtons,
+  getEmoteIdFromButton,
+} from './emote-buttons.js';
+
 const BADGE_CLASS = 'emzk-lite-badge';
 const BADGE_SHORTCUT_CLASS = 'emzk-lite-badge-shortcut';
 const BADGE_UNLINK_CLASS = 'emzk-lite-badge-unlink';
+const BADGE_CONFLICT_CLASS = 'emzk-lite-badge-conflict';
 
 const BADGE_TARGET_ATTR = 'data-emzk-lite-badge-target';
 const BADGE_LABEL_ATTR = 'data-emzk-lite-badge-label';
 const BADGE_TYPE_ATTR = 'data-emzk-lite-badge-type';
 const BADGE_RENDER_KEY_ATTR = 'data-emzk-lite-badge-render-key';
+const BADGE_ORIGINAL_TITLE_ATTR = 'data-emzk-lite-original-title';
 
 const BADGE_TYPE_SHORTCUT = 'shortcut';
 const BADGE_TYPE_UNLINK = 'unlink';
@@ -68,6 +75,7 @@ export function renderShortcutBadges({
       label,
       title: label,
       badgeType: BADGE_TYPE_SHORTCUT,
+      badgeState: '',
     });
   });
 }
@@ -104,6 +112,7 @@ function renderAssignmentBadges({
       label: target.label,
       title: target.title,
       badgeType: target.badgeType,
+      badgeState: target.badgeState,
     });
   });
 }
@@ -118,9 +127,9 @@ function getBadgeTargetsFromAssignments({
   const usedEmojiIds = new Set();
 
   buttons.forEach((button) => {
-    const emojiId = getEmojiIdFromButton(button);
-
-    if (!emojiId) return;
+    const emojiId = getEmoteIdFromButton(button);
+    
+		if (!emojiId) return;
     if (usedEmojiIds.has(emojiId)) return;
 
     const assignment = assignmentMap.get(emojiId);
@@ -142,6 +151,7 @@ function getBadgeTargetsFromAssignments({
       label: assignment.label,
       title: assignment.title,
       badgeType: assignment.badgeType,
+      badgeState: assignment.badgeState,
     });
   });
 
@@ -154,8 +164,11 @@ function createAssignmentMap(assignments) {
   assignments.forEach((assignment) => {
     const emojiId = normalizeEmojiId(assignment?.emojiId);
     const label = normalizeLabel(assignment?.label);
-    const title = normalizeLabel(assignment?.title);
     const badgeType = normalizeBadgeType(assignment?.badgeType);
+    const title = getBadgeTitleFromAssignment({
+      assignment,
+      fallbackLabel: label,
+    });
 
     if (!emojiId) return;
 
@@ -189,35 +202,7 @@ function createAssignmentMap(assignments) {
 }
 
 function getAssignableBadgeButtons(panel) {
-  if (!panel) return [];
-
-  return Array.from(
-    panel.querySelectorAll('button[type="button"]')
-  ).filter((button) => {
-    return (
-      button instanceof HTMLElement &&
-      button.isConnected &&
-      Boolean(getEmojiIdFromButton(button))
-    );
-  });
-}
-
-function getEmojiIdFromButton(button) {
-  const alt = getEmoteAltFromButton(button);
-
-  return getEmojiIdFromAlt(alt);
-}
-
-function getEmoteAltFromButton(button) {
-  const image = button?.querySelector?.('img');
-
-  return image?.getAttribute('alt') ?? '';
-}
-
-function getEmojiIdFromAlt(alt) {
-  const match = String(alt ?? '').match(/^\{:([^:]+):\}$/);
-
-  return match?.[1] ?? '';
+  return getAssignableEmoteButtons(panel);
 }
 
 function removeStaleBadges(targetButtonSet) {
@@ -233,6 +218,7 @@ function ensureBadge({
   label = '',
   title = '',
   badgeType = BADGE_TYPE_SHORTCUT,
+  badgeState = '',
 }) {
   if (!(button instanceof HTMLElement)) return;
 
@@ -253,8 +239,13 @@ function ensureBadge({
 
   if (normalizedTitle) {
     button.setAttribute(BADGE_LABEL_ATTR, normalizedTitle);
+    setButtonBadgeTitle({
+      button,
+      title: normalizedTitle,
+    });
   } else {
     button.removeAttribute(BADGE_LABEL_ATTR);
+    restoreButtonTitle(button);
   }
 
   let badge = getDirectBadge(button);
@@ -275,6 +266,11 @@ function ensureBadge({
   badge.classList.toggle(
     BADGE_UNLINK_CLASS,
     normalizedBadgeType === BADGE_TYPE_UNLINK
+  );
+
+  badge.classList.toggle(
+    BADGE_CONFLICT_CLASS,
+    normalizeBadgeState(badgeState) === 'conflict'
   );
 
   if (normalizedTitle) {
@@ -524,6 +520,8 @@ function removeBadge(button) {
   button.removeAttribute(BADGE_TARGET_ATTR);
   button.removeAttribute(BADGE_LABEL_ATTR);
   button.removeAttribute(BADGE_TYPE_ATTR);
+
+  restoreButtonTitle(button);
 }
 
 function getDirectBadge(button) {
@@ -566,12 +564,16 @@ function normalizeAssignments(assignments) {
   return assignments
     .map((assignment) => {
       const badgeType = normalizeBadgeType(assignment?.badgeType);
+      const label = normalizeLabel(assignment?.label);
 
       return {
         ...assignment,
         emojiId: normalizeEmojiId(assignment?.emojiId),
-        label: normalizeLabel(assignment?.label),
-        title: normalizeLabel(assignment?.title),
+        label,
+        title: getBadgeTitleFromAssignment({
+          assignment,
+          fallbackLabel: label,
+        }),
         badgeType,
       };
     })
@@ -586,6 +588,69 @@ function normalizeAssignments(assignments) {
 
       return Boolean(assignment.label);
     });
+}
+
+function getBadgeTitleFromAssignment({
+  assignment,
+  fallbackLabel = '',
+}) {
+  const directTitle = normalizeTitleText(assignment?.title);
+
+  if (directTitle) {
+    return directTitle;
+  }
+
+  const detailLabels = getBadgeDetailLabels(assignment);
+
+  if (detailLabels.length) {
+    return detailLabels.join('\n');
+  }
+
+  return normalizeTitleText(fallbackLabel);
+}
+
+function normalizeTitleText(value) {
+  return String(value ?? '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trim();
+}
+
+function getBadgeDetailLabels(assignment) {
+  const directLabels = normalizeDetailLabels(assignment?.detailLabels);
+
+  if (directLabels.length) {
+    return directLabels;
+  }
+
+  const items = Array.isArray(assignment?.items)
+    ? assignment.items
+    : [];
+
+  return normalizeDetailLabels(
+    items.map((item) => item?.label)
+  );
+}
+
+function normalizeDetailLabels(labels) {
+  if (!Array.isArray(labels)) {
+    return [];
+  }
+
+  const seen = new Set();
+  const result = [];
+
+  labels.forEach((label) => {
+    const normalizedLabel = normalizeLabel(label);
+
+    if (!normalizedLabel) return;
+    if (seen.has(normalizedLabel)) return;
+
+    seen.add(normalizedLabel);
+    result.push(normalizedLabel);
+  });
+
+  return result;
 }
 
 function normalizeLabels(labels) {
@@ -612,6 +677,57 @@ function normalizeBadgeType(value) {
   }
 
   return BADGE_TYPE_SHORTCUT;
+}
+
+function normalizeBadgeState(value) {
+  const normalizedValue = String(value ?? '').trim();
+
+  if (normalizedValue === 'conflict') {
+    return 'conflict';
+  }
+
+  return '';
+}
+
+function setButtonBadgeTitle({
+  button,
+  title,
+}) {
+  if (!(button instanceof HTMLElement)) return;
+
+  const normalizedTitle = normalizeLabel(title);
+
+  if (!normalizedTitle) {
+    restoreButtonTitle(button);
+    return;
+  }
+
+  if (!button.hasAttribute(BADGE_ORIGINAL_TITLE_ATTR)) {
+    button.setAttribute(
+      BADGE_ORIGINAL_TITLE_ATTR,
+      button.getAttribute('title') ?? ''
+    );
+  }
+
+  button.setAttribute('title', normalizedTitle);
+}
+
+function restoreButtonTitle(button) {
+  if (!(button instanceof HTMLElement)) return;
+
+  if (!button.hasAttribute(BADGE_ORIGINAL_TITLE_ATTR)) {
+    return;
+  }
+
+  const originalTitle = button.getAttribute(BADGE_ORIGINAL_TITLE_ATTR) ?? '';
+
+  if (originalTitle) {
+    button.setAttribute('title', originalTitle);
+  } else {
+    button.removeAttribute('title');
+  }
+
+  button.removeAttribute(BADGE_ORIGINAL_TITLE_ATTR);
 }
 
 function createBadgeRenderKey({

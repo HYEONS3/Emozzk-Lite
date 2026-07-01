@@ -40,17 +40,7 @@ export function closeEmotePanel() {
   return true;
 }
 
-export function toggleEmotePanel() {
-  const trigger = findEmoteTriggerButton();
 
-  if (!trigger) {
-    console.debug('[Emozzk Lite] emote trigger not found');
-    return false;
-  }
-
-  trigger.click();
-  return true;
-}
 
 export function findEmoteTriggerButton() {
   const input = findChatInput();
@@ -150,9 +140,8 @@ function isEmoteTriggerButton(button) {
   if (!isEnabledButton(button)) return false;
   if (!isVisible(button)) return false;
 
-  const name = getElementName(button);
-
-  return isEmoteTriggerName(name);
+  return getElementNameCandidates(button)
+    .some(isEmoteTriggerName);
 }
 
 function isEmoteTriggerName(name) {
@@ -163,18 +152,19 @@ function isEmoteTriggerName(name) {
   return (
     normalized === '이모티콘' ||
     normalized === '이모티콘 열기' ||
-    normalized === '이모티콘 닫기'
+    normalized === '이모티콘 닫기' ||
+    /^이모티콘\s*(열기|닫기|선택)?$/.test(normalized)
   );
 }
 
-function getElementName(element) {
+function getElementNameCandidates(element) {
   return [
     element.getAttribute('aria-label'),
     element.getAttribute('title'),
     element.textContent,
   ]
-    .filter(Boolean)
-    .join(' ');
+    .map(normalizeName)
+    .filter(Boolean);
 }
 
 function normalizeName(value) {
@@ -195,15 +185,15 @@ function isVisible(element) {
     return false;
   }
 
+  if (!element.isConnected) {
+    return false;
+  }
+
   const rect = element.getBoundingClientRect();
 
   if (
     rect.width <= 0 ||
-    rect.height <= 0 ||
-    rect.bottom <= 0 ||
-    rect.right <= 0 ||
-    rect.top >= window.innerHeight ||
-    rect.left >= window.innerWidth
+    rect.height <= 0
   ) {
     return false;
   }

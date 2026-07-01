@@ -19,14 +19,13 @@
     "keyboard-shortcuts",
     "browser-extension"
   ],
-  "author": "Hyeonse Jang",
-  "license": "MIT",
+  "author": "HYEONS3",
+  "license": "UNLICENSED",
   "bugs": {
     "url": "https://github.com/HYEONS3/Emozzk-Lite/issues"
   },
   "homepage": "https://github.com/HYEONS3/Emozzk-Lite#readme",
   "devDependencies": {
-    "archiver": "^8.0.0",
     "esbuild": "^0.28.1"
   }
 }

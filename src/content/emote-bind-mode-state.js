@@ -10,9 +10,18 @@ import {
   isExperimentalKeyupEnabled,
 } from './extension-settings-storage.js';
 
+import {
+  getShortcutCodeLabel,
+  normalizeStoredShortcutCode,
+} from './shortcut-key-code.js';
+
 export const EMOTE_BIND_MODE_NONE = 'none';
 export const EMOTE_BIND_MODE_ASSIGN = 'assign';
 export const EMOTE_BIND_MODE_CLEAR = 'clear';
+export const EMOTE_BIND_MODE_RENAME = 'rename';
+
+
+
 
 export const EMOTE_BIND_MODE_CHANGED_EVENT = 'emzk-lite-emote-bind-mode-changed';
 
@@ -23,16 +32,16 @@ const DEFAULT_BIND_MODE_STATE = {
   selectedEmojiLabel: '',
   selectedEmojiImageUrl: '',
 
-  selectedCode: 'F1',
+  selectedCode: '',
   selectedPhase: SHORTCUT_PHASE_DOWN,
 
-  /*
-   * clear mode 전용 임시 선택 목록.
-   * 실제 단축키 해제는 save 시점에만 수행한다.
-   */
   selectedClearEmojiIds: [],
 
+  renameValue: '',
+  renameSaving: false,
+
   keyListening: false,
+  isSaving: false,
 };
 
 let bindModeState = {
@@ -67,10 +76,10 @@ export function setEmoteBindModeState(nextState = {}) {
 export function resetEmoteBindModeState() {
   const previousState = bindModeState;
 
-  bindModeState = {
-    ...DEFAULT_BIND_MODE_STATE,
-    selectedClearEmojiIds: [],
-  };
+	bindModeState = {
+		...DEFAULT_BIND_MODE_STATE,
+		selectedClearEmojiIds: [],
+	};
 
   dispatchEmoteBindModeChanged({
     previousState,
@@ -93,8 +102,19 @@ export function refreshEmoteBindModeStateForSettings() {
 export function enterEmoteBindAssignMode() {
   return setEmoteBindModeState({
     mode: EMOTE_BIND_MODE_ASSIGN,
+
+    selectedEmojiId: '',
+    selectedEmojiLabel: '',
+    selectedEmojiImageUrl: '',
+    selectedCode: '',
+    selectedPhase: SHORTCUT_PHASE_DOWN,
+
     selectedClearEmojiIds: [],
+    renameValue: '',
+    renameSaving: false,
+
     keyListening: false,
+    isSaving: false,
   });
 }
 
@@ -105,10 +125,40 @@ export function enterEmoteBindClearMode() {
     selectedEmojiId: '',
     selectedEmojiLabel: '',
     selectedEmojiImageUrl: '',
+    selectedCode: '',
 
     selectedClearEmojiIds: [],
     keyListening: false,
+    isSaving: false,
   });
+}
+
+export function enterShortcutSetRenameMode({
+  renameValue = '',
+} = {}) {
+  return setEmoteBindModeState({
+    mode: EMOTE_BIND_MODE_RENAME,
+
+    selectedEmojiId: '',
+    selectedEmojiLabel: '',
+    selectedEmojiImageUrl: '',
+    selectedCode: '',
+
+    selectedClearEmojiIds: [],
+    renameValue: normalizeText(renameValue),
+    renameSaving: false,
+
+    keyListening: false,
+    isSaving: false,
+  });
+}
+
+export function exitShortcutSetRenameMode() {
+  if (!isShortcutSetRenameMode()) {
+    return getEmoteBindModeState();
+  }
+
+  return exitEmoteBindMode();
 }
 
 export function exitEmoteBindMode() {
@@ -133,17 +183,18 @@ export function toggleEmoteBindClearMode() {
 
 export function selectEmoteBindTarget({
   emojiId,
-  emojiLabel = '',
-  emojiImageUrl = '',
+  emojiLabel,
+  emojiImageUrl,
 }) {
-  if (!isEmoteBindAssignMode()) {
-    return getEmoteBindModeState();
-  }
+  const previousState = getEmoteBindModeState();
 
-  return setEmoteBindModeState({
+  setEmoteBindModeState({
+    ...previousState,
     selectedEmojiId: normalizeText(emojiId),
     selectedEmojiLabel: normalizeText(emojiLabel),
     selectedEmojiImageUrl: normalizeText(emojiImageUrl),
+    selectedCode: '',
+    selectedPhase: normalizeEmoteBindPhase(previousState.selectedPhase),
     keyListening: false,
   });
 }
@@ -153,27 +204,65 @@ export function clearEmoteBindTarget() {
     selectedEmojiId: '',
     selectedEmojiLabel: '',
     selectedEmojiImageUrl: '',
+    selectedCode: '',
     keyListening: false,
   });
 }
 
 export function setEmoteBindCode(code) {
-  const normalizedCode = normalizeEmoteBindCode(code);
+  const previousState = getEmoteBindModeState();
+  const selectedCode = normalizeStoredShortcutCode(code);
 
-  if (!normalizedCode) {
+  if (
+    previousState.mode !== EMOTE_BIND_MODE_ASSIGN ||
+    !selectedCode
+  ) {
     return getEmoteBindModeState();
   }
 
-  return setEmoteBindModeState({
-    selectedCode: normalizedCode,
-    keyListening: false,
+  setEmoteBindModeState({
+    ...previousState,
+    selectedCode,
+    selectedPhase: normalizeEmoteBindPhase(previousState.selectedPhase),
+
+    /*
+     * Save 전까지 다른 키를 입력하면 단축키 후보를 교체할 수 있게 유지한다.
+     * Escape는 bind 전체 취소로 처리한다.
+     */
+    keyListening: true,
   });
 }
 
 export function setEmoteBindPhase(phase) {
-  return setEmoteBindModeState({
+  const previousState = getEmoteBindModeState();
+
+  if (previousState.mode !== EMOTE_BIND_MODE_ASSIGN) {
+    return getEmoteBindModeState();
+  }
+
+  setEmoteBindModeState({
+    ...previousState,
     selectedPhase: normalizeEmoteBindPhase(phase),
-    keyListening: false,
+  });
+}
+
+export function setShortcutSetRenameValue(value) {
+  if (!isShortcutSetRenameMode()) {
+    return getEmoteBindModeState();
+  }
+
+  return setEmoteBindModeState({
+    renameValue: normalizeInputText(value),
+  });
+}
+
+export function setShortcutSetRenameSaving(isSaving) {
+  if (!isShortcutSetRenameMode()) {
+    return getEmoteBindModeState();
+  }
+
+  return setEmoteBindModeState({
+    renameSaving: Boolean(isSaving),
   });
 }
 
@@ -184,11 +273,18 @@ export function cycleEmoteBindPhase() {
 }
 
 export function startEmoteBindKeyListening() {
-  if (!isEmoteBindAssignMode()) {
-    return getEmoteBindModeState();
+  const previousState = getEmoteBindModeState();
+
+  if (previousState.mode !== EMOTE_BIND_MODE_ASSIGN) {
+    return;
   }
 
-  return setEmoteBindModeState({
+  if (!normalizeText(previousState.selectedEmojiId)) {
+    return;
+  }
+
+  setEmoteBindModeState({
+    ...previousState,
     keyListening: true,
   });
 }
@@ -197,6 +293,24 @@ export function stopEmoteBindKeyListening() {
   return setEmoteBindModeState({
     keyListening: false,
   });
+}
+
+export function setEmoteBindSaving(isSaving) {
+  if (
+    !isEmoteBindAssignMode() &&
+    !isEmoteBindClearMode()
+  ) {
+    return getEmoteBindModeState();
+  }
+
+  return setEmoteBindModeState({
+    isSaving: Boolean(isSaving),
+    keyListening: false,
+  });
+}
+
+export function isEmoteBindSaving() {
+  return Boolean(bindModeState.isSaving);
 }
 
 export function setEmoteBindClearSelection(emojiIds) {
@@ -305,6 +419,14 @@ export function isEmoteBindExperimentalKeyupEnabled() {
   return isExperimentalKeyupEnabled();
 }
 
+export function isShortcutSetRenameMode() {
+  return bindModeState.mode === EMOTE_BIND_MODE_RENAME;
+}
+
+export function isShortcutSetRenameSaving() {
+  return Boolean(bindModeState.renameSaving);
+}
+
 export function getEmoteBindAvailableCodes() {
   return [
     'F1',
@@ -387,89 +509,13 @@ export function getEmoteBindPhaseDescription(phase) {
 }
 
 export function getEmoteBindCodeLabel(code) {
-  const normalizedCode = normalizeText(code);
+  const label = getShortcutCodeLabel(code);
 
-  if (!normalizedCode) {
+  if (!label) {
     return 'KEY';
   }
 
-  if (normalizedCode.startsWith('Key')) {
-    return normalizedCode.slice(3).toUpperCase();
-  }
-
-  if (normalizedCode.startsWith('Digit')) {
-    return normalizedCode.slice(5);
-  }
-
-  if (normalizedCode.startsWith('Numpad')) {
-    return `Num ${normalizedCode.slice(6)}`;
-  }
-
-  if (normalizedCode === 'Space') {
-    return 'Space';
-  }
-
-  if (normalizedCode === 'Backquote') {
-    return '`';
-  }
-
-  if (normalizedCode === 'Minus') {
-    return '-';
-  }
-
-  if (normalizedCode === 'Equal') {
-    return '=';
-  }
-
-  if (normalizedCode === 'BracketLeft') {
-    return '[';
-  }
-
-  if (normalizedCode === 'BracketRight') {
-    return ']';
-  }
-
-  if (normalizedCode === 'Backslash') {
-    return '\\';
-  }
-
-  if (normalizedCode === 'Semicolon') {
-    return ';';
-  }
-
-  if (normalizedCode === 'Quote') {
-    return "'";
-  }
-
-  if (normalizedCode === 'Comma') {
-    return ',';
-  }
-
-  if (normalizedCode === 'Period') {
-    return '.';
-  }
-
-  if (normalizedCode === 'Slash') {
-    return '/';
-  }
-
-  if (normalizedCode === 'ArrowUp') {
-    return '↑';
-  }
-
-  if (normalizedCode === 'ArrowDown') {
-    return '↓';
-  }
-
-  if (normalizedCode === 'ArrowLeft') {
-    return '←';
-  }
-
-  if (normalizedCode === 'ArrowRight') {
-    return '→';
-  }
-
-  return normalizedCode;
+  return label;
 }
 
 function normalizeBindModeState(state) {
@@ -488,17 +534,35 @@ function normalizeBindModeState(state) {
       ? normalizeText(state.selectedEmojiImageUrl)
       : '',
 
-    selectedCode: normalizeEmoteBindCode(state.selectedCode) ||
-      DEFAULT_BIND_MODE_STATE.selectedCode,
-    selectedPhase: normalizeEmoteBindPhase(state.selectedPhase),
+    selectedCode: normalizedMode === EMOTE_BIND_MODE_ASSIGN
+      ? normalizeEmoteBindCode(state.selectedCode) ||
+        DEFAULT_BIND_MODE_STATE.selectedCode
+      : '',
+    selectedPhase: normalizedMode === EMOTE_BIND_MODE_ASSIGN
+      ? normalizeEmoteBindPhase(state.selectedPhase)
+      : SHORTCUT_PHASE_DOWN,
 
     selectedClearEmojiIds: normalizedMode === EMOTE_BIND_MODE_CLEAR
       ? normalizeEmojiIdList(state.selectedClearEmojiIds)
       : [],
 
-    keyListening: normalizedMode === EMOTE_BIND_MODE_ASSIGN
-      ? Boolean(state.keyListening)
+		renameValue: normalizedMode === EMOTE_BIND_MODE_RENAME
+			? normalizeInputText(state.renameValue)
+			: '',
+    renameSaving: normalizedMode === EMOTE_BIND_MODE_RENAME
+      ? Boolean(state.renameSaving)
       : false,
+
+    keyListening: normalizedMode === EMOTE_BIND_MODE_ASSIGN
+      ? Boolean(state.keyListening) && !Boolean(state.isSaving)
+      : false,
+
+		isSaving: (
+			normalizedMode === EMOTE_BIND_MODE_ASSIGN ||
+			normalizedMode === EMOTE_BIND_MODE_CLEAR
+		)
+			? Boolean(state.isSaving)
+			: false,
   };
 }
 
@@ -511,21 +575,15 @@ function normalizeBindMode(mode) {
     return EMOTE_BIND_MODE_CLEAR;
   }
 
+  if (mode === EMOTE_BIND_MODE_RENAME) {
+    return EMOTE_BIND_MODE_RENAME;
+  }
+
   return EMOTE_BIND_MODE_NONE;
 }
 
 function normalizeEmoteBindCode(code) {
-  const normalizedCode = normalizeText(code);
-
-  if (!normalizedCode) {
-    return '';
-  }
-
-  if (isBlockedBindCode(normalizedCode)) {
-    return '';
-  }
-
-  return normalizedCode;
+  return normalizeStoredShortcutCode(code);
 }
 
 function normalizeEmoteBindPhase(phase) {
@@ -560,27 +618,6 @@ function normalizeEmojiIdList(values) {
   return result;
 }
 
-function isBlockedBindCode(code) {
-  return (
-    code === 'Escape' ||
-    code === 'Tab' ||
-    code === 'CapsLock' ||
-    code === 'ContextMenu' ||
-
-    code === 'ShiftLeft' ||
-    code === 'ShiftRight' ||
-
-    code === 'ControlLeft' ||
-    code === 'ControlRight' ||
-
-    code === 'AltLeft' ||
-    code === 'AltRight' ||
-
-    code === 'MetaLeft' ||
-    code === 'MetaRight'
-  );
-}
-
 function normalizeText(value) {
   return String(value ?? '').trim();
 }
@@ -592,19 +629,24 @@ function dispatchEmoteBindModeChanged({
   window.dispatchEvent(
     new CustomEvent(EMOTE_BIND_MODE_CHANGED_EVENT, {
       detail: {
-        previousState: {
-          ...previousState,
-          selectedClearEmojiIds: [
-            ...(previousState.selectedClearEmojiIds || []),
-          ],
-        },
-        nextState: {
-          ...nextState,
-          selectedClearEmojiIds: [
-            ...(nextState.selectedClearEmojiIds || []),
-          ],
-        },
+        previousState: cloneBindModeStateForEvent(previousState),
+        nextState: cloneBindModeStateForEvent(nextState),
       },
     })
   );
+}
+
+function cloneBindModeStateForEvent(state) {
+  return {
+    ...state,
+    selectedClearEmojiIds: [
+      ...(state.selectedClearEmojiIds || []),
+    ],
+  };
+}
+
+
+
+function normalizeInputText(value) {
+  return String(value ?? '');
 }

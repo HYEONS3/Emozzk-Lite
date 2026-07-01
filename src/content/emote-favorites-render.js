@@ -9,18 +9,23 @@ import {
 
 import {
   findRecentEmoteSection,
+  isRecentEmoteCategoryActive,
 } from './emote-recent-section.js';
 
 import {
+  ensureFavoriteRecentEmoteAppended,
   getCachedFavoriteRecentEmotes,
 } from './favorite-recent-emote-storage.js';
 
 import {
   getRecentEmoteId,
   getRecentEmoteIdFromAlt,
+  readRecentEmotes,
+  writeRecentEmotes,
 } from './recent-emote-storage.js';
 
 import {
+  dispatchFavoritesChanged,
   getFavoritesChangedEventName,
 } from './emote-favorites-event-name.js';
 
@@ -29,30 +34,46 @@ import {
 } from './emote-favorites-drag.js';
 
 import {
+  FAVORITE_GROUP_BOUND,
+  FAVORITE_GROUP_UNBOUND,
+  splitFavoriteEmotesByBindings,
+} from './emote-favorite-groups.js';
+
+import {
   EMOTE_BIND_MODE_ASSIGN,
   EMOTE_BIND_MODE_CHANGED_EVENT,
   EMOTE_BIND_MODE_CLEAR,
+  EMOTE_BIND_MODE_RENAME,
+  enterShortcutSetRenameMode,
+  exitShortcutSetRenameMode,
   exitEmoteBindMode,
   getEmoteBindCodeLabel,
   getEmoteBindModeState,
   getEmoteBindPhaseDescription,
   getNextEmoteBindPhase,
   isEmoteBindExperimentalKeyupEnabled,
+  isEmoteBindSaving,
   setEmoteBindPhase,
-  startEmoteBindKeyListening,
+  setEmoteBindSaving,
+  setShortcutSetRenameSaving,
+  setShortcutSetRenameValue,
   toggleEmoteBindAssignMode,
   toggleEmoteBindClearMode,
 } from './emote-bind-mode-state.js';
 
 import {
   assignShortcutBindingTarget,
-  clearShortcutBindingsByEmojiId,
+  clearShortcutBindingsByEmojiIds ,
+  getCachedShortcutBindings,
+  createShortcutBindingSetId,
   getCachedActiveShortcutBindingSetId,
   getCachedShortcutBindingSetState,
+  getShortcutBindingSetIndex,
+  normalizeShortcutBindingSetCount,
+  renameShortcutBindingSet,
   setActiveShortcutBindingSet,
   SHORTCUT_BINDINGS_CHANGED_EVENT,
-  SHORTCUT_BINDING_SET_1,
-  SHORTCUT_BINDING_SET_2,
+  SHORTCUT_BINDING_SET_OFF,
   SHORTCUT_PHASE_BOTH,
   SHORTCUT_PHASE_DOWN,
   SHORTCUT_PHASE_UP,
@@ -62,14 +83,29 @@ import {
   scheduleBadgeUpdate,
 } from './badge-overlay.js';
 
+import {
+  mergeFavoriteAndRecentEmotes,
+} from './favorite-recent-merge.js';
+
+import {
+  getCachedRecentStorageLimit,
+} from './recent-emote-storage-limit-bridge.js';
+
+import {
+  normalizeStoredShortcutCode,
+} from './shortcut-key-code.js';
+
 const FAVORITES_SECTION_CLASS = 'emzk-lite-favorites-section';
 const FAVORITES_TITLE_CLASS = 'emzk-lite-favorites-title';
 const FAVORITES_LIST_CLASS = 'emzk-lite-favorites-list';
 const FAVORITES_EMPTY_CLASS = 'emzk-lite-favorites-empty';
+const FAVORITES_SEPARATOR_CLASS = 'emzk-lite-favorites-separator';
+const FAVORITES_GROUP_ATTR = 'data-emzk-lite-favorite-group';
 
 const FAVORITES_LABEL_CLASS = 'emzk-lite-favorites-label';
 const FAVORITES_ACTIONS_CLASS = 'emzk-lite-favorites-actions';
 
+const SHORTCUT_SET_OFF_ICON_CLASS = 'emzk-lite-shortcut-set-off-icon';
 const SHORTCUT_SET_SWITCH_CLASS = 'emzk-lite-shortcut-set-switch';
 const SHORTCUT_SET_BUTTON_CLASS = 'emzk-lite-shortcut-set-button';
 const SHORTCUT_SET_BUTTON_ACTIVE_CLASS = 'emzk-lite-shortcut-set-button-active';
@@ -83,14 +119,12 @@ const BIND_BAR_CLASS = 'emzk-lite-bind-bar';
 const BIND_CLEAR_BAR_CLASS = 'emzk-lite-bind-clear-bar';
 const BIND_LEFT_CLASS = 'emzk-lite-bind-left';
 const BIND_VALUE_CLASS = 'emzk-lite-bind-value';
+const BIND_HINT_CLASS = 'emzk-lite-bind-hint';
+const RENAME_INPUT_CLASS = 'emzk-lite-rename-input';
 
 const BIND_EMOTE_PREVIEW_CLASS = 'emzk-lite-bind-emote-preview';
 const BIND_EMOTE_IMAGE_CLASS = 'emzk-lite-bind-emote-image';
 const BIND_EMOTE_EMPTY_CLASS = 'emzk-lite-bind-emote-empty';
-
-const BIND_KEYCAP_BUTTON_CLASS = 'emzk-lite-bind-keycap-button';
-const BIND_KEYCAP_BUTTON_LISTENING_CLASS = 'emzk-lite-bind-keycap-button-listening';
-const BIND_KEYCAP_TEXT_CLASS = 'emzk-lite-bind-keycap-text';
 
 const BIND_PHASE_BUTTON_CLASS = 'emzk-lite-bind-phase-button';
 const BIND_PHASE_BUTTON_ACTIVE_CLASS = 'emzk-lite-bind-phase-button-active';
@@ -107,6 +141,17 @@ const FAVORITES_RENDER_STATE_READY = 'ready';
 const BADGE_CLASS = 'emzk-lite-badge';
 const BADGE_TARGET_ATTR = 'data-emzk-lite-badge-target';
 
+const SHORTCUT_SET_DRAG_SUPPRESS_CLICK_ATTR =
+  'data-emzk-lite-shortcut-set-suppress-click';
+
+const SHORTCUT_SET_DRAGGING_ATTR =
+  'data-emzk-lite-shortcut-set-dragging';
+
+const SHORTCUT_SET_DRAG_THRESHOLD = 3;
+
+const SHORTCUT_SET_DRAG_PREVIEW_CLASS =
+  'emzk-lite-shortcut-set-drag-preview';
+
 let started = false;
 let rafId = 0;
 let observer = null;
@@ -118,7 +163,6 @@ export function startFavoriteEmoteSectionRenderer() {
   started = true;
 
   document.addEventListener('click', handlePossibleFavoriteRender, true);
-  document.addEventListener('keydown', handlePossibleFavoriteRender, true);
   document.addEventListener(
     getFavoritesChangedEventName(),
     scheduleFavoriteEmoteSectionRender
@@ -144,7 +188,6 @@ export function stopFavoriteEmoteSectionRenderer() {
   started = false;
 
   document.removeEventListener('click', handlePossibleFavoriteRender, true);
-  document.removeEventListener('keydown', handlePossibleFavoriteRender, true);
   document.removeEventListener(
     getFavoritesChangedEventName(),
     scheduleFavoriteEmoteSectionRender
@@ -168,7 +211,9 @@ export function stopFavoriteEmoteSectionRenderer() {
   }
 
   clearFavoriteRenderState();
+  exitShortcutSetRenameModeSilently();
   removeFavoriteSection();
+  removeShortcutSetDragPreview();
 }
 
 export function scheduleFavoriteEmoteSectionRender() {
@@ -184,14 +229,22 @@ export function renderFavoriteEmoteSection() {
   const panel = findEmotePanel();
 
   if (!panel) {
-    removeFavoriteSection();
+    exitShortcutSetRenameModeSilently();
     return;
   }
 
   const area = getEmojiArea(panel);
 
   if (!area) {
-    removeFavoriteSection();
+		exitShortcutSetRenameModeSilently();
+    return;
+  }
+
+  if (!isRecentEmoteCategoryActive(panel)) {
+    exitShortcutSetRenameModeSilently();
+
+    removeFavoriteSection(area);
+    markFavoriteAreaReady(area);
     return;
   }
 
@@ -199,7 +252,6 @@ export function renderFavoriteEmoteSection() {
 
   if (!recentSection) {
     markFavoriteAreaReady(area);
-    removeFavoriteSection();
     return;
   }
 
@@ -207,7 +259,6 @@ export function renderFavoriteEmoteSection() {
 
   if (!recentGroup) {
     markFavoriteAreaReady(area);
-    removeFavoriteSection();
     return;
   }
 
@@ -215,22 +266,74 @@ export function renderFavoriteEmoteSection() {
 
   if (!groupParent) {
     markFavoriteAreaReady(area);
-    removeFavoriteSection();
     return;
   }
 
   const recentList = findRecentListFromSection(recentSection);
 
-  if (!recentList) {
+  let favoriteSection = findFavoriteSection(groupParent);
+
+  if (!favoriteSection) {
+    favoriteSection = createFavoriteSectionShell({
+      recentGroup,
+    });
+  } else {
+    copyClassList({
+      target: favoriteSection,
+      source: recentGroup,
+      hookClass: FAVORITES_SECTION_CLASS,
+    });
+  }
+
+  renderFavoriteTitle({
+    section: favoriteSection,
+    sourceHeading: recentSection.heading,
+  });
+
+  let favoriteList = null;
+
+  if (recentList) {
+    favoriteList = ensureFavoriteList({
+      section: favoriteSection,
+      sourceList: recentList,
+    });
+  }
+
+  if (!recentList || !favoriteList) {
+    syncFavoriteEmptyState({
+      section: favoriteSection,
+      hasFavorites: false,
+    });
+
+    insertFavoriteSectionBeforeRecent({
+      groupParent,
+      section: favoriteSection,
+      recentGroup,
+    });
+
+    favoriteSection.hidden = false;
     markFavoriteAreaReady(area);
-    removeFavoriteSection();
     return;
   }
 
   const favoriteEmotes = getCachedFavoriteRecentEmotes();
-  const favoriteIds = favoriteEmotes
+  const favoriteGroups = splitFavoriteEmotesByBindings({
+    favorites: favoriteEmotes,
+    bindings: getCachedShortcutBindings(),
+  });
+
+  const boundFavoriteIds = favoriteGroups.bound
     .map(getRecentEmoteId)
     .filter(Boolean);
+
+  const unboundFavoriteIds = favoriteGroups.unbound
+    .map(getRecentEmoteId)
+    .filter(Boolean);
+
+  const favoriteIds = [
+    ...boundFavoriteIds,
+    ...unboundFavoriteIds,
+  ];
 
   const favoriteIdSet = new Set(favoriteIds);
 
@@ -245,48 +348,50 @@ export function renderFavoriteEmoteSection() {
   isRendering = true;
 
   try {
-    const favoriteSection = ensureFavoriteSection({
-      groupParent,
-      recentGroup,
-    });
-
-    renderFavoriteTitle({
-      section: favoriteSection,
-      sourceHeading: recentSection.heading,
-    });
-
-    const favoriteList = ensureFavoriteList({
-      section: favoriteSection,
-      sourceList: recentList,
-    });
-
     removeLegacyEmptyElements(favoriteSection);
 
     const partition = partitionRecentItems({
       recentList,
       favoriteList,
-      favoriteIds,
+      boundFavoriteIds,
+      unboundFavoriteIds,
       favoriteIdSet,
+    });
+
+    const shouldShowSeparator =
+      partition.boundFavoriteItems.length > 0 &&
+      partition.unboundFavoriteItems.length > 0;
+
+    const favoriteChildren = createFavoriteChildren({
+      favoriteList,
+      boundFavoriteItems: partition.boundFavoriteItems,
+      unboundFavoriteItems: partition.unboundFavoriteItems,
+      shouldShowSeparator,
     });
 
     applyPartition({
       favoriteList,
       recentList,
-      favoriteItems: partition.favoriteItems,
+      favoriteChildren,
       normalItems: partition.normalItems,
     });
 
     syncFavoriteEmptyState({
-    section: favoriteSection,
-    hasFavorites: partition.favoriteItems.length > 0,
+      section: favoriteSection,
+      hasFavorites: partition.favoriteItems.length > 0,
+    });
+
+    insertFavoriteSectionBeforeRecent({
+      groupParent,
+      section: favoriteSection,
+      recentGroup,
     });
 
     if (partition.favoriteItems.length) {
-    attachFavoriteEmoteDrag(favoriteSection);
+      attachFavoriteEmoteDrag(favoriteSection);
     }
 
     favoriteSection.hidden = false;
-
   } finally {
     markFavoriteAreaReady(area);
     isRendering = false;
@@ -299,15 +404,53 @@ function handlePossibleFavoriteRender(event) {
   if (target instanceof Element) {
     if (target.closest(`.${BADGE_CLASS}`)) return;
     if (target.closest(`.${BIND_BUTTON_CLASS}`)) return;
-    if (target.closest(`.${BIND_KEYCAP_BUTTON_CLASS}`)) return;
     if (target.closest(`.${BIND_PHASE_BUTTON_CLASS}`)) return;
     if (target.closest(`.${SHORTCUT_SET_BUTTON_CLASS}`)) return;
+    if (target.closest(`.${RENAME_INPUT_CLASS}`)) return;
+
+    exitShortcutSetRenameModeOnPanelClick(target);
   }
 
   scheduleFavoriteEmoteSectionRender();
 }
 
+function exitShortcutSetRenameModeOnPanelClick(target) {
+  const bindState = getEmoteBindModeState();
+
+  if (bindState.mode !== EMOTE_BIND_MODE_RENAME) {
+    return false;
+  }
+
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  const panel = findEmotePanel();
+
+  if (!panel || !panel.contains(target)) {
+    return false;
+  }
+
+  exitShortcutSetRenameModeSilently();
+  return true;
+}
+
 function handleShortcutBindingsChanged() {
+  const bindState = getEmoteBindModeState();
+
+  if (
+    bindState.mode === EMOTE_BIND_MODE_ASSIGN ||
+    bindState.mode === EMOTE_BIND_MODE_CLEAR ||
+    bindState.mode === EMOTE_BIND_MODE_RENAME
+  ) {
+    exitEmoteBindMode();
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+
+    return;
+  }
+
   scheduleFavoriteEmoteSectionRender();
 }
 
@@ -370,15 +513,20 @@ function findRecentListFromSection(recentSection) {
   return heading.parentElement?.querySelector(':scope > ul') ?? null;
 }
 
-function ensureFavoriteSection({
-  groupParent,
+function findFavoriteSection(groupParent) {
+  if (!(groupParent instanceof Element)) return null;
+
+  const section = groupParent.querySelector(
+    `:scope > .${FAVORITES_SECTION_CLASS}`
+  );
+
+  return section instanceof HTMLElement ? section : null;
+}
+
+function createFavoriteSectionShell({
   recentGroup,
 }) {
-  let section = groupParent.querySelector(`:scope > .${FAVORITES_SECTION_CLASS}`);
-
-  if (!section) {
-    section = document.createElement('div');
-  }
+  const section = document.createElement('div');
 
   copyClassList({
     target: section,
@@ -386,13 +534,28 @@ function ensureFavoriteSection({
     hookClass: FAVORITES_SECTION_CLASS,
   });
 
-  if (section.parentElement !== groupParent) {
-    groupParent.insertBefore(section, recentGroup);
-  } else if (section.nextElementSibling !== recentGroup) {
-    groupParent.insertBefore(section, recentGroup);
-  }
+  section.hidden = true;
 
   return section;
+}
+
+function insertFavoriteSectionBeforeRecent({
+  groupParent,
+  section,
+  recentGroup,
+}) {
+  if (!(groupParent instanceof Element)) return;
+  if (!(section instanceof Element)) return;
+  if (!(recentGroup instanceof Element)) return;
+
+  if (section.parentElement !== groupParent) {
+    groupParent.insertBefore(section, recentGroup);
+    return;
+  }
+
+  if (section.nextElementSibling !== recentGroup) {
+    groupParent.insertBefore(section, recentGroup);
+  }
 }
 
 function renderFavoriteTitle({
@@ -415,6 +578,21 @@ function renderFavoriteTitle({
   const bindState = getEmoteBindModeState();
   const previousMode = title.getAttribute('data-emzk-lite-bind-mode') || '';
 
+  if (bindState.mode === EMOTE_BIND_MODE_RENAME) {
+    title.setAttribute('data-emzk-lite-bind-mode', EMOTE_BIND_MODE_RENAME);
+
+    if (previousMode === EMOTE_BIND_MODE_RENAME) {
+      syncRenameTitleContent({
+        title,
+        bindState,
+      });
+      return;
+    }
+
+    title.replaceChildren(createRenameTitleContent(bindState));
+    return;
+  }
+
   title.setAttribute('data-emzk-lite-bind-mode', bindState.mode);
 
   /*
@@ -431,11 +609,12 @@ function renderFavoriteTitle({
   }
 
   /*
-   * assign / clear에서 기본 모드로 돌아온 경우는 기본 헤더 구조를 다시 만든다.
+   * assign / clear / rename에서 기본 모드로 돌아온 경우는 기본 헤더 구조를 다시 만든다.
    */
   if (
     previousMode === EMOTE_BIND_MODE_ASSIGN ||
-    previousMode === EMOTE_BIND_MODE_CLEAR
+    previousMode === EMOTE_BIND_MODE_CLEAR ||
+    previousMode === EMOTE_BIND_MODE_RENAME
   ) {
     title.replaceChildren(createDefaultTitleContent(bindState));
     return;
@@ -453,6 +632,7 @@ function renderFavoriteTitle({
 
 function createDefaultTitleContent(bindState) {
   const fragment = document.createDocumentFragment();
+  const shortcutsOff = isShortcutBindingOff();
 
   const label = document.createElement('span');
   label.className = FAVORITES_LABEL_CLASS;
@@ -461,30 +641,40 @@ function createDefaultTitleContent(bindState) {
   const actions = document.createElement('span');
   actions.className = FAVORITES_ACTIONS_CLASS;
 
-  const shortcutSetSwitch = createShortcutSetSwitch();
-
-  const assignButton = createHeaderIconButton({
-    icon: 'link',
-    label: '키 지정',
-    active: bindState.mode === EMOTE_BIND_MODE_ASSIGN,
-    onClick: () => {
-      toggleEmoteBindAssignMode();
-    },
-  });
-
-  const clearButton = createHeaderIconButton({
-    icon: 'unlink',
-    label: bindState.mode === EMOTE_BIND_MODE_CLEAR ? '해제 중' : '해제',
-    active: bindState.mode === EMOTE_BIND_MODE_CLEAR,
-    onClick: () => {
-      toggleEmoteBindClearMode();
-    },
-  });
-
   actions.append(
-    shortcutSetSwitch,
-    assignButton,
-    clearButton
+    createShortcutSetSwitch(),
+    createHeaderIconButton({
+      icon: 'edit',
+      label: '세트 이름 변경',
+      title: shortcutsOff
+        ? 'OFF 상태에서는 세트 이름을 변경할 수 없습니다.'
+        : '세트 이름 변경',
+      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_RENAME,
+      disabled: shortcutsOff,
+      onClick: startShortcutSetRenameMode,
+    }),
+    createHeaderIconButton({
+      icon: 'link',
+      label: '키 지정',
+      title: shortcutsOff
+        ? 'OFF 상태에서는 키 지정할 수 없습니다.'
+        : '키 지정',
+      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_ASSIGN,
+      disabled: shortcutsOff,
+      onClick: toggleAssignModeIfShortcutEnabled,
+    }),
+    createHeaderIconButton({
+      icon: 'unlink',
+      label: bindState.mode === EMOTE_BIND_MODE_CLEAR ? '해제 중' : '해제',
+      title: shortcutsOff
+        ? 'OFF 상태에서는 단축키를 해제할 수 없습니다.'
+        : bindState.mode === EMOTE_BIND_MODE_CLEAR
+          ? '해제 중'
+          : '해제',
+      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_CLEAR,
+      disabled: shortcutsOff,
+      onClick: toggleClearModeIfShortcutEnabled,
+    })
   );
 
   fragment.append(
@@ -533,70 +723,50 @@ function createShortcutSetSwitch() {
   wrapper.setAttribute('role', 'group');
   wrapper.setAttribute('aria-label', '단축키 세트 전환');
 
-  const setState = getCachedShortcutBindingSetState();
   const activeSetId = getCachedActiveShortcutBindingSetId();
+  const sets = getShortcutSetSwitchOptions();
 
-  wrapper.setAttribute(
-    'data-emzk-lite-active-shortcut-set',
-    activeSetId === SHORTCUT_BINDING_SET_2 ? '2' : '1'
-  );
-
-  const sets = Array.isArray(setState?.sets) && setState.sets.length
-    ? setState.sets
-    : [
-      {
-        id: SHORTCUT_BINDING_SET_1,
-        label: '1',
-      },
-      {
-        id: SHORTCUT_BINDING_SET_2,
-        label: '2',
-      },
-    ];
-
-  sets.forEach((set) => {
-    const setId = normalizeShortcutSetId(set?.id);
-
-    if (!setId) return;
-
-    const label = normalizeText(set?.label) ||
-      getShortcutSetFallbackLabel(setId);
-
-    wrapper.appendChild(createShortcutSetButton({
-      setId,
-      label,
-      active: setId === activeSetId,
-    }));
+  syncShortcutSetSwitchMetrics({
+    wrapper,
+    sets,
+    activeSetId,
   });
+
+  createShortcutSetButtons({
+    sets,
+    activeSetId,
+  }).forEach((button) => {
+    wrapper.appendChild(button);
+  });
+
+  attachShortcutSetSwitchPointerEvents(wrapper);
 
   return wrapper;
 }
 
 function updateShortcutSetSwitch(wrapper) {
-  if (!(wrapper instanceof HTMLElement)) {
+  const activeSetId = getCachedActiveShortcutBindingSetId();
+  const sets = getShortcutSetSwitchOptions();
+
+  syncShortcutSetSwitchMetrics({
+    wrapper,
+    sets,
+    activeSetId,
+  });
+
+  if (shouldRebuildShortcutSetSwitch({
+    wrapper,
+    sets,
+  })) {
+    wrapper.replaceChildren(
+      ...createShortcutSetButtons({
+        sets,
+        activeSetId,
+      })
+    );
+
     return;
   }
-
-  const setState = getCachedShortcutBindingSetState();
-  const activeSetId = getCachedActiveShortcutBindingSetId();
-
-  wrapper.setAttribute(
-    'data-emzk-lite-active-shortcut-set',
-    activeSetId === SHORTCUT_BINDING_SET_2 ? '2' : '1'
-  );
-
-  const sets = Array.isArray(setState?.sets) && setState.sets.length
-    ? setState.sets
-    : [
-      {
-        id: SHORTCUT_BINDING_SET_1,
-        label: '1',
-      },
-      {
-        id: SHORTCUT_BINDING_SET_2,
-        label: '2',
-      },
-    ];
 
   sets.forEach((set) => {
     const setId = normalizeShortcutSetId(set?.id);
@@ -611,16 +781,182 @@ function updateShortcutSetSwitch(wrapper) {
       return;
     }
 
-    const label = normalizeText(set?.label) ||
-      getShortcutSetFallbackLabel(setId);
+    const segmentLabel = normalizeText(set?.segmentLabel) ||
+      getShortcutSetSegmentLabel(setId);
+
+    const previewLabel = normalizeText(set?.previewLabel) ||
+      getShortcutSetPreviewLabel({
+        setId,
+        label: set?.label,
+      });
 
     const active = setId === activeSetId;
 
-    button.textContent = label;
-    button.setAttribute('aria-label', `단축키 세트 ${label}`);
-    button.setAttribute('title', `단축키 세트 ${label}`);
+    syncShortcutSetButtonContent({
+      button,
+      setId,
+      segmentLabel,
+    });
+
+    button.setAttribute('aria-label', getShortcutSetButtonAriaLabel({
+      setId,
+      segmentLabel,
+      previewLabel,
+    }));
+
+    button.setAttribute('title', getShortcutSetButtonTitle({
+      setId,
+      segmentLabel,
+      previewLabel,
+    }));
+
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
     button.classList.toggle(SHORTCUT_SET_BUTTON_ACTIVE_CLASS, active);
+  });
+}
+
+function syncShortcutSetSwitchMetrics({
+  wrapper,
+  sets,
+  activeSetId,
+}) {
+  const activeIndex = getShortcutSetActiveIndex({
+    sets,
+    activeSetId,
+  });
+
+  wrapper.style.setProperty(
+    '--emzk-lite-shortcut-set-count',
+    String(sets.length)
+  );
+
+  wrapper.style.setProperty(
+    '--emzk-lite-shortcut-set-active-index',
+    String(activeIndex)
+  );
+
+  wrapper.setAttribute(
+    'data-emzk-lite-shortcut-set-count',
+    String(sets.length)
+  );
+
+  wrapper.setAttribute(
+    'data-emzk-lite-active-shortcut-set',
+    String(activeIndex)
+  );
+}
+
+function getShortcutSetActiveIndex({
+  sets,
+  activeSetId,
+}) {
+  const normalizedActiveSetId = normalizeShortcutSetId(activeSetId);
+  const activeIndex = sets.findIndex((set) => {
+    return normalizeShortcutSetId(set?.id) === normalizedActiveSetId;
+  });
+
+  return Math.max(0, activeIndex);
+}
+
+function getShortcutSetSwitchOptions() {
+  const setState = getCachedShortcutBindingSetState();
+  const setCount = normalizeShortcutBindingSetCount(setState?.setCount);
+  const storedSets = Array.isArray(setState?.sets)
+    ? setState.sets
+    : [];
+
+  const storedSetById = new Map();
+
+  storedSets.forEach((set) => {
+    const setId = normalizeShortcutSetId(set?.id);
+
+    if (!setId || setId === SHORTCUT_BINDING_SET_OFF) {
+      return;
+    }
+
+    storedSetById.set(setId, set);
+  });
+
+  const visibleSets = Array.from({
+    length: setCount,
+  }, (_, index) => {
+    const setIndex = index + 1;
+    const setId = createShortcutBindingSetId(setIndex);
+    const storedSet = storedSetById.get(setId);
+
+    return {
+      id: setId,
+      segmentLabel: getShortcutSetSegmentLabel(setId),
+      previewLabel: getShortcutSetPreviewLabel({
+        setId,
+        label: storedSet?.label,
+      }),
+    };
+  });
+
+  return [
+    {
+      id: SHORTCUT_BINDING_SET_OFF,
+      segmentLabel: 'OFF',
+      previewLabel: 'OFF',
+    },
+    ...visibleSets,
+  ];
+}
+
+function createShortcutSetButtons({
+  sets,
+  activeSetId,
+}) {
+  return sets
+    .map((set) => {
+      const setId = normalizeShortcutSetId(set?.id);
+
+      if (!setId) return null;
+
+      const segmentLabel = normalizeText(set?.segmentLabel) ||
+        getShortcutSetSegmentLabel(setId);
+
+      const previewLabel = normalizeText(set?.previewLabel) ||
+        getShortcutSetPreviewLabel({
+          setId,
+          label: set?.label,
+        });
+
+      return createShortcutSetButton({
+        setId,
+        segmentLabel,
+        previewLabel,
+        active: setId === activeSetId,
+      });
+    })
+    .filter(Boolean);
+}
+
+function shouldRebuildShortcutSetSwitch({
+  wrapper,
+  sets,
+}) {
+  const buttons = Array.from(
+    wrapper.querySelectorAll(`:scope > .${SHORTCUT_SET_BUTTON_CLASS}`)
+  );
+
+  const expectedSetIds = sets
+    .map((set) => normalizeShortcutSetId(set?.id))
+    .filter(Boolean);
+
+  const currentSetIds = buttons
+    .map((button) => normalizeShortcutSetId(
+      button.getAttribute('data-emzk-lite-shortcut-set-id')
+    ))
+    .filter(Boolean);
+
+  if (currentSetIds.length !== expectedSetIds.length) {
+    return true;
+  }
+
+  return expectedSetIds.some((setId) => {
+    return !currentSetIds.includes(setId);
   });
 }
 
@@ -628,9 +964,15 @@ function syncDefaultHeaderActionButtons({
   actions,
   bindState,
 }) {
+  const shortcutsOff = isShortcutBindingOff();
+
   const buttons = Array.from(
     actions.querySelectorAll(`:scope > .${BIND_BUTTON_CLASS}`)
   );
+
+  const hasRenameButton = buttons.some((button) => {
+    return button.getAttribute('aria-label') === '세트 이름 변경';
+  });
 
   const hasAssignButton = buttons.some((button) => {
     return button.getAttribute('aria-label') === '키 지정';
@@ -642,38 +984,49 @@ function syncDefaultHeaderActionButtons({
     return label === '해제' || label === '해제 중';
   });
 
-  if (hasAssignButton && hasClearButton) {
+  if (
+    hasRenameButton &&
+    hasAssignButton &&
+    hasClearButton
+  ) {
     buttons.forEach((button) => {
       const label = button.getAttribute('aria-label');
 
+      if (label === '세트 이름 변경') {
+        syncHeaderIconButtonState(button, {
+          label: '세트 이름 변경',
+          title: shortcutsOff
+            ? 'OFF 상태에서는 세트 이름을 변경할 수 없습니다.'
+            : '세트 이름 변경',
+          active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_RENAME,
+          disabled: shortcutsOff,
+        });
+      }
+
       if (label === '키 지정') {
-        button.classList.toggle(
-          BIND_BUTTON_ACTIVE_CLASS,
-          bindState.mode === EMOTE_BIND_MODE_ASSIGN
-        );
-        button.setAttribute(
-          'aria-pressed',
-          bindState.mode === EMOTE_BIND_MODE_ASSIGN ? 'true' : 'false'
-        );
+        syncHeaderIconButtonState(button, {
+          label: '키 지정',
+          title: shortcutsOff
+            ? 'OFF 상태에서는 키 지정할 수 없습니다.'
+            : '키 지정',
+          active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_ASSIGN,
+          disabled: shortcutsOff,
+        });
       }
 
       if (label === '해제' || label === '해제 중') {
-        button.classList.toggle(
-          BIND_BUTTON_ACTIVE_CLASS,
-          bindState.mode === EMOTE_BIND_MODE_CLEAR
-        );
-        button.setAttribute(
-          'aria-pressed',
-          bindState.mode === EMOTE_BIND_MODE_CLEAR ? 'true' : 'false'
-        );
-        button.setAttribute(
-          'aria-label',
-          bindState.mode === EMOTE_BIND_MODE_CLEAR ? '해제 중' : '해제'
-        );
-        button.setAttribute(
-          'title',
-          bindState.mode === EMOTE_BIND_MODE_CLEAR ? '해제 중' : '해제'
-        );
+        const clearLabel = bindState.mode === EMOTE_BIND_MODE_CLEAR
+          ? '해제 중'
+          : '해제';
+
+        syncHeaderIconButtonState(button, {
+          label: clearLabel,
+          title: shortcutsOff
+            ? 'OFF 상태에서는 단축키를 해제할 수 없습니다.'
+            : clearLabel,
+          active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_CLEAR,
+          disabled: shortcutsOff,
+        });
       }
     });
 
@@ -683,38 +1036,86 @@ function syncDefaultHeaderActionButtons({
   actions.replaceChildren(
     createShortcutSetSwitch(),
     createHeaderIconButton({
+      icon: 'edit',
+      label: '세트 이름 변경',
+      title: shortcutsOff
+        ? 'OFF 상태에서는 세트 이름을 변경할 수 없습니다.'
+        : '세트 이름 변경',
+      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_RENAME,
+      disabled: shortcutsOff,
+      onClick: startShortcutSetRenameMode,
+    }),
+    createHeaderIconButton({
       icon: 'link',
       label: '키 지정',
-      active: bindState.mode === EMOTE_BIND_MODE_ASSIGN,
-      onClick: () => {
-        toggleEmoteBindAssignMode();
-      },
+      title: shortcutsOff
+        ? 'OFF 상태에서는 키 지정할 수 없습니다.'
+        : '키 지정',
+      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_ASSIGN,
+      disabled: shortcutsOff,
+      onClick: toggleAssignModeIfShortcutEnabled,
     }),
     createHeaderIconButton({
       icon: 'unlink',
       label: bindState.mode === EMOTE_BIND_MODE_CLEAR ? '해제 중' : '해제',
-      active: bindState.mode === EMOTE_BIND_MODE_CLEAR,
-      onClick: () => {
-        toggleEmoteBindClearMode();
-      },
+      title: shortcutsOff
+        ? 'OFF 상태에서는 단축키를 해제할 수 없습니다.'
+        : bindState.mode === EMOTE_BIND_MODE_CLEAR
+          ? '해제 중'
+          : '해제',
+      active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_CLEAR,
+      disabled: shortcutsOff,
+      onClick: toggleClearModeIfShortcutEnabled,
     })
   );
 }
 
+function syncHeaderIconButtonState(button, {
+  label,
+  title,
+  active,
+  disabled,
+}) {
+  button.disabled = Boolean(disabled);
+  button.setAttribute('aria-label', label);
+  button.setAttribute('title', title || label);
+  button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  button.classList.toggle(BIND_BUTTON_ACTIVE_CLASS, Boolean(active));
+  button.classList.toggle(BIND_BUTTON_DISABLED_CLASS, Boolean(disabled));
+}
+
 function createShortcutSetButton({
   setId,
-  label,
+  segmentLabel,
+  previewLabel,
   active,
 }) {
   const button = document.createElement('button');
 
   button.type = 'button';
   button.className = SHORTCUT_SET_BUTTON_CLASS;
-  button.textContent = label;
   button.setAttribute('data-emzk-lite-shortcut-set-id', setId);
-  button.setAttribute('aria-label', `단축키 세트 ${label}`);
-  button.setAttribute('title', `단축키 세트 ${label}`);
+
+  button.setAttribute('aria-label', getShortcutSetButtonAriaLabel({
+    setId,
+    segmentLabel,
+    previewLabel,
+  }));
+
+  button.setAttribute('title', getShortcutSetButtonTitle({
+    setId,
+    segmentLabel,
+    previewLabel,
+  }));
+
   button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  button.setAttribute('draggable', 'false');
+
+  syncShortcutSetButtonContent({
+    button,
+    setId,
+    segmentLabel,
+  });
 
   if (active) {
     button.classList.add(SHORTCUT_SET_BUTTON_ACTIVE_CLASS);
@@ -724,6 +1125,10 @@ function createShortcutSetButton({
 
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
+
+    if (isShortcutSetClickSuppressed(button)) {
+      return;
+    }
 
     if (isShortcutSetButtonCurrentlyActive(setId)) {
       return;
@@ -758,17 +1163,336 @@ function createShortcutSetButton({
   return button;
 }
 
+function syncShortcutSetButtonContent({
+  button,
+  setId,
+  segmentLabel,
+}) {
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  if (setId === SHORTCUT_BINDING_SET_OFF) {
+    const icon = button.querySelector(
+      `:scope > .${SHORTCUT_SET_OFF_ICON_CLASS}`
+    );
+
+    if (icon) {
+      button.replaceChildren(icon);
+      return;
+    }
+
+    button.replaceChildren(createShortcutSetOffIcon());
+    return;
+  }
+
+  button.textContent = segmentLabel;
+}
+
+function createShortcutSetOffIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+
+  svg.setAttribute('viewBox', '0 0 12 12');
+  svg.setAttribute('width', '12');
+  svg.setAttribute('height', '12');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  svg.classList.add(SHORTCUT_SET_OFF_ICON_CLASS);
+
+  circle.setAttribute('cx', '6');
+  circle.setAttribute('cy', '6');
+  circle.setAttribute('r', '4.25');
+  circle.setAttribute('fill', 'none');
+  circle.setAttribute('stroke', 'currentColor');
+  circle.setAttribute('stroke-width', '1.5');
+
+  svg.appendChild(circle);
+
+  return svg;
+}
+
+function attachShortcutSetSwitchPointerEvents(wrapper) {
+  let dragging = false;
+  let startClientX = 0;
+  let lastSetId = '';
+  let hasDragged = false;
+
+  wrapper.addEventListener('pointerdown', (event) => {
+    if (
+      event.pointerType === 'mouse' &&
+      event.button !== 0
+    ) {
+      return;
+    }
+
+    stopControlEvent(event);
+
+    dragging = true;
+    startClientX = event.clientX;
+    lastSetId = '';
+    hasDragged = false;
+
+    setShortcutSetDragging(wrapper, false);
+
+    wrapper.setPointerCapture?.(event.pointerId);
+
+    switchShortcutSetByPointer({
+      wrapper,
+      clientX: event.clientX,
+      lastSetId,
+      onSetIdChange: (setId) => {
+        lastSetId = setId;
+      },
+    });
+  });
+
+  wrapper.addEventListener('pointermove', (event) => {
+    if (!dragging) {
+      return;
+    }
+
+    stopControlEvent(event);
+
+    if (
+      Math.abs(event.clientX - startClientX) >=
+      SHORTCUT_SET_DRAG_THRESHOLD
+    ) {
+      hasDragged = true;
+      setShortcutSetDragging(wrapper, true);
+    }
+
+    switchShortcutSetByPointer({
+      wrapper,
+      clientX: event.clientX,
+      lastSetId,
+      onSetIdChange: (setId) => {
+        lastSetId = setId;
+      },
+    });
+  });
+
+  wrapper.addEventListener('pointerup', (event) => {
+    if (!dragging) {
+      return;
+    }
+
+    stopControlEvent(event);
+
+    dragging = false;
+    wrapper.releasePointerCapture?.(event.pointerId);
+    hideShortcutSetDragPreview();
+    setShortcutSetDragging(wrapper, false);
+
+    if (hasDragged) {
+      suppressNextShortcutSetClick(wrapper);
+    }
+  });
+
+  wrapper.addEventListener('pointercancel', () => {
+    dragging = false;
+    hasDragged = false;
+
+    hideShortcutSetDragPreview();
+    setShortcutSetDragging(wrapper, false);
+  });
+}
+
+function setShortcutSetDragging(wrapper, dragging) {
+  if (!(wrapper instanceof Element)) {
+    return;
+  }
+
+  if (dragging) {
+    wrapper.setAttribute(SHORTCUT_SET_DRAGGING_ATTR, 'true');
+    return;
+  }
+
+  wrapper.removeAttribute(SHORTCUT_SET_DRAGGING_ATTR);
+}
+
+function switchShortcutSetByPointer({
+  wrapper,
+  clientX,
+  lastSetId,
+  onSetIdChange,
+}) {
+  const shortcutSet = getShortcutSetFromPointerPosition({
+    wrapper,
+    clientX,
+  });
+
+  if (!shortcutSet) {
+    return;
+  }
+
+  showShortcutSetDragPreview({
+    wrapper,
+    shortcutSet,
+  });
+
+  const setId = shortcutSet.setId;
+
+  if (!setId || setId === lastSetId) {
+    return;
+  }
+
+  onSetIdChange(setId);
+
+  if (isShortcutSetButtonCurrentlyActive(setId)) {
+    return;
+  }
+
+  void switchShortcutSet(setId)
+    .catch((error) => {
+      console.error('[Emozzk Lite] failed to switch shortcut set:', error);
+    });
+}
+
+function getShortcutSetFromPointerPosition({
+  wrapper,
+  clientX,
+}) {
+  const sets = getShortcutSetSwitchOptions();
+
+  if (!sets.length) {
+    return null;
+  }
+
+  const rect = wrapper.getBoundingClientRect();
+
+  if (!rect.width) {
+    return null;
+  }
+
+  const clampedClientX = Math.min(
+    rect.right - 0.1,
+    Math.max(rect.left, clientX)
+  );
+
+  const ratio = (clampedClientX - rect.left) / rect.width;
+
+  const index = Math.min(
+    sets.length - 1,
+    Math.max(0, Math.floor(ratio * sets.length))
+  );
+
+  const set = sets[index];
+  const setId = normalizeShortcutSetId(set?.id);
+
+  if (!setId) {
+    return null;
+  }
+
+  return {
+    setId,
+    previewLabel: normalizeText(set?.previewLabel) ||
+      getShortcutSetPreviewLabel({
+        setId,
+        label: set?.label,
+      }),
+    index,
+  };
+}
+
+function getShortcutSetDragPreview() {
+  let preview = document.querySelector(
+    `.${SHORTCUT_SET_DRAG_PREVIEW_CLASS}`
+  );
+
+  if (preview instanceof HTMLElement) {
+    return preview;
+  }
+
+  preview = document.createElement('span');
+  preview.className = SHORTCUT_SET_DRAG_PREVIEW_CLASS;
+  preview.hidden = true;
+  preview.setAttribute('aria-hidden', 'true');
+
+  document.body.appendChild(preview);
+
+  return preview;
+}
+
+function showShortcutSetDragPreview({
+  wrapper,
+  shortcutSet,
+}) {
+  const preview = getShortcutSetDragPreview();
+  const rect = wrapper.getBoundingClientRect();
+  const setCount = Math.max(1, getShortcutSetSwitchOptions().length);
+  const slotWidth = rect.width / setCount;
+
+  const label = shortcutSet?.setId === SHORTCUT_BINDING_SET_OFF
+    ? 'OFF'
+    : normalizeText(shortcutSet?.previewLabel) ||
+      getShortcutSetFallbackLabel(shortcutSet?.setId);
+
+  const left = rect.left + slotWidth * shortcutSet.index + slotWidth / 2;
+  const top = rect.top - 7;
+
+  preview.textContent = label;
+  preview.hidden = false;
+
+  preview.style.left = `${left}px`;
+  preview.style.top = `${top}px`;
+}
+
+function hideShortcutSetDragPreview() {
+  const preview = document.querySelector(
+    `.${SHORTCUT_SET_DRAG_PREVIEW_CLASS}`
+  );
+
+  if (!(preview instanceof HTMLElement)) {
+    return;
+  }
+
+  preview.hidden = true;
+}
+
+function removeShortcutSetDragPreview() {
+  document
+    .querySelectorAll(`.${SHORTCUT_SET_DRAG_PREVIEW_CLASS}`)
+    .forEach((preview) => {
+      preview.remove();
+    });
+
+  document
+    .querySelectorAll(`[${SHORTCUT_SET_DRAGGING_ATTR}]`)
+    .forEach((element) => {
+      element.removeAttribute(SHORTCUT_SET_DRAGGING_ATTR);
+    });
+}
+
+function suppressNextShortcutSetClick(wrapper) {
+  wrapper.setAttribute(SHORTCUT_SET_DRAG_SUPPRESS_CLICK_ATTR, 'true');
+
+  window.setTimeout(() => {
+    wrapper.removeAttribute(SHORTCUT_SET_DRAG_SUPPRESS_CLICK_ATTR);
+  }, 80);
+}
+
+function isShortcutSetClickSuppressed(button) {
+  const wrapper = button.closest(`.${SHORTCUT_SET_SWITCH_CLASS}`);
+
+  return wrapper?.getAttribute(SHORTCUT_SET_DRAG_SUPPRESS_CLICK_ATTR) === 'true';
+}
+
 function isShortcutSetButtonCurrentlyActive(setId) {
-  return getCachedActiveShortcutBindingSetId() === setId;
+  return getCachedActiveShortcutBindingSetId() === normalizeShortcutSetId(setId);
 }
 
 async function switchShortcutSet(setId) {
-  await setActiveShortcutBindingSet(setId);
+  const normalizedSetId = normalizeShortcutSetId(setId);
 
-  /*
-   * setActiveShortcutBindingSet() 내부에서 SHORTCUT_BINDINGS_CHANGED_EVENT가 발생하지만,
-   * 즉시 UI와 badge를 맞추기 위해 한 번 더 예약한다.
-   */
+  if (!normalizedSetId) {
+    return;
+  }
+
+  exitEmoteBindMode();
+
+  await setActiveShortcutBindingSet(normalizedSetId);
+
   scheduleFavoriteEmoteSectionRender();
   scheduleBadgeUpdate();
 }
@@ -776,22 +1500,115 @@ async function switchShortcutSet(setId) {
 function normalizeShortcutSetId(setId) {
   const normalizedSetId = normalizeText(setId);
 
-  if (
-    normalizedSetId === SHORTCUT_BINDING_SET_1 ||
-    normalizedSetId === SHORTCUT_BINDING_SET_2
-  ) {
-    return normalizedSetId;
+  if (normalizedSetId === SHORTCUT_BINDING_SET_OFF) {
+    return SHORTCUT_BINDING_SET_OFF;
   }
 
-  return '';
+  const setIndex = getShortcutBindingSetIndex(normalizedSetId);
+
+  return createShortcutBindingSetId(setIndex);
 }
 
 function getShortcutSetFallbackLabel(setId) {
-  if (setId === SHORTCUT_BINDING_SET_2) {
-    return '2';
+  if (setId === SHORTCUT_BINDING_SET_OFF) {
+    return 'OFF';
   }
 
-  return '1';
+  const setIndex = getShortcutBindingSetIndex(setId);
+
+  if (!setIndex) {
+    return '';
+  }
+
+  return String(setIndex);
+}
+
+function getShortcutSetSegmentLabel(setId) {
+  return getShortcutSetFallbackLabel(setId);
+}
+
+function getShortcutSetCustomLabel({
+  setId,
+  label,
+}) {
+  const normalizedLabel = normalizeText(label);
+  const fallbackLabel = getShortcutSetFallbackLabel(setId);
+
+  if (!normalizedLabel) {
+    return '';
+  }
+
+  if (normalizedLabel === fallbackLabel) {
+    return '';
+  }
+
+  return normalizedLabel;
+}
+
+function getShortcutSetPreviewLabel({
+  setId,
+  label,
+}) {
+  return getShortcutSetCustomLabel({
+    setId,
+    label,
+  }) || getShortcutSetFallbackLabel(setId);
+}
+
+function getShortcutSetButtonAriaLabel({
+  setId,
+  segmentLabel,
+  previewLabel,
+}) {
+  if (setId === SHORTCUT_BINDING_SET_OFF) {
+    return '단축키 OFF';
+  }
+
+  if (
+    previewLabel &&
+    previewLabel !== segmentLabel
+  ) {
+    return `단축키 세트 ${segmentLabel}: ${previewLabel}`;
+  }
+
+  return `단축키 세트 ${segmentLabel}`;
+}
+
+function getShortcutSetButtonTitle({
+  setId,
+  segmentLabel,
+  previewLabel,
+}) {
+  if (setId === SHORTCUT_BINDING_SET_OFF) {
+    return '단축키 OFF';
+  }
+
+  if (
+    previewLabel &&
+    previewLabel !== segmentLabel
+  ) {
+    return `${segmentLabel} · ${previewLabel}`;
+  }
+
+  return `단축키 세트 ${segmentLabel}`;
+}
+
+function isShortcutBindingOff() {
+  return getCachedActiveShortcutBindingSetId() === SHORTCUT_BINDING_SET_OFF;
+}
+
+function toggleAssignModeIfShortcutEnabled() {
+  if (isShortcutBindingOff()) return;
+
+  exitShortcutSetRenameModeSilently();
+  toggleEmoteBindAssignMode();
+}
+
+function toggleClearModeIfShortcutEnabled() {
+  if (isShortcutBindingOff()) return;
+
+  exitShortcutSetRenameModeSilently();
+  toggleEmoteBindClearMode();
 }
 
 function createAssignTitleContent(bindState) {
@@ -802,11 +1619,12 @@ function createAssignTitleContent(bindState) {
   left.className = BIND_LEFT_CLASS;
 
   left.appendChild(createSelectedEmotePreview(bindState));
-  left.appendChild(createKeycapButton(bindState));
 
   if (isEmoteBindExperimentalKeyupEnabled()) {
     left.appendChild(createPhaseToggleButton(bindState));
   }
+
+  left.appendChild(createAssignHint(bindState));
 
   bar.append(
     left,
@@ -816,15 +1634,108 @@ function createAssignTitleContent(bindState) {
   return bar;
 }
 
+function createAssignHint(bindState) {
+  const hint = document.createElement('span');
+
+  hint.className = BIND_HINT_CLASS;
+  hint.textContent = getAssignHintText(bindState);
+  hint.setAttribute('title', getAssignHintDescription(bindState));
+
+  return hint;
+}
+
+function getAssignHintDescription(bindState) {
+  if (bindState?.isSaving) {
+    return '단축키를 저장하는 중입니다.';
+  }
+
+  const hasSelectedEmote = Boolean(
+    normalizeText(bindState?.selectedEmojiId)
+  );
+
+  const selectedCode = normalizeShortcutCode(bindState?.selectedCode);
+
+  if (!hasSelectedEmote) {
+    return '단축키를 지정할 이모티콘을 선택하세요.';
+  }
+
+  if (!selectedCode) {
+    return '등록할 키를 입력하세요. Space와 Enter는 등록되지 않습니다. Escape를 누르면 취소됩니다.';
+  }
+
+  return `${getEmoteBindCodeLabel(selectedCode)} 단축키가 선택되었습니다. 다른 키를 누르면 저장 전 단축키를 바꿀 수 있습니다.`;
+}
+
+function getAssignHintText(bindState) {
+  if (bindState?.isSaving) {
+    return '저장 중';
+  }
+
+  const hasSelectedEmote = Boolean(
+    normalizeText(bindState?.selectedEmojiId)
+  );
+
+  const selectedCode = normalizeShortcutCode(bindState?.selectedCode);
+
+  if (!hasSelectedEmote) {
+    return '이모티콘 선택';
+  }
+
+  if (!selectedCode) {
+    return '키 입력';
+  }
+
+  return `${getEmoteBindCodeLabel(selectedCode)}`;
+}
+
 function createClearTitleContent(bindState) {
   const bar = document.createElement('span');
 
   bar.className = BIND_BAR_CLASS;
   bar.classList.add(BIND_CLEAR_BAR_CLASS);
 
-  bar.appendChild(createClearActionButtons(bindState));
+  const left = document.createElement('span');
+  left.className = BIND_LEFT_CLASS;
+
+  left.appendChild(createClearHint(bindState));
+
+  bar.append(
+    left,
+    createClearActionButtons(bindState)
+  );
 
   return bar;
+}
+
+function createClearHint(bindState) {
+  const hint = document.createElement('span');
+
+  hint.className = BIND_HINT_CLASS;
+  hint.textContent = getClearHintText(bindState);
+  hint.setAttribute('title', getClearHintDescription(bindState));
+  hint.setAttribute('aria-label', getClearHintDescription(bindState));
+
+  return hint;
+}
+
+function getClearHintText(bindState) {
+  const selectedCount = getSelectedClearEmojiIds(bindState).length;
+
+  if (selectedCount <= 0) {
+    return '이모티콘 선택';
+  }
+
+  return `${selectedCount}개 선택됨`;
+}
+
+function getClearHintDescription(bindState) {
+  const selectedCount = getSelectedClearEmojiIds(bindState).length;
+
+  if (selectedCount <= 0) {
+    return '단축키를 해제할 이모티콘을 선택하세요.';
+  }
+
+  return `${selectedCount}개의 이모티콘이 해제 대상으로 선택되었습니다.`;
 }
 
 function createSelectedEmotePreview(bindState) {
@@ -863,54 +1774,6 @@ function createSelectedEmotePreview(bindState) {
   return wrapper;
 }
 
-function createKeycapButton(bindState) {
-  const button = document.createElement('button');
-
-  button.type = 'button';
-  button.className = BIND_KEYCAP_BUTTON_CLASS;
-  button.setAttribute('aria-label', '키 입력 대기');
-  button.setAttribute(
-    'title',
-    bindState.keyListening
-      ? '키 입력 대기 중'
-      : '키 지정'
-  );
-
-  if (bindState.keyListening) {
-    button.classList.add(BIND_KEYCAP_BUTTON_LISTENING_CLASS);
-  }
-
-  const label = document.createElement('span');
-
-  label.className = BIND_KEYCAP_TEXT_CLASS;
-  label.textContent = bindState.keyListening
-    ? 'KEY'
-    : getEmoteBindCodeLabel(bindState.selectedCode);
-
-  button.appendChild(label);
-
-  button.addEventListener('mousedown', stopControlEvent);
-
-  button.addEventListener('click', (event) => {
-    stopControlEvent(event);
-    startEmoteBindKeyListening();
-  });
-
-  button.addEventListener('keydown', (event) => {
-    if (
-      event.code !== 'Enter' &&
-      event.code !== 'Space'
-    ) {
-      return;
-    }
-
-    stopControlEvent(event);
-    startEmoteBindKeyListening();
-  });
-
-  return button;
-}
-
 function createPhaseToggleButton(bindState) {
   const currentPhase = normalizeRenderPhase(bindState.selectedPhase);
   const nextPhase = getNextEmoteBindPhase(currentPhase);
@@ -943,6 +1806,15 @@ function createPhaseToggleButton(bindState) {
     }
 
     stopControlEvent(event);
+
+    /*
+     * keyListening 중 Enter/Space가 단축키 입력과 섞이는 걸 피한다.
+     * phase는 마우스 클릭으로 바꾸는 쪽이 안전하다.
+     */
+    if (bindState?.keyListening) {
+      return;
+    }
+
     setEmoteBindPhase(nextPhase);
   });
 
@@ -986,6 +1858,8 @@ function appendSvgPath(svg, d) {
   path.setAttribute('stroke-linejoin', 'round');
 
   svg.appendChild(path);
+
+  return path;
 }
 
 function normalizeRenderPhase(phase) {
@@ -1007,7 +1881,7 @@ function createAssignActionButtons(bindState) {
 
   actions.append(
     createAssignSaveButton(bindState),
-    createAssignCancelButton()
+    createAssignCancelButton(bindState)
   );
 
   return actions;
@@ -1020,7 +1894,7 @@ function createClearActionButtons(bindState) {
 
   actions.append(
     createClearSaveButton(bindState),
-    createClearCancelButton()
+    createClearCancelButton(bindState)
   );
 
   return actions;
@@ -1029,15 +1903,17 @@ function createClearActionButtons(bindState) {
 function createAssignSaveButton(bindState) {
   const button = document.createElement('button');
 
+  const isSaving = Boolean(bindState?.isSaving);
+  const canSave = canSaveAssignState(bindState);
+  const saveLabel = isSaving ? '저장 중' : '저장';
+
   button.type = 'button';
   button.className = BIND_BUTTON_CLASS;
   button.classList.add(BIND_SAVE_BUTTON_CLASS);
-  button.setAttribute('aria-label', '저장');
-  button.setAttribute('title', '저장');
+  button.setAttribute('aria-label', saveLabel);
+  button.setAttribute('title', saveLabel);
 
-  const canSave = canSaveAssignState(bindState);
-
-  if (!canSave) {
+  if (!canSave || isSaving) {
     button.disabled = true;
     button.classList.add(BIND_BUTTON_DISABLED_CLASS);
   }
@@ -1049,27 +1925,16 @@ function createAssignSaveButton(bindState) {
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
 
-    if (!canSave) return;
+    const currentState = getEmoteBindModeState();
 
-    void saveAssignState(bindState)
-      .catch((error) => {
-        console.error('[Emozzk Lite] failed to save shortcut binding:', error);
-      });
-  });
-
-  button.addEventListener('keydown', (event) => {
     if (
-      event.code !== 'Enter' &&
-      event.code !== 'Space'
+      !canSaveAssignState(currentState) ||
+      isEmoteBindSaving()
     ) {
       return;
     }
 
-    stopControlEvent(event);
-
-    if (!canSave) return;
-
-    void saveAssignState(bindState)
+    void saveAssignState(currentState)
       .catch((error) => {
         console.error('[Emozzk Lite] failed to save shortcut binding:', error);
       });
@@ -1081,15 +1946,23 @@ function createAssignSaveButton(bindState) {
 function createClearSaveButton(bindState) {
   const button = document.createElement('button');
 
+  const selectedCount = getSelectedClearEmojiIds(bindState).length;
+  const isSaving = Boolean(bindState?.isSaving);
+  const canSave = canSaveClearState(bindState);
+
+  const saveLabel = isSaving
+    ? '해제 저장 중'
+    : canSave
+      ? `${selectedCount}개 해제 저장`
+      : '해제할 이모티콘을 선택하세요';
+
   button.type = 'button';
   button.className = BIND_BUTTON_CLASS;
   button.classList.add(BIND_SAVE_BUTTON_CLASS);
-  button.setAttribute('aria-label', '해제 저장');
-  button.setAttribute('title', '해제 저장');
+  button.setAttribute('aria-label', saveLabel);
+  button.setAttribute('title', saveLabel);
 
-  const canSave = canSaveClearState(bindState);
-
-  if (!canSave) {
+  if (!canSave || isSaving) {
     button.disabled = true;
     button.classList.add(BIND_BUTTON_DISABLED_CLASS);
   }
@@ -1101,27 +1974,16 @@ function createClearSaveButton(bindState) {
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
 
-    if (!canSave) return;
+    const currentState = getEmoteBindModeState();
 
-    void saveClearState(bindState)
-      .catch((error) => {
-        console.error('[Emozzk Lite] failed to clear shortcut bindings:', error);
-      });
-  });
-
-  button.addEventListener('keydown', (event) => {
     if (
-      event.code !== 'Enter' &&
-      event.code !== 'Space'
+      !canSaveClearState(currentState) ||
+      isEmoteBindSaving()
     ) {
       return;
     }
 
-    stopControlEvent(event);
-
-    if (!canSave) return;
-
-    void saveClearState(bindState)
+    void saveClearState(currentState)
       .catch((error) => {
         console.error('[Emozzk Lite] failed to clear shortcut bindings:', error);
       });
@@ -1130,14 +1992,20 @@ function createClearSaveButton(bindState) {
   return button;
 }
 
-function createAssignCancelButton() {
+function createAssignCancelButton(bindState) {
   const button = document.createElement('button');
+  const isSaving = Boolean(bindState?.isSaving);
 
   button.type = 'button';
   button.className = BIND_BUTTON_CLASS;
   button.classList.add(BIND_CANCEL_BUTTON_CLASS);
-  button.setAttribute('aria-label', '취소');
-  button.setAttribute('title', '취소');
+  button.setAttribute('aria-label', isSaving ? '저장 중' : '취소');
+  button.setAttribute('title', isSaving ? '저장 중' : '취소');
+
+  if (isSaving) {
+    button.disabled = true;
+    button.classList.add(BIND_BUTTON_DISABLED_CLASS);
+  }
 
   button.appendChild(createCancelXIcon());
 
@@ -1145,6 +2013,9 @@ function createAssignCancelButton() {
 
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
+
+    if (isSaving) return;
+
     cancelAssignState();
   });
 
@@ -1157,20 +2028,29 @@ function createAssignCancelButton() {
     }
 
     stopControlEvent(event);
+
+    if (isSaving) return;
+
     cancelAssignState();
   });
 
   return button;
 }
 
-function createClearCancelButton() {
+function createClearCancelButton(bindState) {
   const button = document.createElement('button');
+  const isSaving = Boolean(bindState?.isSaving);
 
   button.type = 'button';
   button.className = BIND_BUTTON_CLASS;
   button.classList.add(BIND_CANCEL_BUTTON_CLASS);
-  button.setAttribute('aria-label', '해제 취소');
-  button.setAttribute('title', '해제 취소');
+  button.setAttribute('aria-label', isSaving ? '해제 저장 중' : '해제 취소');
+  button.setAttribute('title', isSaving ? '해제 저장 중' : '해제 취소');
+
+  if (isSaving) {
+    button.disabled = true;
+    button.classList.add(BIND_BUTTON_DISABLED_CLASS);
+  }
 
   button.appendChild(createCancelXIcon());
 
@@ -1178,6 +2058,9 @@ function createClearCancelButton() {
 
   button.addEventListener('click', (event) => {
     stopControlEvent(event);
+
+    if (isSaving) return;
+
     cancelClearState();
   });
 
@@ -1190,6 +2073,9 @@ function createClearCancelButton() {
     }
 
     stopControlEvent(event);
+
+    if (isSaving) return;
+
     cancelClearState();
   });
 
@@ -1197,39 +2083,89 @@ function createClearCancelButton() {
 }
 
 async function saveAssignState(bindState) {
-  if (!canSaveAssignState(bindState)) {
+  if (
+    !canSaveAssignState(bindState) ||
+    isEmoteBindSaving()
+  ) {
     return;
   }
 
-  await assignShortcutBindingTarget({
-    code: bindState.selectedCode,
-    phase: bindState.selectedPhase,
-    emojiId: bindState.selectedEmojiId,
-  });
-
-  exitEmoteBindMode();
-
+  setEmoteBindSaving(true);
   scheduleFavoriteEmoteSectionRender();
   scheduleBadgeUpdate();
+
+  try {
+    await assignShortcutBindingTarget({
+      code: normalizeShortcutCode(bindState.selectedCode),
+      phase: normalizeRenderPhase(bindState.selectedPhase),
+      emojiId: bindState.selectedEmojiId,
+    });
+
+    const favoriteResult = await ensureFavoriteRecentEmoteAppended({
+      emojiId: bindState.selectedEmojiId,
+      imageUrl: bindState.selectedEmojiImageUrl,
+    });
+
+    if (favoriteResult.changed) {
+      const mergedRecentEmotes = syncRecentLocalStorageWithFavorites({
+        favorites: favoriteResult.favorites,
+      });
+
+      dispatchFavoritesChanged({
+        emojiId: bindState.selectedEmojiId,
+        added: favoriteResult.added,
+        removed: favoriteResult.removed,
+        source: 'bind',
+        favorites: favoriteResult.favorites,
+        mergedRecentEmotes,
+      });
+    }
+
+    exitEmoteBindMode();
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+  } catch (error) {
+    setEmoteBindSaving(false);
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+
+    throw error;
+  }
 }
 
 async function saveClearState(bindState) {
   const emojiIds = getSelectedClearEmojiIds(bindState);
 
-  if (!emojiIds.length) {
+  if (
+    !emojiIds.length ||
+    isEmoteBindSaving()
+  ) {
     return;
   }
 
-  for (const emojiId of emojiIds) {
-    await clearShortcutBindingsByEmojiId({
-      emojiId,
-    });
-  }
-
-  exitEmoteBindMode();
-
+  setEmoteBindSaving(true);
   scheduleFavoriteEmoteSectionRender();
   scheduleBadgeUpdate();
+
+  try {
+    await clearShortcutBindingsByEmojiIds({
+			emojiIds,
+		});
+
+    exitEmoteBindMode();
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+  } catch (error) {
+    setEmoteBindSaving(false);
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+
+    throw error;
+  }
 }
 
 function cancelAssignState() {
@@ -1246,15 +2182,45 @@ function cancelClearState() {
   scheduleBadgeUpdate();
 }
 
+function syncRecentLocalStorageWithFavorites({
+  favorites,
+}) {
+  const recent = readRecentEmotes();
+
+  const merged = mergeFavoriteAndRecentEmotes({
+    favorites,
+    recent,
+    maxRecentEmoteCount: getCachedRecentStorageLimit(),
+  });
+
+  writeRecentEmotes(merged);
+
+  return merged;
+}
+
 function canSaveAssignState(bindState) {
+  if (
+    bindState?.isSaving ||
+    isShortcutBindingOff()
+  ) {
+    return false;
+  }
+
   return Boolean(
     normalizeText(bindState?.selectedEmojiId) &&
-    normalizeText(bindState?.selectedCode) &&
-    normalizeText(bindState?.selectedPhase)
+    normalizeShortcutCode(bindState?.selectedCode) &&
+    normalizeRenderPhase(bindState?.selectedPhase)
   );
 }
 
 function canSaveClearState(bindState) {
+  if (
+    bindState?.isSaving ||
+    isShortcutBindingOff()
+  ) {
+    return false;
+  }
+
   return getSelectedClearEmojiIds(bindState).length > 0;
 }
 
@@ -1350,7 +2316,9 @@ function createCancelXIcon() {
 function createHeaderIconButton({
   icon,
   label,
+  title = label,
   active,
+  disabled = false,
   onClick,
 }) {
   const button = document.createElement('button');
@@ -1358,11 +2326,16 @@ function createHeaderIconButton({
   button.type = 'button';
   button.className = BIND_BUTTON_CLASS;
   button.setAttribute('aria-label', label);
-  button.setAttribute('title', label);
+  button.setAttribute('title', title || label);
   button.setAttribute('aria-pressed', active ? 'true' : 'false');
 
   if (active) {
     button.classList.add(BIND_BUTTON_ACTIVE_CLASS);
+  }
+
+  if (disabled) {
+    button.disabled = true;
+    button.classList.add(BIND_BUTTON_DISABLED_CLASS);
   }
 
   button.appendChild(createBindIcon(icon));
@@ -1406,7 +2379,12 @@ function createBindIcon(icon) {
   path.setAttribute('stroke-linecap', 'round');
   path.setAttribute('stroke-linejoin', 'round');
 
-  if (icon === 'unlink') {
+  if (icon === 'edit') {
+    path.setAttribute(
+      'd',
+      'M4 20h4.5L19 9.5a2.1 2.1 0 0 0-3-3L5.5 17 4 20ZM13.5 8 16 10.5'
+    );
+  } else if (icon === 'unlink') {
     path.setAttribute(
       'd',
       'M8.5 12.5 6 15a4 4 0 0 0 5.66 5.66l2.5-2.5M15.5 11.5 18 9a4 4 0 0 0-5.66-5.66l-2.5 2.5M3 3l18 18'
@@ -1463,7 +2441,7 @@ function copyClassList({
 
 function removeLegacyEmptyElements(section) {
   section
-    .querySelectorAll(':scope > .emzk-lite-favorites-empty')
+    .querySelectorAll(`:scope > .${FAVORITES_EMPTY_CLASS}`)
     .forEach((element) => {
       element.remove();
     });
@@ -1499,7 +2477,8 @@ function syncFavoriteEmptyState({
 function partitionRecentItems({
   recentList,
   favoriteList,
-  favoriteIds,
+  boundFavoriteIds,
+  unboundFavoriteIds,
   favoriteIdSet,
 }) {
   const allItems = collectEmoteItems({
@@ -1518,11 +2497,29 @@ function partitionRecentItems({
     itemById.set(id, item);
   });
 
-  const favoriteItems = favoriteIds
+  const boundFavoriteItems = boundFavoriteIds
     .map((id) => itemById.get(id))
     .filter(Boolean);
 
+  const unboundFavoriteItems = unboundFavoriteIds
+    .map((id) => itemById.get(id))
+    .filter(Boolean);
+
+  const favoriteItems = [
+    ...boundFavoriteItems,
+    ...unboundFavoriteItems,
+  ];
+
   const favoriteItemSet = new Set(favoriteItems);
+
+  favoriteItems.forEach((item) => {
+    const id = getEmoteItemId(item);
+    const group = boundFavoriteIds.includes(id)
+      ? FAVORITE_GROUP_BOUND
+      : FAVORITE_GROUP_UNBOUND;
+
+    item.setAttribute(FAVORITES_GROUP_ATTR, group);
+  });
 
   const normalItems = allItems.filter((item) => {
     if (favoriteItemSet.has(item)) return false;
@@ -1531,13 +2528,55 @@ function partitionRecentItems({
 
     if (!id) return false;
 
+    item.removeAttribute(FAVORITES_GROUP_ATTR);
+
     return !favoriteIdSet.has(id);
   });
 
   return {
+    boundFavoriteItems,
+    unboundFavoriteItems,
     favoriteItems,
     normalItems,
   };
+}
+
+function createFavoriteChildren({
+  favoriteList,
+  boundFavoriteItems,
+  unboundFavoriteItems,
+  shouldShowSeparator,
+}) {
+  const children = [
+    ...boundFavoriteItems,
+  ];
+
+  if (shouldShowSeparator) {
+    children.push(getFavoriteSeparator(favoriteList));
+  }
+
+  children.push(...unboundFavoriteItems);
+
+  return children;
+}
+
+function getFavoriteSeparator(favoriteList) {
+  const existingSeparator = favoriteList.querySelector(
+    `:scope > .${FAVORITES_SEPARATOR_CLASS}`
+  );
+
+  if (existingSeparator instanceof HTMLElement) {
+    return existingSeparator;
+  }
+
+  const separator = document.createElement('li');
+
+  separator.className = FAVORITES_SEPARATOR_CLASS;
+  separator.setAttribute('role', 'separator');
+  separator.setAttribute('aria-label', '일반 즐겨찾기');
+  separator.setAttribute('draggable', 'false');
+
+  return separator;
 }
 
 function collectEmoteItems({
@@ -1575,13 +2614,13 @@ function getEmoteItemId(item) {
 function applyPartition({
   favoriteList,
   recentList,
-  favoriteItems,
+  favoriteChildren,
   normalItems,
 }) {
-  placeChildren(favoriteList, favoriteItems);
+  placeChildren(favoriteList, favoriteChildren);
   placeChildren(recentList, normalItems);
 
-  pruneChildren(favoriteList, favoriteItems);
+  pruneChildren(favoriteList, favoriteChildren);
   pruneChildren(recentList, normalItems);
 }
 
@@ -1625,7 +2664,7 @@ function startFavoriteSectionMutationObserver() {
 
     if (!hasRelevantMutation) return;
 
-    renderFavoriteEmoteSection();
+    scheduleFavoriteEmoteSectionRender();
   });
 
   observer.observe(document.body, {
@@ -1737,9 +2776,8 @@ function hasRelevantNodes(nodes) {
 
     return (
       isInsideEmotePanel(node) ||
-      Boolean(node.querySelector?.('#emoji_area')) ||
-      Boolean(node.querySelector?.('li[id^="emoji_"]')) ||
-      Boolean(node.querySelector?.('button[type="button"] img[alt^="{:"]'))
+      node.matches?.('#emoji_area') ||
+      Boolean(node.querySelector?.('#emoji_area'))
     );
   });
 }
@@ -1760,4 +2798,268 @@ function stopControlEvent(event) {
 
 function normalizeText(value) {
   return String(value ?? '').trim();
+}
+
+function normalizeShortcutCode(value) {
+  return normalizeStoredShortcutCode(value);
+}
+
+function createRenameTitleContent(bindState) {
+  const bar = document.createElement('span');
+
+  bar.className = BIND_BAR_CLASS;
+
+  const left = document.createElement('span');
+  left.className = BIND_LEFT_CLASS;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = RENAME_INPUT_CLASS;
+  input.value = bindState.renameValue;
+  input.placeholder = getShortcutSetFallbackLabel(
+    getCachedActiveShortcutBindingSetId()
+  );
+  input.setAttribute('aria-label', '세트 이름');
+  input.setAttribute('title', '현재 세트의 이름을 입력하세요.');
+
+  input.addEventListener('mousedown', (event) => {
+    event.stopPropagation();
+  });
+
+  input.addEventListener('click', (event) => {
+    event.stopPropagation();
+  });
+
+  input.addEventListener('input', () => {
+    setShortcutSetRenameValue(input.value);
+  });
+
+  input.addEventListener('keydown', (event) => {
+    if (event.code === 'Escape') {
+      stopControlEvent(event);
+      cancelShortcutSetRenameMode();
+      return;
+    }
+
+    if (event.code === 'Enter') {
+      stopControlEvent(event);
+
+      void saveShortcutSetRenameMode()
+        .catch((error) => {
+          console.error('[Emozzk Lite] failed to rename shortcut set:', error);
+        });
+    }
+  });
+
+  left.appendChild(input);
+
+  bar.append(
+    left,
+    createRenameActionButtons(bindState)
+  );
+
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+  });
+
+  return bar;
+}
+
+function syncRenameTitleContent({
+  title,
+  bindState,
+}) {
+  const input = title.querySelector(`:scope .${RENAME_INPUT_CLASS}`);
+
+  if (!(input instanceof HTMLInputElement)) {
+    title.replaceChildren(createRenameTitleContent(bindState));
+    return;
+  }
+
+  if (
+    document.activeElement !== input &&
+    input.value !== bindState.renameValue
+  ) {
+    input.value = bindState.renameValue;
+  }
+
+  const saveButton = title.querySelector(`:scope .${BIND_SAVE_BUTTON_CLASS}`);
+  const cancelButton = title.querySelector(`:scope .${BIND_CANCEL_BUTTON_CLASS}`);
+
+  syncRenameButtonState({
+    button: saveButton,
+    label: bindState.renameSaving ? '저장 중' : '세트 이름 저장',
+    disabled: bindState.renameSaving,
+  });
+
+  syncRenameButtonState({
+    button: cancelButton,
+    label: bindState.renameSaving ? '저장 중' : '세트 이름 변경 취소',
+    disabled: bindState.renameSaving,
+  });
+}
+
+function syncRenameButtonState({
+  button,
+  label,
+  disabled,
+}) {
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  button.disabled = Boolean(disabled);
+  button.setAttribute('aria-label', label);
+  button.setAttribute('title', label);
+  button.classList.toggle(BIND_BUTTON_DISABLED_CLASS, Boolean(disabled));
+}
+
+function createRenameActionButtons(bindState) {
+  const actions = document.createElement('span');
+
+  actions.className = BIND_ACTIONS_CLASS;
+
+  actions.append(
+    createRenameSaveButton(bindState),
+    createRenameCancelButton(bindState)
+  );
+
+  return actions;
+}
+
+function createRenameSaveButton(bindState) {
+  const button = document.createElement('button');
+
+  const saveLabel = bindState.renameSaving
+    ? '저장 중'
+    : '세트 이름 저장';
+
+  button.type = 'button';
+  button.className = BIND_BUTTON_CLASS;
+  button.classList.add(BIND_SAVE_BUTTON_CLASS);
+  button.setAttribute('aria-label', saveLabel);
+  button.setAttribute('title', saveLabel);
+
+  if (bindState.renameSaving) {
+    button.disabled = true;
+    button.classList.add(BIND_BUTTON_DISABLED_CLASS);
+  }
+
+  button.appendChild(createSaveFloppyIcon());
+
+  button.addEventListener('mousedown', stopControlEvent);
+
+  button.addEventListener('click', (event) => {
+    stopControlEvent(event);
+
+    if (getEmoteBindModeState().renameSaving) return;
+
+    void saveShortcutSetRenameMode()
+      .catch((error) => {
+        console.error('[Emozzk Lite] failed to rename shortcut set:', error);
+      });
+  });
+
+  return button;
+}
+
+function createRenameCancelButton(bindState) {
+  const button = document.createElement('button');
+
+  const cancelLabel = bindState.renameSaving
+    ? '저장 중'
+    : '세트 이름 변경 취소';
+
+  button.type = 'button';
+  button.className = BIND_BUTTON_CLASS;
+  button.classList.add(BIND_CANCEL_BUTTON_CLASS);
+  button.setAttribute('aria-label', cancelLabel);
+  button.setAttribute('title', cancelLabel);
+
+  if (bindState.renameSaving) {
+    button.disabled = true;
+    button.classList.add(BIND_BUTTON_DISABLED_CLASS);
+  }
+
+  button.appendChild(createCancelXIcon());
+
+  button.addEventListener('mousedown', stopControlEvent);
+
+  button.addEventListener('click', (event) => {
+    stopControlEvent(event);
+
+    if (getEmoteBindModeState().renameSaving) return;
+
+    cancelShortcutSetRenameMode();
+  });
+
+  return button;
+}
+
+function startShortcutSetRenameMode() {
+  if (isShortcutBindingOff()) return;
+
+  const activeSetId = getCachedActiveShortcutBindingSetId();
+	const setState = getCachedShortcutBindingSetState();
+	const sets = Array.isArray(setState?.sets) ? setState.sets : [];
+
+	const set = sets.find((candidate) => {
+		return candidate.id === activeSetId;
+	});
+
+  enterShortcutSetRenameMode({
+    renameValue: normalizeText(set?.label),
+  });
+
+  scheduleFavoriteEmoteSectionRender();
+}
+
+function cancelShortcutSetRenameMode() {
+  exitShortcutSetRenameMode();
+
+  scheduleFavoriteEmoteSectionRender();
+}
+
+async function saveShortcutSetRenameMode() {
+  const bindState = getEmoteBindModeState();
+
+  if (
+    bindState.mode !== EMOTE_BIND_MODE_RENAME ||
+    bindState.renameSaving ||
+    isShortcutBindingOff()
+  ) {
+    return;
+  }
+
+  setShortcutSetRenameSaving(true);
+  scheduleFavoriteEmoteSectionRender();
+
+  try {
+    await renameShortcutBindingSet({
+      setId: getCachedActiveShortcutBindingSetId(),
+      label: bindState.renameValue,
+    });
+
+    exitShortcutSetRenameMode();
+
+    scheduleFavoriteEmoteSectionRender();
+    scheduleBadgeUpdate();
+  } catch (error) {
+    setShortcutSetRenameSaving(false);
+    scheduleFavoriteEmoteSectionRender();
+
+    throw error;
+  }
+}
+
+function exitShortcutSetRenameModeSilently() {
+  const bindState = getEmoteBindModeState();
+
+  if (bindState.mode !== EMOTE_BIND_MODE_RENAME) {
+    return false;
+  }
+
+  exitShortcutSetRenameMode();
+  return true;
 }
