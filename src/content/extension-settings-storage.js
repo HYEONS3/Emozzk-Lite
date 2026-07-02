@@ -9,6 +9,7 @@ export const EXTENSION_SETTINGS_CHANGED_EVENT = 'emzk-lite-extension-settings-ch
 const DEFAULT_EXTENSION_SETTINGS = {
   experimentalKeyupEnabled: false,
   experimentalBothPhaseEnabled: false,
+  experimentalPhaseHintPending: false,
   recentStorageLimit: DEFAULT_RECENT_STORAGE_LIMIT,
 };
 
@@ -97,6 +98,23 @@ export function isExperimentalBothPhaseEnabled() {
   );
 }
 
+export function isExperimentalPhaseHintPending() {
+  return Boolean(
+    cachedExtensionSettings.experimentalKeyupEnabled &&
+    cachedExtensionSettings.experimentalPhaseHintPending
+  );
+}
+
+export async function consumeExperimentalPhaseHintPending() {
+  if (!isExperimentalPhaseHintPending()) {
+    return getCachedExtensionSettings();
+  }
+
+  return setExtensionSettings({
+    experimentalPhaseHintPending: false,
+  });
+}
+
 async function readExtensionSettingsFromStorage() {
   if (!isChromeStorageAvailable()) {
     return readExtensionSettingsFromLocalStorage();
@@ -161,6 +179,9 @@ function normalizeExtensionSettings(settings) {
       experimentalKeyupEnabled &&
       settings?.experimentalBothPhaseEnabled
     ),
+    experimentalPhaseHintPending: Boolean(
+      settings?.experimentalPhaseHintPending
+    ),
     recentStorageLimit: normalizeRecentStorageLimit(
       settings?.recentStorageLimit
     ),
@@ -193,6 +214,8 @@ function isSameExtensionSettings(left, right) {
       normalizedRight.experimentalKeyupEnabled &&
     normalizedLeft.experimentalBothPhaseEnabled ===
       normalizedRight.experimentalBothPhaseEnabled &&
+    normalizedLeft.experimentalPhaseHintPending ===
+      normalizedRight.experimentalPhaseHintPending &&
     normalizedLeft.recentStorageLimit ===
       normalizedRight.recentStorageLimit
   );

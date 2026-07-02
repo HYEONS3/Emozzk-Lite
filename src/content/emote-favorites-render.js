@@ -64,11 +64,13 @@ import {
   exitEmoteBindMode,
   getEmoteBindCodeLabel,
   getEmoteBindModeState,
+  consumeEmoteBindPhaseFirstHint,
   getEmoteBindPhaseDescription,
   getNextEmoteBindPhase,
   isEmoteBindExperimentalKeyupEnabled,
   isEmoteBindSaving,
   setEmoteBindPhase,
+  shouldShowEmoteBindPhaseFirstHint,
   setEmoteBindSaving,
   setShortcutSetRenameSaving,
   setShortcutSetRenameValue,
@@ -120,16 +122,16 @@ const FAVORITES_GROUP_ATTR = 'data-emzk-lite-favorite-group';
 const FAVORITES_LABEL_CLASS = 'emzk-lite-favorites-label';
 const FAVORITES_ACTIONS_CLASS = 'emzk-lite-favorites-actions';
 
+const SHORTCUT_SET_ICON_CLASS = 'emzk-lite-shortcut-set-icon';
 const SHORTCUT_SET_OFF_ICON_CLASS = 'emzk-lite-shortcut-set-off-icon';
+
 const SHORTCUT_SET_SWITCH_CLASS = 'emzk-lite-shortcut-set-switch';
 const SHORTCUT_SET_BUTTON_CLASS = 'emzk-lite-shortcut-set-button';
 const SHORTCUT_SET_BUTTON_ACTIVE_CLASS = 'emzk-lite-shortcut-set-button-active';
 const SHORTCUT_SET_LABEL_CLASS = 'emzk-lite-shortcut-set-label';
-
-const SHORTCUT_SET_SEGMENT_LABEL_ATTR =
-  'data-emzk-lite-shortcut-set-segment-label';
-const SHORTCUT_SET_PREVIEW_LABEL_ATTR =
-  'data-emzk-lite-shortcut-set-preview-label';
+const SHORTCUT_SET_OFF_LABEL_CLASS = 'emzk-lite-shortcut-set-off-label';
+const SHORTCUT_SET_SEGMENT_LABEL_ATTR = 'data-emzk-lite-shortcut-set-segment-label';
+const SHORTCUT_SET_PREVIEW_LABEL_ATTR = 'data-emzk-lite-shortcut-set-preview-label';
 
 const HEADER_SPACER_CLASS = 'emzk-lite-header-spacer';
 const BIND_BUTTON_CLASS = 'emzk-lite-bind-button';
@@ -150,6 +152,7 @@ const BIND_EMOTE_EMPTY_CLASS = 'emzk-lite-bind-emote-empty';
 
 const BIND_PHASE_BUTTON_CLASS = 'emzk-lite-bind-phase-button';
 const BIND_PHASE_BUTTON_ACTIVE_CLASS = 'emzk-lite-bind-phase-button-active';
+const BIND_PHASE_FIRST_HINT_CLASS = 'emzk-lite-bind-phase-first-hint';
 const BIND_PHASE_ICON_CLASS = 'emzk-lite-bind-phase-icon';
 
 const BIND_ACTIONS_CLASS = 'emzk-lite-bind-actions';
@@ -162,6 +165,10 @@ const FAVORITES_RENDER_STATE_READY = 'ready';
 
 const BADGE_CLASS = 'emzk-lite-badge';
 const BADGE_TARGET_ATTR = 'data-emzk-lite-badge-target';
+
+const PHASE_FIRST_HINT_CONSUME_FALLBACK_MS = 420 * 3 + 160;
+
+let phaseFirstHintConsumeScheduled = false;
 
 let started = false;
 let rafId = 0;
@@ -1116,12 +1123,12 @@ function syncShortcutSetButtonContent({
   }
 
   if (setId === SHORTCUT_BINDING_SET_OFF) {
-    const icon = button.querySelector(
-      `:scope > .${SHORTCUT_SET_OFF_ICON_CLASS}`
+    const offLabel = button.querySelector(
+      `:scope > .${SHORTCUT_SET_OFF_LABEL_CLASS}`
     );
 
-    if (icon) {
-      button.replaceChildren(icon);
+    if (offLabel) {
+      button.replaceChildren(offLabel);
       return;
     }
 
@@ -1142,8 +1149,8 @@ function createShortcutSetOffIcon() {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 
   wrapper.classList.add(
-    'emzk-lite-shortcut-set-label',
-    'emzk-lite-shortcut-set-off-label'
+    SHORTCUT_SET_LABEL_CLASS,
+    SHORTCUT_SET_OFF_LABEL_CLASS
   );
 
   svg.setAttribute('viewBox', '0 0 12 12');
@@ -1151,13 +1158,16 @@ function createShortcutSetOffIcon() {
   svg.setAttribute('height', '12');
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
-  svg.classList.add(SHORTCUT_SET_OFF_ICON_CLASS);
+  svg.classList.add(
+    SHORTCUT_SET_ICON_CLASS,
+    SHORTCUT_SET_OFF_ICON_CLASS
+  );
 
-	appendAsteriskLine(svg, 6, 2.2, 6, 9.8);
-	appendAsteriskLine(svg, 2.6, 4.1, 9.4, 7.9);
-	appendAsteriskLine(svg, 9.4, 4.1, 2.6, 7.9);
+  appendAsteriskLine(svg, 6, 2.2, 6, 9.8);
+  appendAsteriskLine(svg, 2.6, 4.1, 9.4, 7.9);
+  appendAsteriskLine(svg, 9.4, 4.1, 2.6, 7.9);
 
-	wrapper.appendChild(svg);
+  wrapper.appendChild(svg);
 
   return wrapper;
 }
@@ -1517,7 +1527,7 @@ function getClearHintText(bindState) {
   const selectedCount = getSelectedClearEmojiIds(bindState).length;
 
   if (selectedCount <= 0) {
-    return '이모티콘 선택';
+    return '해제할 이모티콘 선택';
   }
 
   return `${selectedCount}개 선택됨`;
@@ -1579,6 +1589,12 @@ function createPhaseToggleButton(bindState) {
   button.type = 'button';
   button.className = BIND_PHASE_BUTTON_CLASS;
   button.classList.add(BIND_PHASE_BUTTON_ACTIVE_CLASS);
+
+  if (shouldShowEmoteBindPhaseFirstHint()) {
+    button.classList.add(BIND_PHASE_FIRST_HINT_CLASS);
+    scheduleConsumePhaseFirstHintAfterAnimation(button);
+  }
+
   button.setAttribute('aria-label', phaseDescription);
   button.setAttribute('title', phaseDescription);
   button.setAttribute('aria-pressed', 'true');
@@ -1614,6 +1630,52 @@ function createPhaseToggleButton(bindState) {
   });
 
   return button;
+}
+
+function scheduleConsumePhaseFirstHintAfterAnimation(button) {
+  if (phaseFirstHintConsumeScheduled) {
+    return;
+  }
+
+  phaseFirstHintConsumeScheduled = true;
+
+  let finished = false;
+
+  const fallbackTimer = window.setTimeout(() => {
+    finish();
+  }, PHASE_FIRST_HINT_CONSUME_FALLBACK_MS);
+
+  function handleAnimationEnd(event) {
+    if (event.target !== button) {
+      return;
+    }
+
+    finish();
+  }
+
+  function finish() {
+    if (finished) {
+      return;
+    }
+
+    finished = true;
+
+    window.clearTimeout(fallbackTimer);
+    button.removeEventListener('animationend', handleAnimationEnd);
+
+    void consumeEmoteBindPhaseFirstHint()
+      .catch((error) => {
+        console.debug(
+          '[Emozzk Lite] failed to consume phase hint pending:',
+          error
+        );
+      })
+      .finally(() => {
+        phaseFirstHintConsumeScheduled = false;
+      });
+  }
+
+  button.addEventListener('animationend', handleAnimationEnd);
 }
 
 function createPhaseSvgIcon(phase) {

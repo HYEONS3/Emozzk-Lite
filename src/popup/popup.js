@@ -21,6 +21,7 @@ const RECENT_STORAGE_LIMIT_CHANGED_MESSAGE =
 const DEFAULT_SETTINGS = {
   experimentalKeyupEnabled: false,
   experimentalBothPhaseEnabled: false,
+  experimentalPhaseHintPending: false,
   recentStorageLimit: DEFAULT_RECENT_STORAGE_LIMIT,
 };
 
@@ -105,7 +106,11 @@ function handleRecentLimitInput() {
 
 async function handleSettingsChange() {
   const previousSettings = currentSettings;
-  const nextSettings = getSettingsFromControls();
+  const controlSettings = getSettingsFromControls();
+  const nextSettings = withExperimentalPhaseHintPending({
+    previousSettings,
+    nextSettings: controlSettings,
+  });
 
   const recentStorageLimitChanged =
     previousSettings.recentStorageLimit !== nextSettings.recentStorageLimit;
@@ -193,8 +198,50 @@ function normalizeSettings(settings) {
       experimentalKeyupEnabled &&
       settings?.experimentalBothPhaseEnabled
     ),
+    experimentalPhaseHintPending: Boolean(
+      settings?.experimentalPhaseHintPending
+    ),
     recentStorageLimit: normalizeRecentStorageLimit(
       settings?.recentStorageLimit
+    ),
+  };
+}
+
+function withExperimentalPhaseHintPending({
+  previousSettings,
+  nextSettings,
+}) {
+  const normalizedPrevious = normalizeSettings(previousSettings);
+  const normalizedNext = normalizeSettings(nextSettings);
+
+  const phaseOptionEnabled = Boolean(
+    normalizedNext.experimentalKeyupEnabled ||
+    normalizedNext.experimentalBothPhaseEnabled
+  );
+
+  if (!phaseOptionEnabled) {
+    return {
+      ...normalizedNext,
+      experimentalPhaseHintPending: false,
+    };
+  }
+
+  const phaseOptionTurnedOn = Boolean(
+    (
+      !normalizedPrevious.experimentalKeyupEnabled &&
+      normalizedNext.experimentalKeyupEnabled
+    ) ||
+    (
+      !normalizedPrevious.experimentalBothPhaseEnabled &&
+      normalizedNext.experimentalBothPhaseEnabled
+    )
+  );
+
+  return {
+    ...normalizedNext,
+    experimentalPhaseHintPending: Boolean(
+      normalizedPrevious.experimentalPhaseHintPending ||
+      phaseOptionTurnedOn
     ),
   };
 }

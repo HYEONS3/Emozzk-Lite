@@ -6,8 +6,10 @@ import {
 } from './shortcut-storage.js';
 
 import {
+  consumeExperimentalPhaseHintPending,
   isExperimentalBothPhaseEnabled,
   isExperimentalKeyupEnabled,
+  isExperimentalPhaseHintPending,
 } from './extension-settings-storage.js';
 
 import {
@@ -417,6 +419,21 @@ export function isEmoteBindKeyListening() {
 
 export function isEmoteBindExperimentalKeyupEnabled() {
   return isExperimentalKeyupEnabled();
+}
+
+export function shouldShowEmoteBindPhaseFirstHint() {
+  return Boolean(
+    isExperimentalKeyupEnabled() &&
+    isExperimentalPhaseHintPending()
+  );
+}
+
+export async function consumeEmoteBindPhaseFirstHint() {
+  if (!shouldShowEmoteBindPhaseFirstHint()) {
+    return;
+  }
+
+  await consumeExperimentalPhaseHintPending();
 }
 
 export function isShortcutSetRenameMode() {

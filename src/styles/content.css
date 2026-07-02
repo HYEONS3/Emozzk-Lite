@@ -605,7 +605,7 @@ button[data-emzk-lite-badge-target="true"] {
   max-width: 12px;
   height: 12px;
 
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.2px;
@@ -646,22 +646,24 @@ button[data-emzk-lite-badge-target="true"] {
 }
 
 /* OFF button SVG icon */
-.emzk-lite-shortcut-set-off-icon {
+.emzk-lite-shortcut-set-icon {
   display: block;
 
   width: 12px;
   height: 12px;
 
+  flex: 0 0 auto;
+
   color: currentColor;
-  opacity: 0.46;
+  overflow: visible;
 
   pointer-events: none;
   user-select: none;
+}
 
-  transition:
-    color var(--emzk-lite-motion-fast),
-    opacity var(--emzk-lite-motion-fast),
-    filter var(--emzk-lite-motion-fast);
+.emzk-lite-shortcut-set-off-icon {
+  width: 12px;
+  height: 12px;
 }
 
 .emzk-lite-shortcut-set-switch
@@ -1213,6 +1215,10 @@ button[data-emzk-lite-badge-target="true"] {
 .emzk-lite-bind-phase-button {
   width: var(--emzk-lite-bind-assign-control-height);
   min-width: var(--emzk-lite-bind-assign-control-height);
+}
+
+.emzk-lite-bind-phase-first-hint {
+  animation: emzk-lite-shortcut-set-button-flash 420ms ease-in-out 0s 3;
 }
 
 .emzk-lite-bind-phase-icon {

@@ -1,6 +1,8 @@
 const BIND_BUTTON_CLASS = 'emzk-lite-bind-button';
 const BIND_BUTTON_DISABLED_CLASS = 'emzk-lite-bind-button-disabled';
-const BIND_ICON_CLASS = 'emzk-lite-bind-icon';
+
+const SHORTCUT_SET_ICON_CLASS = 'emzk-lite-shortcut-set-icon';
+const SHORTCUT_SET_MORE_ICON_CLASS = 'emzk-lite-shortcut-set-more-icon';
 
 export const SHORTCUT_SET_MENU_WRAP_CLASS = 'emzk-lite-shortcut-set-menu-wrap';
 export const SHORTCUT_SET_MENU_BUTTON_CLASS = 'emzk-lite-shortcut-set-menu-button';
@@ -253,18 +255,21 @@ function createShortcutSetMenuItem({
 function createMoreIcon() {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('width', '14');
-  svg.setAttribute('height', '14');
+  svg.setAttribute('viewBox', '0 0 12 12');
+  svg.setAttribute('width', '12');
+  svg.setAttribute('height', '12');
   svg.setAttribute('aria-hidden', 'true');
-  svg.classList.add(BIND_ICON_CLASS);
+  svg.classList.add(
+    SHORTCUT_SET_ICON_CLASS,
+    SHORTCUT_SET_MORE_ICON_CLASS,
+  );
 
-  [7, 12, 17].forEach((cx) => {
+  [1.5, 6, 10.5].forEach((cx) => {
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
 
     circle.setAttribute('cx', String(cx));
-    circle.setAttribute('cy', '12');
-    circle.setAttribute('r', '1.7');
+    circle.setAttribute('cy', '6');
+    circle.setAttribute('r', '1.2');
     circle.setAttribute('fill', 'currentColor');
 
     svg.appendChild(circle);
