@@ -50,6 +50,7 @@ import {
   SHORTCUT_BINDING_SET_OFF,
 } from './shortcut-storage.js';
 
+const FAVORITES_SECTION_SELECTOR = '.emzk-lite-favorites-section';
 const FAVORITES_LIST_SELECTOR = '.emzk-lite-favorites-list';
 const FAVORITES_GROUP_ATTR = 'data-emzk-lite-favorite-group';
 
