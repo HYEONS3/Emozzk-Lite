@@ -124,6 +124,12 @@ const SHORTCUT_SET_OFF_ICON_CLASS = 'emzk-lite-shortcut-set-off-icon';
 const SHORTCUT_SET_SWITCH_CLASS = 'emzk-lite-shortcut-set-switch';
 const SHORTCUT_SET_BUTTON_CLASS = 'emzk-lite-shortcut-set-button';
 const SHORTCUT_SET_BUTTON_ACTIVE_CLASS = 'emzk-lite-shortcut-set-button-active';
+const SHORTCUT_SET_LABEL_CLASS = 'emzk-lite-shortcut-set-label';
+
+const SHORTCUT_SET_SEGMENT_LABEL_ATTR =
+  'data-emzk-lite-shortcut-set-segment-label';
+const SHORTCUT_SET_PREVIEW_LABEL_ATTR =
+  'data-emzk-lite-shortcut-set-preview-label';
 
 const HEADER_SPACER_CLASS = 'emzk-lite-header-spacer';
 const BIND_BUTTON_CLASS = 'emzk-lite-bind-button';
@@ -658,10 +664,10 @@ function createDefaultTitleContent(bindState) {
     createHeaderSpacer(),
     createHeaderIconButton({
       icon: 'link',
-      label: '키 지정',
+      label: '단축키 지정',
       title: shortcutsOff
-        ? 'OFF 상태에서는 키 지정할 수 없습니다.'
-        : '키 지정',
+        ? 'OFF 상태에서는 단축키를 지정할 수 없습니다.'
+        : '단축키 지정',
       active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_ASSIGN,
       disabled: shortcutsOff,
       onClick: toggleAssignModeIfShortcutEnabled,
@@ -801,6 +807,9 @@ function updateShortcutSetSwitch(wrapper) {
 
     const active = setId === activeSetId;
 
+    button.setAttribute(SHORTCUT_SET_SEGMENT_LABEL_ATTR, segmentLabel);
+    button.setAttribute(SHORTCUT_SET_PREVIEW_LABEL_ATTR, previewLabel);
+
     syncShortcutSetButtonContent({
       button,
       setId,
@@ -898,12 +907,18 @@ function getShortcutSetSwitchOptions() {
     const setId = createShortcutBindingSetId(setIndex);
     const storedSet = storedSetById.get(setId);
 
+    const label = storedSet?.label;
+
     return {
       id: setId,
-      segmentLabel: getShortcutSetSegmentLabel(setId),
+      label,
+      segmentLabel: getShortcutSetSegmentLabel({
+        setId,
+        label,
+      }),
       previewLabel: getShortcutSetPreviewLabel({
         setId,
-        label: storedSet?.label,
+        label,
       }),
     };
   });
@@ -912,7 +927,7 @@ function getShortcutSetSwitchOptions() {
     {
       id: SHORTCUT_BINDING_SET_OFF,
       segmentLabel: 'OFF',
-      previewLabel: 'OFF',
+      previewLabel: '🌐',
     },
     ...visibleSets,
   ];
@@ -986,10 +1001,10 @@ function syncDefaultHeaderActionButtons({
     createHeaderSpacer(),
     createHeaderIconButton({
       icon: 'link',
-      label: '키 지정',
+      label: '단축키 지정',
       title: shortcutsOff
-        ? 'OFF 상태에서는 키 지정할 수 없습니다.'
-        : '키 지정',
+        ? 'OFF 상태에서는 단축키를 지정할 수 없습니다.'
+        : '단축키 지정',
       active: !shortcutsOff && bindState.mode === EMOTE_BIND_MODE_ASSIGN,
       disabled: shortcutsOff,
       onClick: toggleAssignModeIfShortcutEnabled,
@@ -1021,6 +1036,8 @@ function createShortcutSetButton({
   button.type = 'button';
   button.className = SHORTCUT_SET_BUTTON_CLASS;
   button.setAttribute('data-emzk-lite-shortcut-set-id', setId);
+  button.setAttribute(SHORTCUT_SET_SEGMENT_LABEL_ATTR, segmentLabel);
+  button.setAttribute(SHORTCUT_SET_PREVIEW_LABEL_ATTR, previewLabel);
 
   button.setAttribute('aria-label', getShortcutSetButtonAriaLabel({
     setId,
@@ -1112,12 +1129,22 @@ function syncShortcutSetButtonContent({
     return;
   }
 
-  button.textContent = segmentLabel;
+  const labelElement = document.createElement('span');
+
+  labelElement.className = SHORTCUT_SET_LABEL_CLASS;
+  labelElement.textContent = segmentLabel;
+
+  button.replaceChildren(labelElement);
 }
 
 function createShortcutSetOffIcon() {
+  const wrapper = document.createElement('span');
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+
+  wrapper.classList.add(
+    'emzk-lite-shortcut-set-label',
+    'emzk-lite-shortcut-set-off-label'
+  );
 
   svg.setAttribute('viewBox', '0 0 12 12');
   svg.setAttribute('width', '12');
@@ -1126,18 +1153,28 @@ function createShortcutSetOffIcon() {
   svg.setAttribute('focusable', 'false');
   svg.classList.add(SHORTCUT_SET_OFF_ICON_CLASS);
 
-  circle.setAttribute('cx', '6');
-  circle.setAttribute('cy', '6');
-  circle.setAttribute('r', '4.25');
-  circle.setAttribute('fill', 'none');
-  circle.setAttribute('stroke', 'currentColor');
-  circle.setAttribute('stroke-width', '1.5');
+	appendAsteriskLine(svg, 6, 2.2, 6, 9.8);
+	appendAsteriskLine(svg, 2.6, 4.1, 9.4, 7.9);
+	appendAsteriskLine(svg, 9.4, 4.1, 2.6, 7.9);
 
-  svg.appendChild(circle);
+	wrapper.appendChild(svg);
 
-  return svg;
+  return wrapper;
 }
 
+function appendAsteriskLine(svg, x1, y1, x2, y2) {
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+
+  line.setAttribute('x1', String(x1));
+  line.setAttribute('y1', String(y1));
+  line.setAttribute('x2', String(x2));
+  line.setAttribute('y2', String(y2));
+  line.setAttribute('stroke', 'currentColor');
+  line.setAttribute('stroke-width', '2');
+  line.setAttribute('stroke-linecap', 'round');
+
+  svg.appendChild(line);
+}
 function isShortcutSetButtonCurrentlyActive(setId) {
   return getCachedActiveShortcutBindingSetId() === normalizeShortcutSetId(setId);
 }
@@ -1184,8 +1221,101 @@ function getShortcutSetFallbackLabel(setId) {
   return String(setIndex);
 }
 
-function getShortcutSetSegmentLabel(setId) {
-  return getShortcutSetFallbackLabel(setId);
+function getShortcutSetSegmentLabel(options) {
+  const setId = typeof options === 'object'
+    ? options?.setId
+    : options;
+
+  const label = typeof options === 'object'
+    ? options?.label
+    : '';
+
+  const customLabel = getShortcutSetCustomLabel({
+    setId,
+    label,
+  });
+
+  return getShortcutSetInitialLabel(customLabel) ||
+    getShortcutSetFallbackLabel(setId);
+}
+
+const HANGUL_INITIALS = [
+  'ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ',
+  'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ',
+  'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ',
+  'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ',
+];
+
+function getShortcutSetInitialLabel(label) {
+  const normalizedLabel = normalizeText(label);
+
+  if (!normalizedLabel) {
+    return '';
+  }
+
+  const firstGrapheme = getFirstGrapheme(normalizedLabel);
+
+  if (!firstGrapheme) {
+    return '';
+  }
+
+  const hangulInitial = getHangulInitial(firstGrapheme);
+
+  if (hangulInitial) {
+    return hangulInitial;
+  }
+
+  return firstGrapheme.toLocaleUpperCase('ko-KR');
+}
+
+function getFirstGrapheme(value) {
+  const normalizedValue = normalizeText(value);
+
+  if (!normalizedValue) {
+    return '';
+  }
+
+  if (
+    typeof Intl !== 'undefined' &&
+    typeof Intl.Segmenter === 'function'
+  ) {
+    const segmenter = new Intl.Segmenter('ko-KR', {
+      granularity: 'grapheme',
+    });
+
+    const iterator = segmenter.segment(normalizedValue)[Symbol.iterator]();
+    const first = iterator.next();
+
+    return first.done
+      ? ''
+      : first.value.segment;
+  }
+
+  return Array.from(normalizedValue)[0] || '';
+}
+
+function getHangulInitial(value) {
+  const codePoint = String(value || '').codePointAt(0);
+
+  if (!Number.isInteger(codePoint)) {
+    return '';
+  }
+
+  const HANGUL_SYLLABLE_START = 0xac00;
+  const HANGUL_SYLLABLE_END = 0xd7a3;
+
+  if (
+    codePoint < HANGUL_SYLLABLE_START ||
+    codePoint > HANGUL_SYLLABLE_END
+  ) {
+    return '';
+  }
+
+  const initialIndex = Math.floor(
+    (codePoint - HANGUL_SYLLABLE_START) / 588
+  );
+
+  return HANGUL_INITIALS[initialIndex] || '';
 }
 
 function getShortcutSetCustomLabel({
@@ -1218,40 +1348,42 @@ function getShortcutSetPreviewLabel({
 
 function getShortcutSetButtonAriaLabel({
   setId,
-  segmentLabel,
   previewLabel,
 }) {
   if (setId === SHORTCUT_BINDING_SET_OFF) {
-    return '단축키 OFF';
+    return '';
   }
+
+  const fallbackLabel = getShortcutSetFallbackLabel(setId);
 
   if (
     previewLabel &&
-    previewLabel !== segmentLabel
+    previewLabel !== fallbackLabel
   ) {
-    return `단축키 세트 ${segmentLabel}: ${previewLabel}`;
+    return `단축키 세트 ${fallbackLabel}: ${previewLabel}`;
   }
 
-  return `단축키 세트 ${segmentLabel}`;
+  return `단축키 세트 ${fallbackLabel}`;
 }
 
 function getShortcutSetButtonTitle({
   setId,
-  segmentLabel,
   previewLabel,
 }) {
   if (setId === SHORTCUT_BINDING_SET_OFF) {
-    return '단축키 OFF';
+    return '전체 목록';
   }
+
+  const fallbackLabel = getShortcutSetFallbackLabel(setId);
 
   if (
     previewLabel &&
-    previewLabel !== segmentLabel
+    previewLabel !== fallbackLabel
   ) {
-    return `${segmentLabel} · ${previewLabel}`;
+    return `세트 ${fallbackLabel}: ${previewLabel}`;
   }
 
-  return `단축키 세트 ${segmentLabel}`;
+  return `단축키 세트 ${fallbackLabel}`;
 }
 
 function isShortcutBindingOff() {
@@ -1991,7 +2123,7 @@ function getShortcutSetMenuControlOptions() {
 
   return {
     disabled: shortcutsOff,
-    disabledTitle: 'OFF 상태에서는 세트 메뉴를 사용할 수 없습니다.',
+    disabledTitle: 'OFF 상태에서는 컨텍스트 메뉴를 사용할 수 없습니다.',
     activeSetId,
     hasCustomOrder: hasCustomFavoriteRecentSetOrder(activeSetId),
     onRename: startShortcutSetRenameMode,

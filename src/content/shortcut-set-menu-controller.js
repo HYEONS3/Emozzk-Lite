@@ -84,10 +84,10 @@ function createShortcutSetMenuButton({
   button.type = 'button';
   button.className = BIND_BUTTON_CLASS;
   button.classList.add(SHORTCUT_SET_MENU_BUTTON_CLASS);
-  button.setAttribute('aria-label', '세트 메뉴');
+  button.setAttribute('aria-label', '컨텍스트 메뉴');
   button.setAttribute(
     'title',
-    disabled ? disabledTitle || '세트 메뉴를 사용할 수 없습니다.' : '세트 메뉴'
+    disabled ? disabledTitle || '컨텍스트 메뉴를 사용할 수 없습니다.' : '컨텍스트 메뉴'
   );
   button.setAttribute('aria-expanded', 'false');
 
@@ -207,7 +207,7 @@ function createShortcutSetMenu({
   }));
 
   menu.appendChild(createShortcutSetMenuItem({
-    label: 'OFF 순서로 되돌리기',
+    label: '기본 정렬 적용',
     disabled: !hasCustomOrder,
     stopControlEvent,
     onClick: () => {

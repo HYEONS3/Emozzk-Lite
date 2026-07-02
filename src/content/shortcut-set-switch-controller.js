@@ -291,9 +291,20 @@ function getShortcutSetFromPointerPosition({
 
   return {
     setId,
-    previewLabel: normalizeText(set?.previewLabel) || normalizeText(set?.segmentLabel) || setId,
+    previewLabel: getShortcutSetPreviewText(set) || setId,
     index,
   };
+}
+
+function getShortcutSetPreviewText(set) {
+  /*
+   * segmentLabel may be shortened for the compact header.
+   * The floating drag preview must keep the full set label.
+   */
+  return normalizeText(set?.previewLabel) ||
+    normalizeText(set?.label) ||
+    normalizeText(set?.title) ||
+    normalizeText(set?.segmentLabel);
 }
 
 function getShortcutSetDragPreview() {
