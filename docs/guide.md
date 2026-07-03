@@ -1,113 +1,166 @@
-# Emozzk Lite User Guide
+# Emozzk Lite 사용 설명서
 
-Emozzk Lite helps you operate the CHZZK emote panel faster with keyboard shortcuts and favorite emotes.
+Emozzk Lite는 CHZZK 기본 이모티콘 패널을 키보드 단축키와 즐겨찾기 기능으로 더 빠르게 조작할 수 있게 해주는 Chromium 계열 브라우저 확장 프로그램입니다.
 
-This extension is not an official CHZZK or NAVER extension.
-
----
-
-## 1. Open the emote panel
-
-Press `E` while the chat input is not active to open the CHZZK emote panel.
-
-<p>
-  <img src="./assets/gifs/start.gif" width="350" alt="Open the CHZZK emote panel with the E key">
-</p>
+이 확장 프로그램은 CHZZK 또는 NAVER의 공식 도구가 아닙니다. 채팅 메시지 payload, WebSocket 전송 데이터, 구독 권한을 직접 수정하지 않고, 사용자가 실제로 클릭할 수 있는 CHZZK 이모티콘 버튼을 더 편하게 누르는 방식으로 동작합니다.
 
 ---
 
-## 2. Add a favorite emote
+## 전체 흐름
 
-Use `Alt + Click` on a recent emote to add it to favorites.
+이 문서는 아래 순서대로 설명합니다.
 
-<p>
-  <img src="./assets/gifs/add.gif" width="350" alt="Add a recent emote to favorites">
-</p>
-
----
-
-## 3. Rearrange favorite emotes
-
-Drag favorite emotes to change their order.
-
-<p>
-  <img src="./assets/gifs/rearrange.gif" width="350" alt="Rearrange favorite emotes by dragging">
-</p>
+1. 시작하기
+2. 최근 이모티콘을 즐겨찾기에 추가
+3. 즐겨찾기 순서 변경
+4. 확장 프로그램 팝업 설정
+5. 단축키 등록 단계 확인
+6. 채팅 입력 중 단축키 보호
+7. 이모티콘 단축키 등록
+8. 세트별 즐겨찾기 정렬
+9. 이모티콘 단축키 해제
+10. 세트 이름 변경
+11. 즐겨찾기 제거 및 차단
 
 ---
 
-## 4. Bind a shortcut
+## 1. 시작하기
 
-Click the bind button, select an emote, press the shortcut key, and save.
+채팅 입력창에 커서가 없을 때 `E` 키를 누르면 CHZZK 이모티콘 패널을 열 수 있습니다.
+
+이모티콘 패널이 열린 상태에서는 즐겨찾기, 단축키 등록, 단축키 해제 기능을 사용할 수 있습니다.
 
 <p>
-  <img src="./assets/gifs/bind.gif" width="350" alt="Bind a keyboard shortcut to an emote">
+  <img src="./assets/gifs/start.gif" width="350" alt="E 키로 CHZZK 이모티콘 패널 열기">
 </p>
 
 ---
 
-## 5. Clear a shortcut
+## 2. 최근 이모티콘을 즐겨찾기에 추가
 
-Click the clear button, select the emote whose shortcut should be removed, and save.
+`최근 사용한 이모티콘` 영역에서 이모티콘을 `Alt + 클릭`하면 즐겨찾기에 고정됩니다.
+
+즐겨찾기에 추가된 이모티콘은 패널 상단에 따로 표시되어 더 빠르게 선택할 수 있습니다.
 
 <p>
-  <img src="./assets/gifs/clear.gif" width="350" alt="Clear an emote shortcut">
+  <img src="./assets/gifs/add.gif" width="350" alt="최근 이모티콘을 Alt 클릭으로 즐겨찾기에 추가">
 </p>
 
 ---
 
-## 6. Sort favorites by shortcut set
+## 3. 즐겨찾기 순서 변경
 
-Favorite emotes can be grouped and ordered according to the active shortcut set.
+즐겨찾기 이모티콘은 드래그해서 순서를 바꿀 수 있습니다.
+
+자주 쓰는 이모티콘을 앞쪽에 배치하면 단축키 등록과 선택 흐름이 더 단순해집니다.
 
 <p>
-  <img src="./assets/gifs/orderbyset.gif" width="350" alt="Order favorite emotes by shortcut set">
+  <img src="./assets/gifs/rearrange.gif" width="350" alt="즐겨찾기 이모티콘 드래그 정렬">
 </p>
 
 ---
 
-## 7. Use Emozzk Lite in a popup chat window
+## 4. 확장 프로그램 팝업 설정
 
-Emozzk Lite also works when the CHZZK chat is opened as a popup window.
+브라우저 우측 상단의 확장 프로그램 아이콘을 누르면 Emozzk Lite 팝업을 열 수 있습니다.
+
+팝업에서는 최근 이모티콘 보존 개수, 단축키 관련 설정, 기본 동작 옵션을 조정할 수 있습니다.
 
 <p>
-  <img src="./assets/gifs/popup.gif" width="332" alt="Use Emozzk Lite in a CHZZK popup chat window">
+  <img src="./assets/gifs/popup.gif" width="332" alt="Emozzk Lite 확장 프로그램 팝업 설정">
 </p>
 
 ---
 
-## 8. Additional features
+## 5. 단축키 등록 단계 확인
 
-### Remove and block
+패널 상단의 단축키 관련 버튼을 사용해 현재 등록 단계와 동작 상태를 확인할 수 있습니다.
 
-<p>
-  <img src="./assets/gifs/removeandblock.gif" width="350" alt="Remove or block an emote from favorites">
-</p>
-
-### Rename a shortcut set
+단축키를 등록하거나 해제하기 전, 현재 선택된 세트와 모드가 맞는지 먼저 확인하는 흐름으로 사용하면 됩니다.
 
 <p>
-  <img src="./assets/gifs/rename_set.gif" width="350" alt="Rename a shortcut set">
-</p>
-
-### Change bind phase
-
-<p>
-  <img src="./assets/gifs/exp-phase.gif" width="350" alt="Change bind phase behavior">
-</p>
-
-### In-use indicator
-
-<p>
-  <img src="./assets/gifs/inuse.gif" width="350" alt="Display an in-use shortcut indicator">
+  <img src="./assets/gifs/exp-phase.gif" width="350" alt="단축키 등록 단계와 상태 확인">
 </p>
 
 ---
 
-## Notes
+## 6. 채팅 입력 중 단축키 보호
 
-- Shortcut keys do not run while typing in the chat input.
-- The extension clicks visible CHZZK emote buttons instead of modifying chat payloads or WebSocket data.
-- Settings such as shortcuts and favorites are stored locally in the browser.
+채팅 입력창에 커서가 있는 상태에서는 `E` 같은 단축키가 확장 기능으로 동작하지 않도록 보호됩니다.
 
-[Privacy Policy](./privacy.html)
+즉, 채팅을 입력하는 중에는 일반 문자 입력이 우선이고, 단축키는 입력을 방해하지 않습니다.
+
+<p>
+  <img src="./assets/gifs/inuse.gif" width="350" alt="채팅 입력 중 단축키 보호">
+</p>
+
+---
+
+## 7. 이모티콘 단축키 등록
+
+체인 아이콘을 눌러 단축키 등록 모드로 들어갑니다.
+
+등록할 이모티콘을 선택한 뒤 원하는 키를 누르고 저장하면, 이후 해당 키로 이모티콘을 빠르게 선택할 수 있습니다.
+
+<p>
+  <img src="./assets/gifs/bind.gif" width="350" alt="이모티콘 단축키 등록">
+</p>
+
+---
+
+## 8. 세트별 즐겨찾기 정렬
+
+즐겨찾기 이모티콘은 현재 선택된 단축키 세트 기준으로 정렬됩니다.
+
+현재 세트에서 단축키가 등록된 이모티콘은 위쪽에 모이고, 등록되지 않은 즐겨찾기는 아래쪽에 유지됩니다.
+
+<p>
+  <img src="./assets/gifs/orderbyset.gif" width="350" alt="세트별 즐겨찾기 정렬">
+</p>
+
+---
+
+## 9. 이모티콘 단축키 해제
+
+가위 아이콘을 눌러 단축키 해제 모드로 들어갑니다.
+
+해제할 이모티콘을 선택한 뒤 저장하면 선택한 이모티콘의 단축키가 제거됩니다.
+
+<p>
+  <img src="./assets/gifs/clear.gif" width="350" alt="이모티콘 단축키 해제">
+</p>
+
+---
+
+## 10. 세트 이름 변경
+
+단축키 세트는 구분하기 쉬운 이름으로 변경할 수 있습니다.
+
+세트를 여러 개 사용하는 경우, 용도에 맞게 이름을 정해두면 현재 어떤 단축키 구성을 쓰는지 빠르게 확인할 수 있습니다.
+
+<p>
+  <img src="./assets/gifs/rename_set.gif" width="350" alt="단축키 세트 이름 변경">
+</p>
+
+---
+
+## 11. 즐겨찾기 제거 및 차단
+
+더 이상 사용하지 않는 즐겨찾기는 목록에서 제거할 수 있습니다.
+
+필요한 경우 특정 이모티콘을 다시 추천되거나 추가되지 않도록 차단할 수 있습니다.
+
+<p>
+  <img src="./assets/gifs/removeandblock.gif" width="350" alt="즐겨찾기 제거 및 차단">
+</p>
+
+---
+
+## 참고
+
+- 단축키는 채팅 입력 중에는 동작하지 않습니다.
+- 이모티콘 버튼이 실제로 화면에 보이는 상태에서만 선택됩니다.
+- 즐겨찾기, 단축키, 최근 이모티콘 설정은 브라우저 로컬 저장소에 저장됩니다.
+- Emozzk Lite는 CHZZK 메시지 전송 데이터나 WebSocket 데이터를 직접 수정하지 않습니다.
+
+[개인정보 처리방침 보기](./privacy.html)
