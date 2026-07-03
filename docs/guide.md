@@ -52,7 +52,7 @@ Emozzk Lite는 CHZZK 기본 이모티콘 패널을 키보드 단축키와 즐겨
 
 조합 키는 단독으로 사용할 수 없습니다.
 
-일부 키('Esc','Win'등) 는 지정할 수 없습니다.
+일부 키(`Esc`,`Win`등) 는 지정할 수 없습니다.
 
 <p>
   <img src="./assets/gifs/bind.gif" width="350" alt="이모티콘 단축키 등록">
