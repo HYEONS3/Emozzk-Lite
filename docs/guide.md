@@ -211,7 +211,6 @@ Streamer → S
 - Emozzk Lite는 CHZZK 메시지 전송 데이터나 WebSocket 데이터를 직접 수정하지 않습니다.
 - 채팅 입력창에 이미 이모티콘이 10개 들어간 경우에는 추가 이모티콘 입력을 시도하지 않습니다.
 - 즐겨찾기, 단축키, 최근 이모티콘 설정은 브라우저 로컬 저장소에 저장됩니다.
-```
-Emozzk Lite는 설정 저장을 위해 `storage` 권한을 사용하고, CHZZK 페이지에서 동작하기 위해 `https://chzzk.naver.com/*` 권한을 사용합니다.
-```
+- Emozzk Lite는 설정 저장을 위해 `storage` 권한을 사용하고, CHZZK 페이지에서 동작하기 위해 `https://chzzk.naver.com/*` 권한을 사용합니다.
+
 [개인정보 처리방침 보기](./privacy.html)
