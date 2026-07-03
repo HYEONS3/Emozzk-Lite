@@ -14,6 +14,11 @@
   --link-hover: #79c0ff;
   --code-bg: #161b22;
   --accent: #2f81f7;
+  --icon-default: #e6edf3;
+  --icon-muted: #8b949e;
+  --icon-accent: #58a6ff;
+  --icon-save: #3fb950;
+  --icon-danger: #f85149;
 }
 
 header,
@@ -205,6 +210,53 @@ img[width="16"] {
   border: 0;
   border-radius: 0;
   background: transparent;
+}
+
+.doc-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin: 0 3px;
+  vertical-align: -3px;
+  background-color: var(--icon-default);
+
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+}
+
+.doc-icon-link {
+  background-color: var(--icon-accent);
+  mask-image: url("../svgs/link.svg");
+  -webkit-mask-image: url("../svgs/link.svg");
+}
+
+.doc-icon-unlink {
+  background-color: var(--icon-danger);
+  mask-image: url("../svgs/unlink.svg");
+  -webkit-mask-image: url("../svgs/unlink.svg");
+}
+
+.doc-icon-save {
+  background-color: var(--icon-save);
+  mask-image: url("../svgs/save.svg");
+  -webkit-mask-image: url("../svgs/save.svg");
+}
+
+.doc-icon-context {
+  background-color: var(--icon-muted);
+  mask-image: url("../svgs/context.svg");
+  -webkit-mask-image: url("../svgs/context.svg");
+}
+
+.doc-icon-main {
+  background-color: var(--icon-default);
+  mask-image: url("../svgs/main.svg");
+  -webkit-mask-image: url("../svgs/main.svg");
 }
 
 p:has(> img) {

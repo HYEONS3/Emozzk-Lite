@@ -46,9 +46,9 @@ Emozzk Lite는 CHZZK 기본 이모티콘 패널을 키보드 단축키와 즐겨
 
 ## 4. 이모티콘 단축키 등록
 
-<img src="./assets/svgs/link.svg" width="16" height="16" alt="단축키 지정" color = #c9cedc> 버튼을 눌러 단축키 지정 모드로 들어갑니다.
+<span class="doc-icon doc-icon-link" role="img" aria-label="단축키 지정"></span> 버튼을 눌러 단축키 지정 모드로 들어갑니다.
 
-등록할 이모티콘을 선택한 뒤 원하는 키를 누르고, <img src="./assets/svgs/save.svg" width="16" height="16" alt="저장" color = #c9cedc> 버튼을 눌러 저장합니다.
+등록할 이모티콘을 선택한 뒤 원하는 키를 누르고, <span class="doc-icon doc-icon-save" role="img" aria-label="저장"></span> 버튼을 눌러 저장합니다.
 
 등록된 단축키는 이모티콘 위에 작은 배지로 표시됩니다.
 
@@ -64,9 +64,9 @@ Emozzk Lite는 CHZZK 기본 이모티콘 패널을 키보드 단축키와 즐겨
 
 ## 5. 이모티콘 단축키 해제
 
-<img src="./assets/svgs/unlink.svg" width="16" height="16" alt="단축키 해제" color = #c9cedc> 버튼을 눌러 단축키 해제 모드로 들어갑니다.
+<span class="doc-icon doc-icon-unlink" role="img" aria-label="단축키 해제"></span> 버튼을 눌러 단축키 해제 모드로 들어갑니다.
 
-해제할 이모티콘을 선택한 뒤 <img src="./assets/svgs/save.svg" width="16" height="16" alt="저장" color = #c9cedc> 버튼을 누르면 선택한 단축키가 해제됩니다.
+해제할 이모티콘을 선택한 뒤 <span class="doc-icon doc-icon-save" role="img" aria-label="저장"></span> 버튼을 누르면 선택한 단축키가 해제됩니다.
 
 여러 이모티콘을 한 번에 선택해서 해제할 수 있습니다.
 
@@ -108,7 +108,7 @@ Emozzk Lite는 CHZZK 기본 이모티콘 패널을 키보드 단축키와 즐겨
 
 세트 화면에서 변경한 순서는 현재 세트에서만 적용됩니다.
 
-<img src="./assets/svgs/context.svg" width="16" height="16" alt="컨텍스트 메뉴" color = #c9cedc> 컨텍스트 메뉴에서 `기본 정렬 적용` 버튼을 누르면 <img src="./assets/svgs/main.svg" width="16" height="16" alt="즐겨찾기 모아보기" color = #c9cedc> 즐겨찾기 모아보기 순서로 초기화할 수 있습니다.
+<span class="doc-icon doc-icon-context" role="img" aria-label="컨텍스트 메뉴"></span> 컨텍스트 메뉴에서 `기본 정렬 적용` 버튼을 누르면 <span class="doc-icon doc-icon-main" role="img" aria-label="즐겨찾기 모아보기"></span> 즐겨찾기 모아보기 순서로 초기화할 수 있습니다.
 
 <p>
   <img src="./assets/gifs/orderbyset.gif" width="350" alt="세트별 즐겨찾기 정렬">
