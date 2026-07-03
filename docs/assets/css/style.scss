@@ -1,0 +1,51 @@
+---
+---
+
+@import "{{ site.theme }}";
+
+body {
+  word-break: keep-all;
+  line-height: 1.7;
+}
+
+.wrapper {
+  max-width: 860px;
+}
+
+h1 {
+  margin-bottom: 1rem;
+}
+
+h2 {
+  margin-top: 2.5rem;
+}
+
+p {
+  margin: 0.75rem 0;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+p > img {
+  display: block;
+  margin: 1rem 0 2rem;
+  border-radius: 12px;
+}
+
+img[width="16"] {
+  display: inline-block;
+  vertical-align: -3px;
+  margin: 0 2px;
+  border-radius: 0;
+}
+
+hr {
+  margin: 2.5rem 0;
+}
+
+code {
+  white-space: nowrap;
+}
