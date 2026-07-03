@@ -19,7 +19,7 @@ import {
 import {
   getShortcutCodeLabel,
   normalizeStoredShortcutCode,
-} from './shortcut-key-code.js';
+} from '../shared/shortcut-key-code.js';
 
 export function getShortcutBadgeAssignments(panel) {
   const bindings = getCachedShortcutBindings();

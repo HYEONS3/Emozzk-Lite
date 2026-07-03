@@ -33,7 +33,7 @@ import {
 
 import {
   normalizeStoredShortcutCode,
-} from './shortcut-key-code.js';
+} from '../shared/shortcut-key-code.js';
 
 const BADGE_CLASS = 'emzk-lite-badge';
 const BADGE_TARGET_ATTR = 'data-emzk-lite-badge-target';

@@ -40,7 +40,7 @@ import {
 import {
   getShortcutCodeFromKeyboardEvent,
   isImeKeyboardEvent,
-} from './shortcut-key-code.js';
+} from '../shared/shortcut-key-code.js';
 
 const BADGE_CLASS = 'emzk-lite-badge';
 

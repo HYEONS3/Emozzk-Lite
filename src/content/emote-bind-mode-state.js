@@ -15,7 +15,7 @@ import {
 import {
   getShortcutCodeLabel,
   normalizeStoredShortcutCode,
-} from './shortcut-key-code.js';
+} from '../shared/shortcut-key-code.js';
 
 export const EMOTE_BIND_MODE_NONE = 'none';
 export const EMOTE_BIND_MODE_ASSIGN = 'assign';

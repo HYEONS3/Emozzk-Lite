@@ -110,7 +110,7 @@ import {
 
 import {
   normalizeStoredShortcutCode,
-} from './shortcut-key-code.js';
+} from '../shared/shortcut-key-code.js';
 
 const FAVORITES_SECTION_CLASS = 'emzk-lite-favorites-section';
 const FAVORITES_TITLE_CLASS = 'emzk-lite-favorites-title';

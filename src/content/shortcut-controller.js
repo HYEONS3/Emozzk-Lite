@@ -60,7 +60,7 @@ import {
   getShortcutCodeFromKeyboardEvent,
   isImeKeyboardEvent,
   normalizeStoredShortcutCode,
-} from './shortcut-key-code.js';
+} from '../shared/shortcut-key-code.js';
 
 const EVENT_PHASE_KEYDOWN = 'keydown';
 const EVENT_PHASE_KEYUP = 'keyup';

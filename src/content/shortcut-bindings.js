@@ -1,6 +1,6 @@
 import {
   normalizeStoredShortcutCode,
-} from './shortcut-key-code.js';
+} from '../shared/shortcut-key-code.js';
 
 export const SHORTCUT_ACTION_SELECT_EMOTE = 'selectEmote';
 
