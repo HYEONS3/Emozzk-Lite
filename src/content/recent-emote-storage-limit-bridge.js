@@ -11,7 +11,9 @@ import {
   normalizeRecentStorageLimit,
 } from '../shared/recent-storage-limit.js';
 
-const EXTENSION_SETTINGS_STORAGE_KEY = 'emzk_lite_extension_settings_v1';
+import {
+  EXTENSION_SETTINGS_STORAGE_KEY,
+} from '../shared/extension-settings.js';
 
 const RECENT_STORAGE_LIMIT_MESSAGE =
   'EMZK_LITE_RECENT_STORAGE_LIMIT_CHANGED';

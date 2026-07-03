@@ -1,17 +1,10 @@
 import {
-  DEFAULT_RECENT_STORAGE_LIMIT,
-  normalizeRecentStorageLimit,
-} from '../shared/recent-storage-limit.js';
+  DEFAULT_EXTENSION_SETTINGS,
+  EXTENSION_SETTINGS_STORAGE_KEY,
+  normalizeExtensionSettings,
+} from '../shared/extension-settings.js';
 
-export const EXTENSION_SETTINGS_STORAGE_KEY = 'emzk_lite_extension_settings_v1';
 export const EXTENSION_SETTINGS_CHANGED_EVENT = 'emzk-lite-extension-settings-changed';
-
-const DEFAULT_EXTENSION_SETTINGS = {
-  experimentalKeyupEnabled: false,
-  experimentalBothPhaseEnabled: false,
-  experimentalPhaseHintPending: false,
-  recentStorageLimit: DEFAULT_RECENT_STORAGE_LIMIT,
-};
 
 let cachedExtensionSettings = {
   ...DEFAULT_EXTENSION_SETTINGS,
@@ -168,24 +161,6 @@ function writeExtensionSettingsToLocalStorage(settings) {
      * chrome.storage.local이 없는 환경에서만 사용된다.
      */
   }
-}
-
-function normalizeExtensionSettings(settings) {
-  const experimentalKeyupEnabled = Boolean(settings?.experimentalKeyupEnabled);
-
-  return {
-    experimentalKeyupEnabled,
-    experimentalBothPhaseEnabled: Boolean(
-      experimentalKeyupEnabled &&
-      settings?.experimentalBothPhaseEnabled
-    ),
-    experimentalPhaseHintPending: Boolean(
-      settings?.experimentalPhaseHintPending
-    ),
-    recentStorageLimit: normalizeRecentStorageLimit(
-      settings?.recentStorageLimit
-    ),
-  };
 }
 
 function dispatchExtensionSettingsChanged() {

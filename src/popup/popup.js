@@ -1,11 +1,15 @@
 import {
-  DEFAULT_RECENT_STORAGE_LIMIT,
   getRecentStorageLimitFromRangeValue,
   getRecentStorageLimitRangeValue,
   normalizeRecentStorageLimit,
 } from '../shared/recent-storage-limit.js';
 
-const EXTENSION_SETTINGS_STORAGE_KEY = 'emzk_lite_extension_settings_v1';
+import {
+  DEFAULT_EXTENSION_SETTINGS,
+  EXTENSION_SETTINGS_STORAGE_KEY,
+  normalizeExtensionSettings,
+} from '../shared/extension-settings.js';
+
 const SHORTCUT_BINDINGS_STORAGE_KEY = 'emzk_lite_shortcut_bindings_v1';
 
 const MIN_SHORTCUT_SET_COUNT = 1;
@@ -18,12 +22,6 @@ const SHORTCUT_BINDING_SET_OFF = 'off';
 const RECENT_STORAGE_LIMIT_CHANGED_MESSAGE =
   'EMZK_LITE_RECENT_STORAGE_LIMIT_CHANGED';
 
-const DEFAULT_SETTINGS = {
-  experimentalKeyupEnabled: false,
-  experimentalBothPhaseEnabled: false,
-  experimentalPhaseHintPending: false,
-  recentStorageLimit: DEFAULT_RECENT_STORAGE_LIMIT,
-};
 
 const keyupCheckbox = document.getElementById('experimentalKeyupEnabled');
 const bothCheckbox = document.getElementById('experimentalBothPhaseEnabled');
@@ -34,7 +32,7 @@ const recentStorageLimitValue = document.getElementById('recentStorageLimitValue
 const statusText = document.getElementById('statusText');
 const versionText = document.querySelector('.popup-version');
 
-let currentSettings = normalizeSettings(DEFAULT_SETTINGS);
+let currentSettings = normalizeExtensionSettings(DEFAULT_EXTENSION_SETTINGS);
 let currentShortcutSetState = createDefaultShortcutBindingSetState();
 
 initPopup();
@@ -132,12 +130,12 @@ async function handleSettingsChange() {
 async function readSettings() {
   const result = await chrome.storage.local.get(EXTENSION_SETTINGS_STORAGE_KEY);
 
-  return normalizeSettings(result?.[EXTENSION_SETTINGS_STORAGE_KEY]);
+  return normalizeExtensionSettings(result?.[EXTENSION_SETTINGS_STORAGE_KEY]);
 }
 
 async function writeSettings(settings) {
   await chrome.storage.local.set({
-    [EXTENSION_SETTINGS_STORAGE_KEY]: normalizeSettings(settings),
+    [EXTENSION_SETTINGS_STORAGE_KEY]: normalizeExtensionSettings(settings),
   });
 }
 
@@ -158,7 +156,7 @@ async function writeShortcutBindingSetState(state) {
 function getSettingsFromControls() {
   const experimentalKeyupEnabled = Boolean(keyupCheckbox.checked);
 
-  return normalizeSettings({
+  return normalizeExtensionSettings({
     experimentalKeyupEnabled,
     experimentalBothPhaseEnabled:
       experimentalKeyupEnabled &&
@@ -170,7 +168,7 @@ function getSettingsFromControls() {
 }
 
 function applySettingsToControls(settings) {
-  const normalizedSettings = normalizeSettings(settings);
+  const normalizedSettings = normalizeExtensionSettings(settings);
 
   keyupCheckbox.checked = normalizedSettings.experimentalKeyupEnabled;
   bothCheckbox.checked = normalizedSettings.experimentalBothPhaseEnabled;
@@ -189,30 +187,12 @@ function applyShortcutSetStateToControls(state) {
   updateShortcutSetCountLabel(normalizedState.setCount);
 }
 
-function normalizeSettings(settings) {
-  const experimentalKeyupEnabled = Boolean(settings?.experimentalKeyupEnabled);
-
-  return {
-    experimentalKeyupEnabled,
-    experimentalBothPhaseEnabled: Boolean(
-      experimentalKeyupEnabled &&
-      settings?.experimentalBothPhaseEnabled
-    ),
-    experimentalPhaseHintPending: Boolean(
-      settings?.experimentalPhaseHintPending
-    ),
-    recentStorageLimit: normalizeRecentStorageLimit(
-      settings?.recentStorageLimit
-    ),
-  };
-}
-
 function withExperimentalPhaseHintPending({
   previousSettings,
   nextSettings,
 }) {
-  const normalizedPrevious = normalizeSettings(previousSettings);
-  const normalizedNext = normalizeSettings(nextSettings);
+  const normalizedPrevious = normalizeExtensionSettings(previousSettings);
+  const normalizedNext = normalizeExtensionSettings(nextSettings);
 
   const phaseOptionEnabled = Boolean(
     normalizedNext.experimentalKeyupEnabled ||
