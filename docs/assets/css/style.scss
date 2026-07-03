@@ -16,6 +16,12 @@
   --accent: #2f81f7;
 }
 
+header,
+footer,
+.view {
+  display: none !important;
+}
+
 * {
   box-sizing: border-box;
 }
