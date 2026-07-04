@@ -2,7 +2,9 @@
 
 CHZZK 채팅의 기본 이모티콘 패널을 키보드와 즐겨찾기 UI로 더 빠르게 조작하기 위한 Chromium 계열 브라우저 확장 프로그램입니다.
 
-Emozzk Lite는 CHZZK의 채팅 메시지 payload, WebSocket 전송 데이터, 구독 권한을 직접 수정하지 않습니다. 사용자가 실제로 클릭할 수 있는 CHZZK 이모티콘 버튼을 확장 프로그램 UI와 단축키로 더 편하게 누르는 방식으로 동작합니다.
+Emozzk Lite는 CHZZK의 채팅 메시지 payload, WebSocket 전송 데이터, 구독 권한을 직접 수정하지 않습니다.
+
+CHZZK 이모티콘에 단축키를 할당해서 키보드로 이모티콘을 입력할 수 있습니다.
 
 ---
 
