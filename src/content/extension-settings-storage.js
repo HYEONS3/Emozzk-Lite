@@ -1,17 +1,14 @@
 import {
-  DEFAULT_RECENT_STORAGE_LIMIT,
-  normalizeRecentStorageLimit,
-} from '../shared/recent-storage-limit.js';
+  DEFAULT_EXTENSION_SETTINGS,
+  EXTENSION_SETTINGS_STORAGE_KEY,
+  normalizeExtensionSettings,
+} from '../shared/extension-settings.js';
 
-export const EXTENSION_SETTINGS_STORAGE_KEY = 'emzk_lite_extension_settings_v1';
+import {
+  normalizeStoredShortcutCode,
+} from '../shared/shortcut-key-code.js';
+
 export const EXTENSION_SETTINGS_CHANGED_EVENT = 'emzk-lite-extension-settings-changed';
-
-const DEFAULT_EXTENSION_SETTINGS = {
-  experimentalKeyupEnabled: false,
-  experimentalBothPhaseEnabled: false,
-  experimentalPhaseHintPending: false,
-  recentStorageLimit: DEFAULT_RECENT_STORAGE_LIMIT,
-};
 
 let cachedExtensionSettings = {
   ...DEFAULT_EXTENSION_SETTINGS,
@@ -170,24 +167,6 @@ function writeExtensionSettingsToLocalStorage(settings) {
   }
 }
 
-function normalizeExtensionSettings(settings) {
-  const experimentalKeyupEnabled = Boolean(settings?.experimentalKeyupEnabled);
-
-  return {
-    experimentalKeyupEnabled,
-    experimentalBothPhaseEnabled: Boolean(
-      experimentalKeyupEnabled &&
-      settings?.experimentalBothPhaseEnabled
-    ),
-    experimentalPhaseHintPending: Boolean(
-      settings?.experimentalPhaseHintPending
-    ),
-    recentStorageLimit: normalizeRecentStorageLimit(
-      settings?.recentStorageLimit
-    ),
-  };
-}
-
 function dispatchExtensionSettingsChanged() {
   window.dispatchEvent(
     new CustomEvent(EXTENSION_SETTINGS_CHANGED_EVENT, {
@@ -217,6 +196,23 @@ function isSameExtensionSettings(left, right) {
     normalizedLeft.experimentalPhaseHintPending ===
       normalizedRight.experimentalPhaseHintPending &&
     normalizedLeft.recentStorageLimit ===
-      normalizedRight.recentStorageLimit
+      normalizedRight.recentStorageLimit &&
+		normalizedLeft.previousShortcutSetCode ===
+			normalizedRight.previousShortcutSetCode &&
+		normalizedLeft.nextShortcutSetCode ===
+			normalizedRight.nextShortcutSetCode	
+		);
+}
+
+export function isShortcutSetNavigationCode(code) {
+  const normalizedCode = normalizeStoredShortcutCode(code);
+
+  if (!normalizedCode) {
+    return false;
+  }
+
+  return (
+    normalizedCode === cachedExtensionSettings.previousShortcutSetCode ||
+    normalizedCode === cachedExtensionSettings.nextShortcutSetCode
   );
 }

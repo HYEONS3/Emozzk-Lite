@@ -112,6 +112,16 @@ import {
   normalizeStoredShortcutCode,
 } from '../shared/shortcut-key-code.js';
 
+import {
+  isShortcutSetNavigationCode,
+} from './extension-settings-storage.js';
+
+import {
+  getShortcutSetFallbackLabel,
+  getShortcutSetPreviewLabel,
+  getShortcutSetSegmentLabel,
+} from './shortcut-set-label.js';
+
 const FAVORITES_SECTION_CLASS = 'emzk-lite-favorites-section';
 const FAVORITES_TITLE_CLASS = 'emzk-lite-favorites-title';
 const FAVORITES_LIST_CLASS = 'emzk-lite-favorites-list';
@@ -1217,145 +1227,6 @@ function normalizeShortcutSetId(setId) {
   return createShortcutBindingSetId(setIndex);
 }
 
-function getShortcutSetFallbackLabel(setId) {
-  if (setId === SHORTCUT_BINDING_SET_OFF) {
-    return 'OFF';
-  }
-
-  const setIndex = getShortcutBindingSetIndex(setId);
-
-  if (!setIndex) {
-    return '';
-  }
-
-  return String(setIndex);
-}
-
-function getShortcutSetSegmentLabel(options) {
-  const setId = typeof options === 'object'
-    ? options?.setId
-    : options;
-
-  const label = typeof options === 'object'
-    ? options?.label
-    : '';
-
-  const customLabel = getShortcutSetCustomLabel({
-    setId,
-    label,
-  });
-
-  return getShortcutSetInitialLabel(customLabel) ||
-    getShortcutSetFallbackLabel(setId);
-}
-
-const HANGUL_INITIALS = [
-  'ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ',
-  'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ',
-  'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ',
-  'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ',
-];
-
-function getShortcutSetInitialLabel(label) {
-  const normalizedLabel = normalizeText(label);
-
-  if (!normalizedLabel) {
-    return '';
-  }
-
-  const firstGrapheme = getFirstGrapheme(normalizedLabel);
-
-  if (!firstGrapheme) {
-    return '';
-  }
-
-  const hangulInitial = getHangulInitial(firstGrapheme);
-
-  if (hangulInitial) {
-    return hangulInitial;
-  }
-
-  return firstGrapheme.toLocaleUpperCase('ko-KR');
-}
-
-function getFirstGrapheme(value) {
-  const normalizedValue = normalizeText(value);
-
-  if (!normalizedValue) {
-    return '';
-  }
-
-  if (
-    typeof Intl !== 'undefined' &&
-    typeof Intl.Segmenter === 'function'
-  ) {
-    const segmenter = new Intl.Segmenter('ko-KR', {
-      granularity: 'grapheme',
-    });
-
-    const iterator = segmenter.segment(normalizedValue)[Symbol.iterator]();
-    const first = iterator.next();
-
-    return first.done
-      ? ''
-      : first.value.segment;
-  }
-
-  return Array.from(normalizedValue)[0] || '';
-}
-
-function getHangulInitial(value) {
-  const codePoint = String(value || '').codePointAt(0);
-
-  if (!Number.isInteger(codePoint)) {
-    return '';
-  }
-
-  const HANGUL_SYLLABLE_START = 0xac00;
-  const HANGUL_SYLLABLE_END = 0xd7a3;
-
-  if (
-    codePoint < HANGUL_SYLLABLE_START ||
-    codePoint > HANGUL_SYLLABLE_END
-  ) {
-    return '';
-  }
-
-  const initialIndex = Math.floor(
-    (codePoint - HANGUL_SYLLABLE_START) / 588
-  );
-
-  return HANGUL_INITIALS[initialIndex] || '';
-}
-
-function getShortcutSetCustomLabel({
-  setId,
-  label,
-}) {
-  const normalizedLabel = normalizeText(label);
-  const fallbackLabel = getShortcutSetFallbackLabel(setId);
-
-  if (!normalizedLabel) {
-    return '';
-  }
-
-  if (normalizedLabel === fallbackLabel) {
-    return '';
-  }
-
-  return normalizedLabel;
-}
-
-function getShortcutSetPreviewLabel({
-  setId,
-  label,
-}) {
-  return getShortcutSetCustomLabel({
-    setId,
-    label,
-  }) || getShortcutSetFallbackLabel(setId);
-}
-
 function getShortcutSetButtonAriaLabel({
   setId,
   previewLabel,
@@ -1467,6 +1338,9 @@ function getAssignHintDescription(bindState) {
   if (!selectedCode) {
     return '등록할 키를 입력하세요. Space와 Enter는 등록되지 않습니다. Escape를 누르면 취소됩니다.';
   }
+	if (isShortcutSetNavigationCode(selectedCode)) {
+		return '세트 전환 단축키와 중복됩니다. 다른 키를 입력하세요.';
+	}
 
   return `${getEmoteBindCodeLabel(selectedCode)} 단축키가 선택되었습니다. 다른 키를 누르면 저장 전 단축키를 바꿀 수 있습니다.`;
 }
@@ -1489,6 +1363,10 @@ function getAssignHintText(bindState) {
   if (!selectedCode) {
     return '키 입력';
   }
+
+	if (isShortcutSetNavigationCode(selectedCode)) {
+		return '세트 전환 키와 중복';
+	}
 
   return `${getEmoteBindCodeLabel(selectedCode)}`;
 }
@@ -2063,9 +1941,19 @@ function canSaveAssignState(bindState) {
     return false;
   }
 
+  const selectedCode = normalizeShortcutCode(
+    bindState?.selectedCode
+  );
+
+  if (
+    !selectedCode ||
+    isShortcutSetNavigationCode(selectedCode)
+  ) {
+    return false;
+  }
+
   return Boolean(
     normalizeText(bindState?.selectedEmojiId) &&
-    normalizeShortcutCode(bindState?.selectedCode) &&
     normalizeRenderPhase(bindState?.selectedPhase)
   );
 }

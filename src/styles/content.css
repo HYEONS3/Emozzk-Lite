@@ -142,11 +142,10 @@
     inset 0 0 0 1px rgba(var(--emzk-lite-color-content-rgb), 0.10),
     inset 0 1px 2px var(--emzk-lite-color-shadow-press);
 
-  /* Segment */
-  --emzk-lite-color-segment-bg: var(--emzk-lite-color-surface-active);
-  --emzk-lite-color-segment-shadow:
-    inset 0 0 0 1px rgba(var(--emzk-lite-color-content-rgb), 0.08);
-
+	/* Segment */
+	--emzk-lite-color-segment-bg: var(--emzk-lite-color-surface-active);
+	--emzk-lite-color-segment-shadow:
+		inset 0 0 0 1px rgba(var(--emzk-lite-color-content-rgb), 0.08);
   /* Menu */
   --emzk-lite-color-menu-bg: rgba(var(--emzk-lite-color-neutral-800-rgb), 0.96);
   --emzk-lite-color-menu-shadow:
@@ -416,6 +415,7 @@ button[data-emzk-lite-badge-target="true"] {
 .emzk-lite-favorites-title:not([data-emzk-lite-bind-mode="assign"]):not([data-emzk-lite-bind-mode="clear"]):not([data-emzk-lite-bind-mode="rename"]) {
   justify-content: flex-start;
 
+
   /*
    * 세트 드래그 preview가 헤더 위로 떠야 하므로
    * 기본 모드에서만 overflow를 열어둔다.
@@ -606,7 +606,7 @@ button[data-emzk-lite-badge-target="true"] {
   height: 12px;
 
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
   letter-spacing: -0.2px;
   text-align: center;
@@ -674,8 +674,9 @@ button[data-emzk-lite-badge-target="true"] {
   filter: none;
 }
 
-/* Drag preview - iPad key preview style */
-.emzk-lite-shortcut-set-drag-preview {
+/* Shortcut set floating preview */
+.emzk-lite-shortcut-set-drag-preview,
+.emzk-lite-shortcut-set-switch-feedback {
   position: fixed;
   z-index: 2147483647;
 
@@ -687,9 +688,7 @@ button[data-emzk-lite-badge-target="true"] {
   display: grid;
   place-items: center;
 
-  min-width: 30px;
   height: 30px;
-  padding: 0 8px;
   box-sizing: border-box;
 
   color: var(--emzk-lite-color-floating-text);
@@ -716,8 +715,20 @@ button[data-emzk-lite-badge-target="true"] {
     transform var(--emzk-lite-motion-floating-fast);
 }
 
+.emzk-lite-shortcut-set-drag-preview {
+  min-width: 30px;
+  padding: 0 4px;
+}
+
+.emzk-lite-shortcut-set-switch-feedback {
+  width: 30px;
+  padding: 0;
+}
+
 .emzk-lite-shortcut-set-drag-preview[data-state="enter"],
-.emzk-lite-shortcut-set-drag-preview[data-state="leave"] {
+.emzk-lite-shortcut-set-drag-preview[data-state="leave"],
+.emzk-lite-shortcut-set-switch-feedback[data-state="enter"],
+.emzk-lite-shortcut-set-switch-feedback[data-state="leave"] {
   opacity: 0;
 
   transform:
@@ -726,7 +737,8 @@ button[data-emzk-lite-badge-target="true"] {
     scale(0.94);
 }
 
-.emzk-lite-shortcut-set-drag-preview[hidden] {
+.emzk-lite-shortcut-set-drag-preview[hidden],
+.emzk-lite-shortcut-set-switch-feedback[hidden] {
   display: none !important;
 }
 
@@ -853,10 +865,10 @@ button[data-emzk-lite-badge-target="true"] {
   position: absolute;
   z-index: 2147483000;
 
-  top: calc(100% + 5px);
-  left: 0;
+	top: calc(100% + 5px);
+	left: var(--emzk-lite-shortcut-set-menu-offset-x, 0px);
 
-  display: inline-flex;
+	display: inline-flex;
   flex-direction: column;
   align-items: stretch;
   gap: 2px;
@@ -1559,7 +1571,7 @@ html.emzk-lite-shortcut-set-dragging * {
 
 #emoji_area
   .emzk-lite-favorites-title:not([data-emzk-lite-bind-mode="assign"]):not([data-emzk-lite-bind-mode="clear"]):not([data-emzk-lite-bind-mode="rename"]) {
-  padding-inline-start: var(--emzk-lite-bind-title-padding-x);
+  padding-inline: var(--emzk-lite-bind-title-padding-x);
 }
 
 #emoji_area > .emzk-lite-favorites-section {
@@ -1583,7 +1595,8 @@ html.emzk-lite-shortcut-set-dragging * {
   .emzk-lite-bind-emote-preview,
   .emzk-lite-shortcut-set-button,
   .emzk-lite-shortcut-set-drag-preview,
-  .emzk-lite-shortcut-set-menu,
+  .emzk-lite-shortcut-set-switch-feedback,
+	.emzk-lite-shortcut-set-menu,
   .emzk-lite-favorites-drag-ghost,
   .emzk-lite-favorites-dragging-item,
   .emzk-lite-favorites-drag-placeholder,

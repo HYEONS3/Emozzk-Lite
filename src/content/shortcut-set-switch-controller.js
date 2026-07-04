@@ -51,6 +51,50 @@ export function clearShortcutSetSwitchFloatingUi() {
   removeShortcutSetDragPreview();
 }
 
+export function isShortcutSetSwitchVisible() {
+  const switches = document.querySelectorAll(
+    `.${SHORTCUT_SET_SWITCH_CLASS}`
+  );
+
+  return Array.from(switches)
+    .some(isVisibleShortcutSetSwitch);
+}
+
+function isVisibleShortcutSetSwitch(element) {
+  if (
+    !(element instanceof HTMLElement) ||
+    !element.isConnected
+  ) {
+    return false;
+  }
+
+  const rect = element.getBoundingClientRect();
+
+  if (
+    rect.width <= 0 ||
+    rect.height <= 0
+  ) {
+    return false;
+  }
+
+  if (
+    rect.bottom <= 0 ||
+    rect.right <= 0 ||
+    rect.top >= window.innerHeight ||
+    rect.left >= window.innerWidth
+  ) {
+    return false;
+  }
+
+  const style = window.getComputedStyle(element);
+
+  return (
+    style.display !== 'none' &&
+    style.visibility !== 'hidden' &&
+    Number(style.opacity) > 0
+  );
+}
+
 export function isShortcutSetClickSuppressed(button) {
   const wrapper = button?.closest?.(`.${SHORTCUT_SET_SWITCH_CLASS}`);
 

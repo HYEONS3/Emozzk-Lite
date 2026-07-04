@@ -12,6 +12,7 @@ export const SHORTCUT_SET_MENU_ITEM_CLASS = 'emzk-lite-shortcut-set-menu-item';
 
 const SHORTCUT_SET_MENU_CLOSING_ATTR = 'data-closing';
 const SHORTCUT_SET_MENU_CLOSE_MS = 160;
+const SHORTCUT_SET_MENU_EDGE_GAP = 8;
 
 export function createShortcutSetMenuControl({
   disabled = false,
@@ -173,6 +174,12 @@ function toggleShortcutSetMenu({
   });
 
   wrap.appendChild(menu);
+
+	positionShortcutSetMenu({
+		wrap,
+		menu,
+	});
+
   button.setAttribute('aria-expanded', 'true');
   button.classList.add(SHORTCUT_SET_MENU_OPEN_CLASS);
 
@@ -184,6 +191,58 @@ function toggleShortcutSetMenu({
     wrap.setAttribute('data-open', 'true');
     menu.removeAttribute(SHORTCUT_SET_MENU_CLOSING_ATTR);
   });
+}
+
+function positionShortcutSetMenu({
+  wrap,
+  menu,
+}) {
+  menu.style.removeProperty(
+    '--emzk-lite-shortcut-set-menu-offset-x'
+  );
+
+  const boundary = wrap.closest('#emoji_area');
+
+  const menuRect = menu.getBoundingClientRect();
+
+  const boundaryRect = boundary instanceof HTMLElement
+    ? boundary.getBoundingClientRect()
+    : {
+        left: 0,
+        right: window.innerWidth,
+      };
+
+  const leftLimit =
+    Math.max(0, boundaryRect.left) +
+    SHORTCUT_SET_MENU_EDGE_GAP;
+
+  const rightLimit =
+    Math.min(window.innerWidth, boundaryRect.right) -
+    SHORTCUT_SET_MENU_EDGE_GAP;
+
+  const overflowRight = Math.max(
+    0,
+    menuRect.right - rightLimit
+  );
+
+  if (!overflowRight) {
+    return;
+  }
+
+  const maxShiftLeft = Math.max(
+    0,
+    menuRect.left - leftLimit
+  );
+
+  const shiftLeft = Math.min(
+    overflowRight,
+    maxShiftLeft
+  );
+
+  menu.style.setProperty(
+    '--emzk-lite-shortcut-set-menu-offset-x',
+    `${-shiftLeft}px`
+  );
 }
 
 function createShortcutSetMenu({
