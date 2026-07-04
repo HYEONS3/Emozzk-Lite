@@ -72,6 +72,14 @@ async function initPopup() {
   applySettingsToControls(settings);
   applyShortcutSetStateToControls(shortcutSetState);
 
+	previousShortcutSetClearButton.appendChild(
+		createShortcutClearIcon()
+	);
+
+	nextShortcutSetClearButton.appendChild(
+		createShortcutClearIcon()
+	);
+
   keyupCheckbox.addEventListener('change', handleSettingsChange);
   bothCheckbox.addEventListener('change', handleSettingsChange);
 
@@ -700,4 +708,30 @@ function updateRangeProgress(range) {
     '--popup-range-progress',
     `${clampNumber(progress, 0, 100)}%`
   );
+}
+
+function createShortcutClearIcon() {
+  const svg = document.createElementNS(
+    'http://www.w3.org/2000/svg',
+    'svg'
+  );
+
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('popup-shortcut-clear-icon');
+
+  const path = document.createElementNS(
+    'http://www.w3.org/2000/svg',
+    'path'
+  );
+
+  path.setAttribute('d', 'M6 6l12 12M18 6 6 18');
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', 'currentColor');
+  path.setAttribute('stroke-width', '2.2');
+  path.setAttribute('stroke-linecap', 'round');
+
+  svg.appendChild(path);
+
+  return svg;
 }
