@@ -39,7 +39,9 @@ import {
 
 import {
   getCachedActiveShortcutBindingSetId,
+  getCachedShortcutBindingSetState,
   getCachedShortcutBindings,
+  setActiveShortcutBindingSet,
   SHORTCUT_BINDINGS_CHANGED_EVENT,
   SHORTCUT_PHASE_DOWN,
   SHORTCUT_PHASE_UP,
@@ -53,8 +55,18 @@ import {
 } from './emote-bind-mode-state.js';
 
 import {
+  getCachedExtensionSettings,
+} from './extension-settings-storage.js';
+
+import {
   isChatInputEmoteLimitReached,
 } from './chat-input-emote-limit.js';
+
+import {
+  getAdjacentShortcutBindingSetId,
+  SHORTCUT_SET_DIRECTION_NEXT,
+  SHORTCUT_SET_DIRECTION_PREVIOUS,
+} from './shortcut-set-navigation.js';
 
 import {
   getShortcutCodeFromKeyboardEvent,
@@ -66,6 +78,7 @@ const EVENT_PHASE_KEYDOWN = 'keydown';
 const EVENT_PHASE_KEYUP = 'keyup';
 
 const activePresses = new Map();
+const activeShortcutSetPresses = new Set();
 
 let attached = false;
 let shortcutBindings = [];
@@ -169,13 +182,17 @@ function handleShortcutEvent(event) {
     return;
   }
 
-  if (phase === EVENT_PHASE_KEYUP) {
-    handleShortcutKeyUp({
-      event,
-    });
+	if (phase === EVENT_PHASE_KEYUP) {
+		if (handleShortcutSetNavigationKeyUp(event)) {
+			return;
+		}
 
-    return;
-  }
+		handleShortcutKeyUp({
+			event,
+		});
+
+		return;
+	}
 
   if (event.defaultPrevented) {
     return;
@@ -191,6 +208,10 @@ function handleShortcutEvent(event) {
 		event,
 		state,
 	})) {
+		return;
+	}
+
+	if (handleShortcutSetNavigationKeyDown(event)) {
 		return;
 	}
 
@@ -827,6 +848,8 @@ function getActivePressKeyFromEvent(event) {
 
 function clearActivePresses() {
   activePresses.clear();
+  activeShortcutSetPresses.clear();
+
   suppressNextRenameEscapeKeyUp = false;
 }
 
@@ -866,4 +889,113 @@ function normalizeStoragePhase(phase) {
 
 function normalizeText(value) {
   return String(value ?? '').trim();
+}
+
+function handleShortcutSetNavigationKeyDown(event) {
+  const direction = getShortcutSetDirectionFromEvent(event);
+
+  if (!direction) {
+    return false;
+  }
+
+  blockKeyboardEvent({
+    event,
+    binding: null,
+  });
+
+  const pressKey = getActivePressKeyFromEvent(event);
+
+  if (!pressKey) {
+    return true;
+  }
+
+  if (activeShortcutSetPresses.has(pressKey)) {
+    return true;
+  }
+
+  activeShortcutSetPresses.add(pressKey);
+
+  if (event.repeat) {
+    return true;
+  }
+
+  switchShortcutBindingSet(direction);
+
+  return true;
+}
+
+function getShortcutSetDirectionFromEvent(event) {
+  const eventCode = getShortcutCodeFromKeyboardEvent(event);
+
+  if (!eventCode) {
+    return '';
+  }
+
+  const settings = getCachedExtensionSettings();
+
+  const previousCode = normalizeStoredShortcutCode(
+    settings.previousShortcutSetCode
+  );
+
+  const nextCode = normalizeStoredShortcutCode(
+    settings.nextShortcutSetCode
+  );
+
+  if (
+    previousCode &&
+    eventCode === previousCode
+  ) {
+    return SHORTCUT_SET_DIRECTION_PREVIOUS;
+  }
+
+  if (
+    nextCode &&
+    eventCode === nextCode
+  ) {
+    return SHORTCUT_SET_DIRECTION_NEXT;
+  }
+
+  return '';
+}
+
+function switchShortcutBindingSet(direction) {
+  const state = getCachedShortcutBindingSetState();
+
+  const nextSetId = getAdjacentShortcutBindingSetId({
+    activeSetId: state.activeSetId,
+    setCount: state.setCount,
+    direction,
+  });
+
+  if (!nextSetId) {
+    return;
+  }
+
+  void setActiveShortcutBindingSet(nextSetId)
+    .catch((error) => {
+      console.debug(
+        '[Emozzk Lite] failed to switch shortcut binding set:',
+        error
+      );
+    });
+}
+
+function handleShortcutSetNavigationKeyUp(event) {
+  const pressKey = getActivePressKeyFromEvent(event);
+
+  if (
+    !pressKey ||
+    !activeShortcutSetPresses.has(pressKey)
+  ) {
+    return false;
+  }
+
+  activeShortcutSetPresses.delete(pressKey);
+
+  blockKeyboardEvent({
+    event,
+    binding: null,
+  });
+
+  return true;
 }

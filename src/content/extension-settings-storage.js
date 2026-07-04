@@ -4,6 +4,10 @@ import {
   normalizeExtensionSettings,
 } from '../shared/extension-settings.js';
 
+import {
+  normalizeStoredShortcutCode,
+} from '../shared/shortcut-key-code.js';
+
 export const EXTENSION_SETTINGS_CHANGED_EVENT = 'emzk-lite-extension-settings-changed';
 
 let cachedExtensionSettings = {
@@ -192,6 +196,23 @@ function isSameExtensionSettings(left, right) {
     normalizedLeft.experimentalPhaseHintPending ===
       normalizedRight.experimentalPhaseHintPending &&
     normalizedLeft.recentStorageLimit ===
-      normalizedRight.recentStorageLimit
+      normalizedRight.recentStorageLimit &&
+		normalizedLeft.previousShortcutSetCode ===
+			normalizedRight.previousShortcutSetCode &&
+		normalizedLeft.nextShortcutSetCode ===
+			normalizedRight.nextShortcutSetCode	
+		);
+}
+
+export function isShortcutSetNavigationCode(code) {
+  const normalizedCode = normalizeStoredShortcutCode(code);
+
+  if (!normalizedCode) {
+    return false;
+  }
+
+  return (
+    normalizedCode === cachedExtensionSettings.previousShortcutSetCode ||
+    normalizedCode === cachedExtensionSettings.nextShortcutSetCode
   );
 }

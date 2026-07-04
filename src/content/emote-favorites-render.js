@@ -112,6 +112,10 @@ import {
   normalizeStoredShortcutCode,
 } from '../shared/shortcut-key-code.js';
 
+import {
+  isShortcutSetNavigationCode,
+} from './extension-settings-storage.js';
+
 const FAVORITES_SECTION_CLASS = 'emzk-lite-favorites-section';
 const FAVORITES_TITLE_CLASS = 'emzk-lite-favorites-title';
 const FAVORITES_LIST_CLASS = 'emzk-lite-favorites-list';
@@ -1467,6 +1471,9 @@ function getAssignHintDescription(bindState) {
   if (!selectedCode) {
     return '등록할 키를 입력하세요. Space와 Enter는 등록되지 않습니다. Escape를 누르면 취소됩니다.';
   }
+	if (isShortcutSetNavigationCode(selectedCode)) {
+		return '세트 전환 단축키와 중복됩니다. 다른 키를 입력하세요.';
+	}
 
   return `${getEmoteBindCodeLabel(selectedCode)} 단축키가 선택되었습니다. 다른 키를 누르면 저장 전 단축키를 바꿀 수 있습니다.`;
 }
@@ -1489,6 +1496,10 @@ function getAssignHintText(bindState) {
   if (!selectedCode) {
     return '키 입력';
   }
+
+	if (isShortcutSetNavigationCode(selectedCode)) {
+		return '세트 전환 키와 중복';
+	}
 
   return `${getEmoteBindCodeLabel(selectedCode)}`;
 }
@@ -2063,9 +2074,19 @@ function canSaveAssignState(bindState) {
     return false;
   }
 
+  const selectedCode = normalizeShortcutCode(
+    bindState?.selectedCode
+  );
+
+  if (
+    !selectedCode ||
+    isShortcutSetNavigationCode(selectedCode)
+  ) {
+    return false;
+  }
+
   return Boolean(
     normalizeText(bindState?.selectedEmojiId) &&
-    normalizeShortcutCode(bindState?.selectedCode) &&
     normalizeRenderPhase(bindState?.selectedPhase)
   );
 }

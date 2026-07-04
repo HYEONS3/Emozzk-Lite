@@ -10,6 +10,12 @@ import {
   normalizeExtensionSettings,
 } from '../shared/extension-settings.js';
 
+import {
+  getShortcutCodeFromKeyboardEvent,
+  getShortcutCodeLabel,
+  normalizeStoredShortcutCode,
+} from '../shared/shortcut-key-code.js';
+
 const SHORTCUT_BINDINGS_STORAGE_KEY = 'emzk_lite_shortcut_bindings_v1';
 
 const MIN_SHORTCUT_SET_COUNT = 1;
@@ -19,6 +25,9 @@ const DEFAULT_SHORTCUT_SET_COUNT = 2;
 const SHORTCUT_BINDING_SETS_VERSION = 4;
 const SHORTCUT_BINDING_SET_OFF = 'off';
 
+const SHORTCUT_SET_TARGET_PREVIOUS = 'previous';
+const SHORTCUT_SET_TARGET_NEXT = 'next';
+
 const RECENT_STORAGE_LIMIT_CHANGED_MESSAGE =
   'EMZK_LITE_RECENT_STORAGE_LIMIT_CHANGED';
 
@@ -27,11 +36,20 @@ const keyupCheckbox = document.getElementById('experimentalKeyupEnabled');
 const bothCheckbox = document.getElementById('experimentalBothPhaseEnabled');
 const shortcutSetCountRange = document.getElementById('shortcutSetCountRange');
 const shortcutSetCountValue = document.getElementById('shortcutSetCountValue');
+
+const previousShortcutSetButton = document.getElementById('previousShortcutSetButton');
+const previousShortcutSetClearButton = document.getElementById('previousShortcutSetClearButton');
+const nextShortcutSetButton = document.getElementById('nextShortcutSetButton');
+const nextShortcutSetClearButton = document.getElementById('nextShortcutSetClearButton');
+
 const recentStorageLimitRange = document.getElementById('recentStorageLimitRange');
 const recentStorageLimitValue = document.getElementById('recentStorageLimitValue');
+
 const statusText = document.getElementById('statusText');
 const versionText = document.querySelector('.popup-version');
 
+
+let listeningShortcutSetTarget = '';
 let currentSettings = normalizeExtensionSettings(DEFAULT_EXTENSION_SETTINGS);
 let currentShortcutSetState = createDefaultShortcutBindingSetState();
 
@@ -62,6 +80,28 @@ async function initPopup() {
 
   recentStorageLimitRange.addEventListener('input', handleRecentLimitInput);
   recentStorageLimitRange.addEventListener('change', handleSettingsChange);
+
+  previousShortcutSetButton.addEventListener('click', () => {
+    toggleShortcutSetCodeListening(SHORTCUT_SET_TARGET_PREVIOUS);
+  });
+
+  nextShortcutSetButton.addEventListener('click', () => {
+    toggleShortcutSetCodeListening(SHORTCUT_SET_TARGET_NEXT);
+  });
+
+  previousShortcutSetClearButton.addEventListener('click', () => {
+    void clearShortcutSetCode(SHORTCUT_SET_TARGET_PREVIOUS);
+  });
+
+  nextShortcutSetClearButton.addEventListener('click', () => {
+    void clearShortcutSetCode(SHORTCUT_SET_TARGET_NEXT);
+  });
+
+  document.addEventListener(
+    'keydown',
+    handleShortcutSetCodeKeyDown,
+    true
+  );
 }
 
 function handleShortcutSetCountInput() {
@@ -94,6 +134,117 @@ async function handleShortcutSetCountChange() {
     applyShortcutSetStateToControls(currentShortcutSetState);
     setStatus('저장에 실패했습니다.');
   }
+}
+
+function handleShortcutSetCodeKeyDown(event) {
+  const target = listeningShortcutSetTarget;
+
+  if (!target) {
+    return;
+  }
+
+  blockPopupEvent(event);
+
+  if (event.repeat) {
+    return;
+  }
+
+  if (
+    event.code === 'Escape' &&
+    !hasAnyModifier(event)
+  ) {
+    listeningShortcutSetTarget = '';
+
+    applyShortcutSetCodesToControls(currentSettings);
+    return;
+  }
+
+  const code = getShortcutCodeFromKeyboardEvent(event);
+
+  if (!code) {
+    return;
+  }
+
+  void assignShortcutSetCode({
+    target,
+    code,
+  });
+}
+
+async function assignShortcutSetCode({
+  target,
+  code,
+}) {
+  const normalizedCode = normalizeStoredShortcutCode(code);
+
+  if (!normalizedCode) {
+    return;
+  }
+
+  if (normalizedCode === 'KeyE') {
+    setStatus('이모티콘 패널 열기 단축키와 중복됩니다.');
+    return;
+  }
+
+  const otherCode = target === SHORTCUT_SET_TARGET_PREVIOUS
+    ? currentSettings.nextShortcutSetCode
+    : currentSettings.previousShortcutSetCode;
+
+  if (
+    normalizedCode === normalizeStoredShortcutCode(otherCode)
+  ) {
+    setStatus('다른 세트 전환 단축키와 중복됩니다.');
+    return;
+  }
+
+  if (
+    hasShortcutBindingCode(
+      currentShortcutSetState,
+      normalizedCode
+    )
+  ) {
+    setStatus('이모티콘 단축키와 중복됩니다.');
+    return;
+  }
+
+  await saveShortcutSetCode({
+    target,
+    code: normalizedCode,
+  });
+}
+
+function hasShortcutBindingCode(state, code) {
+  const normalizedCode = normalizeStoredShortcutCode(code);
+
+  if (!normalizedCode) {
+    return false;
+  }
+
+  const normalizedState = normalizeShortcutBindingSetState(state);
+
+  return normalizedState.sets.some((set) => {
+    return set.bindings.some((binding) => {
+      return (
+        normalizeStoredShortcutCode(binding?.code) ===
+        normalizedCode
+      );
+    });
+  });
+}
+
+function blockPopupEvent(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
+}
+
+function hasAnyModifier(event) {
+  return Boolean(
+    event.ctrlKey ||
+    event.altKey ||
+    event.metaKey ||
+    event.shiftKey
+  );
 }
 
 function handleRecentLimitInput() {
@@ -157,6 +308,7 @@ function getSettingsFromControls() {
   const experimentalKeyupEnabled = Boolean(keyupCheckbox.checked);
 
   return normalizeExtensionSettings({
+    ...currentSettings,
     experimentalKeyupEnabled,
     experimentalBothPhaseEnabled:
       experimentalKeyupEnabled &&
@@ -178,6 +330,57 @@ function applySettingsToControls(settings) {
     getRecentStorageLimitRangeValue(normalizedSettings.recentStorageLimit)
   );
   updateRecentStorageLimitLabel(normalizedSettings.recentStorageLimit);
+
+  applyShortcutSetCodesToControls(normalizedSettings);
+}
+
+function applyShortcutSetCodeToControls({
+  code,
+  button,
+  clearButton,
+  isListening = false,
+}) {
+  button.classList.toggle('is-listening', isListening);
+
+  if (isListening) {
+    button.textContent = '키 입력…';
+    clearButton.hidden = true;
+    return;
+  }
+
+  const label = getShortcutCodeLabel(code);
+
+  button.textContent = label || '미지정';
+  clearButton.hidden = !label;
+}
+
+function applyShortcutSetCodesToControls(settings) {
+  const normalizedSettings = normalizeExtensionSettings(settings);
+
+  applyShortcutSetCodeToControls({
+    code: normalizedSettings.previousShortcutSetCode,
+    button: previousShortcutSetButton,
+    clearButton: previousShortcutSetClearButton,
+    isListening:
+      listeningShortcutSetTarget === SHORTCUT_SET_TARGET_PREVIOUS,
+  });
+
+  applyShortcutSetCodeToControls({
+    code: normalizedSettings.nextShortcutSetCode,
+    button: nextShortcutSetButton,
+    clearButton: nextShortcutSetClearButton,
+    isListening:
+      listeningShortcutSetTarget === SHORTCUT_SET_TARGET_NEXT,
+  });
+}
+
+function toggleShortcutSetCodeListening(target) {
+  listeningShortcutSetTarget =
+    listeningShortcutSetTarget === target
+      ? ''
+      : target;
+
+  applyShortcutSetCodesToControls(currentSettings);
 }
 
 function applyShortcutSetStateToControls(state) {
@@ -363,6 +566,63 @@ function getShortcutBindingSetIndex(setId) {
   }
 
   return Number(match[1]) || 0;
+}
+
+function getShortcutSetCodeSettingKey(target) {
+  if (target === SHORTCUT_SET_TARGET_PREVIOUS) {
+    return 'previousShortcutSetCode';
+  }
+
+  if (target === SHORTCUT_SET_TARGET_NEXT) {
+    return 'nextShortcutSetCode';
+  }
+
+  return '';
+}
+
+async function saveShortcutSetCode({
+  target,
+  code,
+}) {
+  const settingKey = getShortcutSetCodeSettingKey(target);
+
+  if (!settingKey) {
+    return false;
+  }
+
+  const nextSettings = normalizeExtensionSettings({
+    ...currentSettings,
+    [settingKey]: code,
+  });
+
+  try {
+    await writeSettings(nextSettings);
+
+    currentSettings = nextSettings;
+    listeningShortcutSetTarget = '';
+
+    applyShortcutSetCodesToControls(currentSettings);
+    setStatus('저장됨. 열린 페이지에 즉시 반영됩니다.');
+
+    return true;
+  } catch (error) {
+    console.debug(
+      '[Emozzk Lite] failed to save shortcut set code:',
+      error
+    );
+
+    applyShortcutSetCodesToControls(currentSettings);
+    setStatus('저장에 실패했습니다.');
+
+    return false;
+  }
+}
+
+async function clearShortcutSetCode(target) {
+  await saveShortcutSetCode({
+    target,
+    code: '',
+  });
 }
 
 function normalizeShortcutSetCount(value) {
