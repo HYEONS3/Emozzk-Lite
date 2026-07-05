@@ -19,32 +19,34 @@ export function getAdjacentShortcutBindingSetId({
 
   const activeIndex = getShortcutBindingSetIndex(normalizedActiveSetId);
 
-  if (
+  const isOffOrInvalid = (
     normalizedActiveSetId === SHORTCUT_BINDING_SET_OFF ||
     activeIndex < 1 ||
     activeIndex > normalizedSetCount
-  ) {
-    return createShortcutBindingSetId(
-      direction === SHORTCUT_SET_DIRECTION_PREVIOUS
-        ? normalizedSetCount
-        : 1
-    );
-  }
+  );
 
   if (direction === SHORTCUT_SET_DIRECTION_PREVIOUS) {
-    return createShortcutBindingSetId(
-      activeIndex === 1
-        ? normalizedSetCount
-        : activeIndex - 1
-    );
+    if (isOffOrInvalid) {
+      return createShortcutBindingSetId(normalizedSetCount);
+    }
+
+    if (activeIndex === 1) {
+      return SHORTCUT_BINDING_SET_OFF;
+    }
+
+    return createShortcutBindingSetId(activeIndex - 1);
   }
 
   if (direction === SHORTCUT_SET_DIRECTION_NEXT) {
-    return createShortcutBindingSetId(
-      activeIndex === normalizedSetCount
-        ? 1
-        : activeIndex + 1
-    );
+    if (isOffOrInvalid) {
+      return createShortcutBindingSetId(1);
+    }
+
+    if (activeIndex === normalizedSetCount) {
+      return SHORTCUT_BINDING_SET_OFF;
+    }
+
+    return createShortcutBindingSetId(activeIndex + 1);
   }
 
   return '';

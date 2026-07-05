@@ -78,6 +78,10 @@ import {
   showShortcutSetSwitchFeedback,
 } from './shortcut-set-switch-feedback.js';
 
+import {
+  revealQuickEmotePanelForUser,
+} from './quick-emote-panel-session.js';
+
 const EVENT_PHASE_KEYDOWN = 'keydown';
 const EVENT_PHASE_KEYUP = 'keyup';
 
@@ -568,6 +572,18 @@ function handleOpenPanelShortcut({
     binding: null,
   });
 
+  if (revealQuickEmotePanelForUser()) {
+    if (state.panel) {
+      scheduleChatInputFocus();
+      scheduleFavoriteEmoteSectionRender();
+      scheduleBadgeUpdate();
+    } else {
+      openPanelFromShortcut();
+    }
+
+    return true;
+  }
+
   openPanelFromShortcut();
 
   return true;
@@ -673,22 +689,32 @@ function isShortcutBindingAllowedInState({
   if (!binding) return false;
 
   /*
-   * 패널이 열려 있으면 이모티콘 선택 단축키를 허용한다.
-   * 이때 채팅 입력창 focus가 있어도 패널 조작 상태로 본다.
+   * CHZZK 채팅 UI가 없으면 이모티콘 단축키를 사용하지 않는다.
    */
-  if (state.panel) {
-    return true;
+  if (!state.chatInput) {
+    return false;
   }
 
+  /*
+   * 검색창이나 다른 입력 요소를 사용 중이면 단축키를 가로채지 않는다.
+   */
   if (state.isNonChatTyping) {
     return false;
   }
 
+  /*
+   * CHZZK 채팅 입력창에서 직접 입력 중일 때는
+   * 해당 binding이 채팅 입력 중 사용을 허용한 경우에만 실행한다.
+   */
   if (state.isChatTyping) {
     return binding.options?.enabledInChatInput === true;
   }
 
-  return false;
+  /*
+   * 세트가 활성화되어 있고 다른 입력 요소를 사용 중이 아니라면
+   * 포커스 위치와 관계없이 이모티콘 단축키를 허용한다.
+   */
+  return true;
 }
 
 function shouldBlockBindingPhase({
@@ -1007,6 +1033,7 @@ function switchShortcutBindingSet(direction) {
       showShortcutSetSwitchFeedback({
         setId: nextSetId,
         label: activeSet?.label,
+				direction,
       });
     })
     .catch((error) => {

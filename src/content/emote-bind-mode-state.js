@@ -187,16 +187,21 @@ export function selectEmoteBindTarget({
   emojiId,
   emojiLabel,
   emojiImageUrl,
+  code = '',
+  phase = '',
 }) {
   const previousState = getEmoteBindModeState();
+  const selectedCode = normalizeStoredShortcutCode(code);
 
   setEmoteBindModeState({
     ...previousState,
     selectedEmojiId: normalizeText(emojiId),
     selectedEmojiLabel: normalizeText(emojiLabel),
     selectedEmojiImageUrl: normalizeText(emojiImageUrl),
-    selectedCode: '',
-    selectedPhase: normalizeEmoteBindPhase(previousState.selectedPhase),
+    selectedCode,
+    selectedPhase: selectedCode
+      ? normalizeEmoteBindPhase(phase)
+      : normalizeEmoteBindPhase(previousState.selectedPhase),
     keyListening: false,
   });
 }

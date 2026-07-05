@@ -202,7 +202,6 @@ function isVisible(element) {
 
   return (
     style.display !== 'none' &&
-    style.visibility !== 'hidden' &&
-    style.opacity !== '0'
+    style.visibility !== 'hidden'
   );
 }

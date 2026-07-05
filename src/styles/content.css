@@ -175,8 +175,8 @@
   --emzk-lite-color-flash-glow: rgba(var(--emzk-lite-color-content-rgb), 0.10);
 
   /* Floating */
-  --emzk-lite-color-floating-text: rgba(var(--emzk-lite-color-content-rgb), 0.70);
-  --emzk-lite-color-floating-bg: rgba(var(--emzk-lite-color-neutral-black-rgb), 0.70);
+  --emzk-lite-color-floating-text: rgba(var(--emzk-lite-color-content-rgb), 0.82);
+  --emzk-lite-color-floating-bg: rgba(var(--emzk-lite-color-neutral-black-rgb), 0.82);
 
   /* Drag */
   --emzk-lite-color-drag-placeholder-bg-start: rgba(var(--emzk-lite-color-content-rgb), 0.08);
@@ -674,21 +674,25 @@ button[data-emzk-lite-badge-target="true"] {
   filter: none;
 }
 
-/* Shortcut set floating preview */
+/* ========================================================================== */
+/* Shortcut set previews                                                      */
+/* ========================================================================== */
+
+/* -------------------------------------------------------------------------- */
+/* Shared                                                                     */
+/* -------------------------------------------------------------------------- */
+
 .emzk-lite-shortcut-set-drag-preview,
 .emzk-lite-shortcut-set-switch-feedback {
   position: fixed;
   z-index: 2147483647;
 
-  transform:
-    translate(-50%, -100%)
-    translateY(-4px)
-    scale(1);
-
   display: grid;
   place-items: center;
 
+  min-width: 30px;
   height: 30px;
+  padding: 0 5px;
   box-sizing: border-box;
 
   color: var(--emzk-lite-color-floating-text);
@@ -703,43 +707,86 @@ button[data-emzk-lite-badge-target="true"] {
   white-space: nowrap;
 
   opacity: 1;
-
-  box-shadow:
-    0 4px 12px var(--emzk-lite-color-shadow-floating);
+  box-shadow: none;
 
   pointer-events: none;
   user-select: none;
 
-  transition:
-    opacity var(--emzk-lite-motion-floating-fast),
-    transform var(--emzk-lite-motion-floating-fast);
-}
-
-.emzk-lite-shortcut-set-drag-preview {
-  min-width: 30px;
-  padding: 0 4px;
-}
-
-.emzk-lite-shortcut-set-switch-feedback {
-  width: 30px;
-  padding: 0;
-}
-
-.emzk-lite-shortcut-set-drag-preview[data-state="enter"],
-.emzk-lite-shortcut-set-drag-preview[data-state="leave"],
-.emzk-lite-shortcut-set-switch-feedback[data-state="enter"],
-.emzk-lite-shortcut-set-switch-feedback[data-state="leave"] {
-  opacity: 0;
-
-  transform:
-    translate(-50%, -100%)
-    translateY(2px)
-    scale(0.94);
+  will-change: opacity, transform;
 }
 
 .emzk-lite-shortcut-set-drag-preview[hidden],
 .emzk-lite-shortcut-set-switch-feedback[hidden] {
   display: none !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Drag preview                                                               */
+/* -------------------------------------------------------------------------- */
+
+.emzk-lite-shortcut-set-drag-preview {
+  transform:
+    translate(-50%, -100%)
+    translateY(-4px);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Set switch feedback                                                        */
+/* -------------------------------------------------------------------------- */
+
+.emzk-lite-shortcut-set-switch-feedback {
+  width: auto;
+
+  transform:
+    translate(-100%, -50%);
+
+  transition:
+    opacity 160ms ease,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Next: old leaves left, new enters from right */
+.emzk-lite-shortcut-set-switch-feedback[data-state="enter"][data-direction="next"] {
+  opacity: 0;
+
+  transform:
+    translate(-100%, -50%)
+    translateX(6px);
+}
+
+.emzk-lite-shortcut-set-switch-feedback[data-state="replace-leave"][data-direction="next"] {
+  opacity: 0;
+
+  transform:
+    translate(-100%, -50%)
+    translateX(-6px);
+}
+
+/* Previous: old leaves right, new enters from left */
+.emzk-lite-shortcut-set-switch-feedback[data-state="enter"][data-direction="previous"] {
+  opacity: 0;
+
+  transform:
+    translate(-100%, -50%)
+    translateX(-6px);
+}
+
+.emzk-lite-shortcut-set-switch-feedback[data-state="replace-leave"][data-direction="previous"] {
+  opacity: 0;
+
+  transform:
+    translate(-100%, -50%)
+    translateX(6px);
+}
+
+/* Initial / dismiss */
+.emzk-lite-shortcut-set-switch-feedback[data-state="enter"][data-direction="initial"],
+.emzk-lite-shortcut-set-switch-feedback[data-state="dismiss"] {
+  opacity: 0;
+
+  transform:
+    translate(-100%, -50%)
+    translateX(6px);
 }
 
 .emzk-lite-favorites-title[data-emzk-lite-bind-mode="assign"]
@@ -1566,6 +1613,33 @@ html.emzk-lite-shortcut-set-dragging * {
 }
 
 /* ========================================================================== */
+/* Quick insert                                                               */
+/* ========================================================================== */
+html.emzk-lite-quick-insert-panel-stealth
+  [role="alertdialog"][aria-modal="true"]:has(#emoji_area),
+html.emzk-lite-quick-insert-panel-stealth
+  [role="dialog"][aria-modal="true"]:has(#emoji_area) {
+  clip-path: inset(100%) !important;
+  pointer-events: none !important;
+  transition: none !important;
+  animation: none !important;
+}
+
+.emzk-lite-quick-insert-trigger-snapshot {
+  position: fixed !important;
+  z-index: 2147483647 !important;
+
+  box-sizing: border-box;
+  margin: 0 !important;
+
+  background-color: transparent !important;
+  opacity: 1 !important;
+
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+/* ========================================================================== */
 /* Spacing adjustment                                                         */
 /* ========================================================================== */
 
@@ -1605,3 +1679,4 @@ html.emzk-lite-shortcut-set-dragging * {
     transition: none;
   }
 }
+

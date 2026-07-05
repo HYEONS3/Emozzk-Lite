@@ -195,6 +195,8 @@ function isSameExtensionSettings(left, right) {
       normalizedRight.experimentalBothPhaseEnabled &&
     normalizedLeft.experimentalPhaseHintPending ===
       normalizedRight.experimentalPhaseHintPending &&
+    normalizedLeft.experimentalQuickInsertPanelHidden ===
+      normalizedRight.experimentalQuickInsertPanelHidden &&
     normalizedLeft.recentStorageLimit ===
       normalizedRight.recentStorageLimit &&
 		normalizedLeft.previousShortcutSetCode ===

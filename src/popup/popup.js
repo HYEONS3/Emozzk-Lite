@@ -34,6 +34,9 @@ const RECENT_STORAGE_LIMIT_CHANGED_MESSAGE =
 
 const keyupCheckbox = document.getElementById('experimentalKeyupEnabled');
 const bothCheckbox = document.getElementById('experimentalBothPhaseEnabled');
+const quickInsertPanelHiddenCheckbox = document.getElementById(
+  'experimentalQuickInsertPanelHidden'
+);
 const shortcutSetCountRange = document.getElementById('shortcutSetCountRange');
 const shortcutSetCountValue = document.getElementById('shortcutSetCountValue');
 
@@ -82,6 +85,10 @@ async function initPopup() {
 
   keyupCheckbox.addEventListener('change', handleSettingsChange);
   bothCheckbox.addEventListener('change', handleSettingsChange);
+  quickInsertPanelHiddenCheckbox.addEventListener(
+    'change',
+    handleSettingsChange
+  );
 
   shortcutSetCountRange.addEventListener('input', handleShortcutSetCountInput);
   shortcutSetCountRange.addEventListener('change', handleShortcutSetCountChange);
@@ -321,6 +328,9 @@ function getSettingsFromControls() {
     experimentalBothPhaseEnabled:
       experimentalKeyupEnabled &&
       Boolean(bothCheckbox.checked),
+    experimentalQuickInsertPanelHidden: Boolean(
+      quickInsertPanelHiddenCheckbox.checked
+    ),
     recentStorageLimit: getRecentStorageLimitFromRangeValue(
       recentStorageLimitRange.value
     ),
@@ -333,6 +343,9 @@ function applySettingsToControls(settings) {
   keyupCheckbox.checked = normalizedSettings.experimentalKeyupEnabled;
   bothCheckbox.checked = normalizedSettings.experimentalBothPhaseEnabled;
   bothCheckbox.disabled = !normalizedSettings.experimentalKeyupEnabled;
+  quickInsertPanelHiddenCheckbox.checked = Boolean(
+    normalizedSettings.experimentalQuickInsertPanelHidden
+  );
 
   recentStorageLimitRange.value = String(
     getRecentStorageLimitRangeValue(normalizedSettings.recentStorageLimit)

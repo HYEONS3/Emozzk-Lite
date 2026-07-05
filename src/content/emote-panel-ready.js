@@ -7,7 +7,6 @@ import {
 } from './emote-panel.js';
 
 const DEFAULT_READY_TIMEOUT_MS = 1200;
-const DEFAULT_READY_POLL_INTERVAL_MS = 16;
 
 let pendingReadyPromise = null;
 
@@ -33,7 +32,6 @@ export function getReadyEmotePanelState() {
 
 export function waitForEmotePanelReady({
   timeoutMs = DEFAULT_READY_TIMEOUT_MS,
-  pollIntervalMs = DEFAULT_READY_POLL_INTERVAL_MS,
 } = {}) {
   if (pendingReadyPromise) {
     return pendingReadyPromise;
@@ -41,7 +39,6 @@ export function waitForEmotePanelReady({
 
   pendingReadyPromise = waitForReadyState({
     timeoutMs,
-    pollIntervalMs,
   })
     .finally(() => {
       pendingReadyPromise = null;
@@ -52,7 +49,6 @@ export function waitForEmotePanelReady({
 
 async function waitForReadyState({
   timeoutMs,
-  pollIntervalMs,
 }) {
   const startedAt = performance.now();
 
@@ -63,7 +59,7 @@ async function waitForReadyState({
       return readyState;
     }
 
-    await waitDelay(pollIntervalMs);
+    await waitNextFrame();
   }
 
   return getReadyEmotePanelState();
@@ -132,8 +128,8 @@ function isUsablePanel(panel) {
   return rect.width > 0 && rect.height > 0;
 }
 
-function waitDelay(ms) {
+function waitNextFrame() {
   return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
+    requestAnimationFrame(resolve);
   });
 }

@@ -7,9 +7,12 @@ const args = new Set(process.argv.slice(2));
 
 const isProd = args.has('--prod');
 const isBeta = args.has('--beta');
-const shouldCreateZip = isProd || args.has('--zip');
+const shouldCreateZip =
+  args.has('--zip') ||
+  (isProd && !isBeta);
 
 const DIST_DIR = isBeta ? 'dist-beta' : 'dist';
+const PACKAGE_DIR = 'packages';
 
 let crcTable = null;
 
@@ -453,7 +456,12 @@ function createWebStoreZip(manifest) {
     manifest.version_name || manifest.version || getBuildDateStamp()
   );
 
-  const zipFile = `${packageName}-${versionLabel}.zip`;
+  const zipFileName = `${packageName}-${versionLabel}.zip`;
+  const zipFile = path.join(PACKAGE_DIR, zipFileName);
+
+  fs.mkdirSync(PACKAGE_DIR, {
+    recursive: true,
+  });
 
   fs.rmSync(zipFile, {
     force: true,

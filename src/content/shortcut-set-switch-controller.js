@@ -52,6 +52,13 @@ export function clearShortcutSetSwitchFloatingUi() {
 }
 
 export function isShortcutSetSwitchVisible() {
+	if (
+    document.documentElement.classList.contains(
+      'emzk-lite-quick-insert-panel-stealth'
+    )
+  ) {
+    return false;
+  }
   const switches = document.querySelectorAll(
     `.${SHORTCUT_SET_SWITCH_CLASS}`
   );

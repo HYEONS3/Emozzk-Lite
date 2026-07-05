@@ -58,6 +58,15 @@ import {
   refreshEmoteBindModeStateForSettings,
 } from './emote-bind-mode-state.js';
 
+import {
+  attachQuickEmotePanelSession,
+} from './quick-emote-panel-session.js';
+
+import {
+  scheduleInitialShortcutSetSwitchFeedback,
+	
+} from './shortcut-set-switch-feedback.js';
+
 const DEBUG = false;
 
 startContentScript();
@@ -72,6 +81,7 @@ function startContentScript() {
 
   startBadgeOverlay();
 
+  attachQuickEmotePanelSession();
 	attachEmoteFavoriteEvents();
 	attachEmoteClickFocusRestore();
 	attachEmoteBindEvents();
@@ -86,6 +96,8 @@ function startContentScript() {
 			attachShortcutController();
 
 			startFavoriteEmoteSectionRenderer();
+
+			scheduleInitialShortcutSetSwitchFeedback();
 
 			if (DEBUG) {
 				logStorageSnapshot();

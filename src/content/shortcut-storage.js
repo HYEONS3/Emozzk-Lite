@@ -28,7 +28,7 @@ export const SHORTCUT_BINDING_SET_1 = 'set_1';
 export const SHORTCUT_BINDING_SET_2 = 'set_2';
 export const SHORTCUT_BINDING_SET_3 = 'set_3';
 
-const SHORTCUT_BINDING_SETS_VERSION = 4;
+const SHORTCUT_BINDING_SETS_VERSION = 5;
 
 const USER_BINDING_SOURCE = 'user';
 
@@ -42,6 +42,10 @@ export async function initShortcutBindingsStorage() {
     storedValue: storageEntry.value,
     hasStoredValue: storageEntry.hasStoredValue,
   });
+
+  if (shouldMigrateShortcutBindingStorage(storageEntry)) {
+    await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
+  }
 
   startShortcutBindingsStorageSync();
   dispatchShortcutBindingsChanged();
@@ -218,7 +222,8 @@ export async function assignShortcutBindingTarget({
    * 저장 정책:
    * - 저장소에는 both를 직접 저장하지 않고 down/up 두 개로 저장한다.
    * - 같은 code + phase 조합은 하나만 유지한다.
-   * - 같은 code + 같은 emojiId의 기존 down/up은 새 phase로 교체한다.
+   * - 한 이모티콘은 현재 세트에서 하나의 논리적 단축키만 가진다.
+   * - 같은 emojiId의 기존 바인딩은 code/phase와 관계없이 모두 교체한다.
    *
    * 세트 정책:
    * - assign은 현재 active set에만 적용한다.
@@ -229,19 +234,15 @@ export async function assignShortcutBindingTarget({
     const bindingPhase = normalizeStoredPhase(binding.phase);
     const bindingEmojiId = getBindingEmojiId(binding);
 
-    if (bindingCode !== normalizedCode) {
-      return true;
-    }
-
-    if (phasesToAssign.includes(bindingPhase)) {
-      return false;
-    }
-
     if (bindingEmojiId === normalizedEmojiId) {
       return false;
     }
 
-    return true;
+    if (bindingCode !== normalizedCode) {
+      return true;
+    }
+
+    return !phasesToAssign.includes(bindingPhase);
   });
 
   phasesToAssign.forEach((phaseToAssign) => {
@@ -253,6 +254,49 @@ export async function assignShortcutBindingTarget({
   });
 
   return setShortcutBindings(nextBindings);
+}
+
+export function getShortcutBindingForEmojiId({
+  emojiId,
+} = {}) {
+  const normalizedEmojiId = normalizeEmojiId(emojiId);
+
+  if (!normalizedEmojiId) {
+    return null;
+  }
+
+  const matchingBindings = getCachedShortcutBindings().filter((binding) => {
+    return getBindingEmojiId(binding) === normalizedEmojiId;
+  });
+
+  if (!matchingBindings.length) {
+    return null;
+  }
+
+	const code = normalizeShortcutCode(
+		matchingBindings[0]?.code
+	);
+
+  if (!code) {
+    return null;
+  }
+
+  const phases = new Set(
+    matchingBindings
+      .filter((binding) => normalizeShortcutCode(binding.code) === code)
+      .map((binding) => normalizeStoredPhase(binding.phase))
+  );
+
+  const phase = phases.has(SHORTCUT_PHASE_DOWN) && phases.has(SHORTCUT_PHASE_UP)
+    ? SHORTCUT_PHASE_BOTH
+    : phases.has(SHORTCUT_PHASE_UP)
+      ? SHORTCUT_PHASE_UP
+      : SHORTCUT_PHASE_DOWN;
+
+  return {
+    code,
+    phase,
+  };
 }
 
 export async function clearShortcutBindingTarget({
@@ -446,6 +490,19 @@ function createDefaultShortcutBindingSetState() {
     setCount: SHORTCUT_BINDING_SET_DEFAULT_COUNT,
     sets: [],
   };
+}
+
+function shouldMigrateShortcutBindingStorage({
+  value,
+  hasStoredValue,
+}) {
+  if (!hasStoredValue) {
+    return false;
+  }
+
+  const storedVersion = Number(value?.version) || 0;
+
+  return storedVersion < SHORTCUT_BINDING_SETS_VERSION;
 }
 
 function normalizeShortcutBindingSetState({
@@ -757,7 +814,27 @@ function normalizeShortcutBindings(bindings) {
     normalizedBindings.push(normalizedBinding);
   });
 
-  return normalizedBindings;
+	const firstCodeByEmojiId = new Map();
+
+	normalizedBindings.forEach((binding) => {
+		const emojiId = getBindingEmojiId(binding);
+
+		if (!emojiId || firstCodeByEmojiId.has(emojiId)) {
+			return;
+		}
+
+		firstCodeByEmojiId.set(emojiId, binding.code);
+	});
+
+	return normalizedBindings.filter((binding) => {
+		const emojiId = getBindingEmojiId(binding);
+
+		if (!emojiId) {
+			return true;
+		}
+
+		return firstCodeByEmojiId.get(emojiId) === binding.code;
+	});
 }
 
 function normalizeStoredShortcutBinding(binding) {

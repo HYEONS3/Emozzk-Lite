@@ -14,6 +14,7 @@ export const DEFAULT_EXTENSION_SETTINGS = {
   experimentalKeyupEnabled: false,
   experimentalBothPhaseEnabled: false,
   experimentalPhaseHintPending: false,
+  experimentalQuickInsertPanelHidden: false,
   recentStorageLimit: DEFAULT_RECENT_STORAGE_LIMIT,
 
 	previousShortcutSetCode: '',
@@ -33,6 +34,9 @@ export function normalizeExtensionSettings(settings) {
     ),
     experimentalPhaseHintPending: Boolean(
       settings?.experimentalPhaseHintPending
+    ),
+    experimentalQuickInsertPanelHidden: Boolean(
+      settings?.experimentalQuickInsertPanelHidden
     ),
     recentStorageLimit: normalizeRecentStorageLimit(
       settings?.recentStorageLimit

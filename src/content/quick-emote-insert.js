@@ -37,6 +37,14 @@ import {
   isChatInputEmoteLimitReached,
 } from './chat-input-emote-limit.js';
 
+import {
+  abortQuickEmotePanelSession,
+  beginQuickEmotePanelSession,
+  keepQuickEmotePanelSessionAlive,
+  scheduleQuickEmotePanelSessionRelease,
+  waitForQuickEmotePanelSessionRelease,
+} from './quick-emote-panel-session.js';
+
 const INSERT_RETRY_COUNT = 3;
 const INSERT_RETRY_DELAY_MS = 35;
 const PANEL_OPEN_SETTLE_FRAMES = 1;
@@ -112,6 +120,8 @@ export function quickInsertEmoteByTarget(actionArgs) {
     return false;
   }
 
+  keepQuickEmotePanelSessionAlive();
+
 	void ensureEmotePanelReady();
 
   scheduleInsertQueueExecution();
@@ -167,23 +177,40 @@ function ensureEmotePanelReady() {
     return Promise.resolve(readyState.panel);
   }
 
-  const opened = openEmotePanel();
-
-  if (!opened) {
-    return null;
-  }
-
-  openingPromise = waitForEmotePanelReady()
-    .then((readyStateAfterOpen) => {
-      return readyStateAfterOpen?.ready
-        ? readyStateAfterOpen.panel
-        : null;
-    })
+  openingPromise = openEmotePanelForQuickInsert()
     .finally(() => {
       openingPromise = null;
     });
 
   return openingPromise;
+}
+
+async function openEmotePanelForQuickInsert() {
+  await waitForQuickEmotePanelSessionRelease();
+
+  const readyState = getReadyEmotePanelState();
+
+  if (readyState?.ready && readyState?.panel) {
+    return readyState.panel;
+  }
+
+  beginQuickEmotePanelSession();
+
+  const opened = openEmotePanel();
+
+  if (!opened) {
+    abortQuickEmotePanelSession();
+    return null;
+  }
+
+  const readyStateAfterOpen = await waitForEmotePanelReady();
+
+  if (!readyStateAfterOpen?.ready) {
+    abortQuickEmotePanelSession();
+    return null;
+  }
+
+  return readyStateAfterOpen.panel;
 }
 
 function scheduleInsertQueueExecution() {
@@ -197,6 +224,7 @@ function scheduleInsertQueueExecution() {
   if (isChatInputEmoteLimitReached()) {
     clearInsertQueue();
     scheduleBadgeUpdate();
+    scheduleQuickEmotePanelSessionRelease();
     return;
   }
 
@@ -217,12 +245,16 @@ function scheduleInsertQueueExecution() {
       if (isChatInputEmoteLimitReached()) {
         clearInsertQueue();
         scheduleBadgeUpdate();
+        scheduleQuickEmotePanelSessionRelease();
         return;
       }
 
       if (insertQueue.length) {
         scheduleInsertQueueExecution();
+        return;
       }
+
+      scheduleQuickEmotePanelSessionRelease();
     });
 }
 

@@ -38,6 +38,10 @@ import {
 } from './shortcut-badge-map.js';
 
 import {
+  getShortcutBindingForEmojiId,
+} from './shortcut-storage.js';
+
+import {
   getShortcutCodeFromKeyboardEvent,
   isImeKeyboardEvent,
 } from '../shared/shortcut-key-code.js';
@@ -232,11 +236,14 @@ function handleAssignModeClick({
 }) {
   const emojiLabel = getEmoteLabelFromButton(button) || emojiId;
   const emojiImageUrl = getEmoteImageUrlFromButton(button);
+  const currentBinding = getShortcutBindingForEmojiId({ emojiId });
 
   selectEmoteBindTarget({
     emojiId,
     emojiLabel,
     emojiImageUrl,
+    code: currentBinding?.code,
+    phase: currentBinding?.phase,
   });
 
   startEmoteBindKeyListening();
