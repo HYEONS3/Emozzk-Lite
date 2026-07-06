@@ -1,6 +1,6 @@
 import {
   getEmoteAltFromButton,
-  isRealEmoteButton,
+  isEmoteButtonStructure,
 } from './emote-buttons.js';
 
 import {
@@ -21,6 +21,7 @@ import {
 } from './favorite-recent-emote-storage.js';
 
 import {
+  getRecentEmoteId,
   getRecentEmoteIdFromAlt,
   readRecentEmotes,
   writeRecentEmotes,
@@ -300,7 +301,7 @@ export function renderFavoriteEmoteSection() {
     return;
   }
 
-  const recentList = findRecentListFromSection(recentSection);
+  const recentList = recentSection.list;
 
   let favoriteSection = findFavoriteSection(groupParent);
 
@@ -381,35 +382,40 @@ export function renderFavoriteEmoteSection() {
   try {
     removeLegacyEmptyElements(favoriteSection);
 
-    const partition = partitionRecentItems({
-      recentList,
-      favoriteList,
-      boundFavoriteIds,
-      unboundFavoriteIds,
-      favoriteIdSet,
-    });
+		const reconciliation = reconcileFavoriteItems({
+			recentList,
+			favoriteList,
+			boundFavoriteIds,
+			unboundFavoriteIds,
+			favoriteIdSet,
+		});
 
-    const shouldShowSeparator =
-      partition.boundFavoriteItems.length > 0 &&
-      partition.unboundFavoriteItems.length > 0;
+		if (!reconciliation) {
+			return;
+		}
 
-    const favoriteChildren = createFavoriteChildren({
-      favoriteList,
-      boundFavoriteItems: partition.boundFavoriteItems,
-      unboundFavoriteItems: partition.unboundFavoriteItems,
-      shouldShowSeparator,
-    });
+		const shouldShowSeparator =
+			reconciliation.boundFavoriteItems.length > 0 &&
+			reconciliation.unboundFavoriteItems.length > 0;
 
-    applyPartition({
-      favoriteList,
-      recentList,
-      favoriteChildren,
-      normalItems: partition.normalItems,
-    });
+		const favoriteChildren = createFavoriteChildren({
+			favoriteList,
+			boundFavoriteItems: reconciliation.boundFavoriteItems,
+			unboundFavoriteItems: reconciliation.unboundFavoriteItems,
+			shouldShowSeparator,
+		});
+
+		applyFavoriteReconciliation({
+			favoriteList,
+			recentList,
+			favoriteChildren,
+			favoriteItems: reconciliation.favoriteItems,
+			favoriteIdSet,
+		});
 
     syncFavoriteEmptyState({
       section: favoriteSection,
-      hasFavorites: partition.favoriteItems.length > 0,
+      hasFavorites: reconciliation.favoriteItems.length > 0,
     });
 
     insertFavoriteSectionBeforeRecent({
@@ -418,7 +424,7 @@ export function renderFavoriteEmoteSection() {
       recentGroup,
     });
 
-    if (partition.favoriteItems.length) {
+    if (reconciliation.favoriteItems.length) {
       attachFavoriteEmoteDrag(favoriteSection);
     }
 
@@ -527,24 +533,6 @@ function clearFavoriteRenderState() {
     .forEach((element) => {
       element.removeAttribute(FAVORITES_RENDER_STATE_ATTR);
     });
-}
-
-function findRecentListFromSection(recentSection) {
-  const heading = recentSection?.heading;
-
-  if (!heading) return null;
-
-  let sibling = heading.nextElementSibling;
-
-  while (sibling) {
-    if (sibling.matches?.('ul')) {
-      return sibling;
-    }
-
-    sibling = sibling.nextElementSibling;
-  }
-
-  return heading.parentElement?.querySelector(':scope > ul') ?? null;
 }
 
 function findFavoriteSection(groupParent) {
@@ -2243,16 +2231,61 @@ function syncFavoriteEmptyState({
   }
 }
 
-function partitionRecentItems({
+function reconcileFavoriteItems({
   recentList,
   favoriteList,
   boundFavoriteIds,
   unboundFavoriteIds,
   favoriteIdSet,
 }) {
-  const allItems = collectEmoteItems({
-    recentList,
+	const currentFavoriteItems =
+		collectEmoteItemsFrom(favoriteList);
+
+	const recentItems =
+		collectEmoteItemsFrom(recentList);
+
+	const allItems = [
+		...currentFavoriteItems,
+		...recentItems,
+	];
+
+	const recentEmotes = readRecentEmotes();
+
+  /*
+   * 저장된 최근 목록은 있는데 DOM 항목이 하나도 없다면
+   * CHZZK가 아직 목록을 만드는 중인 상태로 본다.
+   *
+   * 이 상태에서는 DOM을 수정하지 않는다.
+   */
+	const expectedRecentIds = recentEmotes
+		.map(getRecentEmoteId)
+		.filter((id) => {
+			return (
+				id &&
+				!favoriteIdSet.has(id)
+			);
+		});
+
+	if (
+		recentItems.length === 0 &&
+		expectedRecentIds.length > 0
+	) {
+		return null;
+	}
+
+  const recentOrderIds = recentEmotes
+    .map(getRecentEmoteId)
+    .filter(Boolean);
+
+  /*
+   * 즐겨찾기에서 해제된 실제 노드는 삭제하지 않고
+   * recentList로 되돌린다.
+   */
+  moveRemovedFavoritesBackToRecent({
     favoriteList,
+    recentList,
+    favoriteIdSet,
+    recentOrderIds,
   });
 
   const itemById = new Map();
@@ -2279,34 +2312,25 @@ function partitionRecentItems({
     ...unboundFavoriteItems,
   ];
 
-  const favoriteItemSet = new Set(favoriteItems);
+  const boundFavoriteIdSet = new Set(boundFavoriteIds);
 
   favoriteItems.forEach((item) => {
     const id = getEmoteItemId(item);
-    const group = boundFavoriteIds.includes(id)
+
+    const group = boundFavoriteIdSet.has(id)
       ? FAVORITE_GROUP_BOUND
       : FAVORITE_GROUP_UNBOUND;
 
-    item.setAttribute(FAVORITES_GROUP_ATTR, group);
-  });
-
-  const normalItems = allItems.filter((item) => {
-    if (favoriteItemSet.has(item)) return false;
-
-    const id = getEmoteItemId(item);
-
-    if (!id) return false;
-
-    item.removeAttribute(FAVORITES_GROUP_ATTR);
-
-    return !favoriteIdSet.has(id);
+    item.setAttribute(
+      FAVORITES_GROUP_ATTR,
+      group
+    );
   });
 
   return {
     boundFavoriteItems,
     unboundFavoriteItems,
     favoriteItems,
-    normalItems,
   };
 }
 
@@ -2348,26 +2372,27 @@ function getFavoriteSeparator(favoriteList) {
   return separator;
 }
 
-function collectEmoteItems({
-  recentList,
-  favoriteList,
-}) {
-  const items = [
-    ...Array.from(favoriteList.querySelectorAll(':scope > li')),
-    ...Array.from(recentList.querySelectorAll(':scope > li')),
-  ];
+function collectEmoteItemsFrom(list) {
+  if (!(list instanceof Element)) {
+    return [];
+  }
 
-  return items.filter(isRealEmoteItem);
+  return Array.from(
+    list.querySelectorAll(':scope > li')
+  )
+    .filter(isEmoteItemStructure);
 }
 
-function isRealEmoteItem(item) {
-  if (!(item instanceof HTMLElement)) return false;
+function isEmoteItemStructure(item) {
+  if (!(item instanceof HTMLElement)) {
+    return false;
+  }
 
-  const button = item.querySelector('button[type="button"]');
+  const button = item.querySelector(
+    'button[type="button"]'
+  );
 
-  if (!button) return false;
-
-  return isRealEmoteButton(button);
+  return isEmoteButtonStructure(button);
 }
 
 function getEmoteItemId(item) {
@@ -2380,17 +2405,71 @@ function getEmoteItemId(item) {
   return getRecentEmoteIdFromAlt(alt);
 }
 
-function applyPartition({
+function applyFavoriteReconciliation({
   favoriteList,
   recentList,
   favoriteChildren,
-  normalItems,
+  favoriteItems,
+  favoriteIdSet,
 }) {
-  placeChildren(favoriteList, favoriteChildren);
-  placeChildren(recentList, normalItems);
+  removeFavoriteDuplicatesFromRecent({
+    recentList,
+    favoriteItems,
+    favoriteIdSet,
+  });
 
-  pruneChildren(favoriteList, favoriteChildren);
-  pruneChildren(recentList, normalItems);
+  placeChildren(
+    favoriteList,
+    favoriteChildren
+  );
+
+  pruneFavoriteListChildren({
+    favoriteList,
+    favoriteChildren,
+    favoriteItems,
+  });
+}
+
+function removeFavoriteDuplicatesFromRecent({
+  recentList,
+  favoriteItems,
+  favoriteIdSet,
+}) {
+  const selectedItemById = new Map();
+
+  favoriteItems.forEach((item) => {
+    const id = getEmoteItemId(item);
+
+    if (!id) return;
+
+    selectedItemById.set(id, item);
+  });
+
+  Array.from(recentList.children).forEach((item) => {
+    const id = getEmoteItemId(item);
+
+    if (!id) return;
+    if (!favoriteIdSet.has(id)) return;
+
+    const selectedItem = selectedItemById.get(id);
+
+    /*
+     * 아직 사용할 실제 favorite 노드를 찾지 못한 상태라면
+     * recent 원본을 삭제하지 않는다.
+     */
+    if (!selectedItem) return;
+
+    /*
+     * 이 노드 자체가 앞으로 favoriteList로 이동할 대상이면 유지한다.
+     */
+    if (selectedItem === item) return;
+
+    /*
+     * 같은 ID의 실제 favorite 노드가 이미 따로 있으므로
+     * CHZZK가 recent에 다시 생성한 중복 노드만 제거한다.
+     */
+    item.remove();
+  });
 }
 
 function placeChildren(parent, nextChildren) {
@@ -2403,11 +2482,56 @@ function placeChildren(parent, nextChildren) {
   });
 }
 
-function pruneChildren(parent, nextChildren) {
-  const nextSet = new Set(nextChildren);
+function pruneFavoriteListChildren({
+  favoriteList,
+  favoriteChildren,
+  favoriteItems,
+}) {
+  const nextChildSet = new Set(favoriteChildren);
+  const selectedItemById = new Map();
 
-  Array.from(parent.children).forEach((child) => {
-    if (!nextSet.has(child)) {
+  favoriteItems.forEach((item) => {
+    const id = getEmoteItemId(item);
+
+    if (!id) return;
+
+    selectedItemById.set(id, item);
+  });
+
+  Array.from(favoriteList.children).forEach((child) => {
+    if (nextChildSet.has(child)) {
+      return;
+    }
+
+    if (
+      child.classList.contains(
+        FAVORITES_SEPARATOR_CLASS
+      )
+    ) {
+      child.remove();
+      return;
+    }
+
+    const id = getEmoteItemId(child);
+
+    /*
+     * 구조가 아직 완성되지 않은 노드는
+     * 불확실하므로 건드리지 않는다.
+     */
+    if (!id) {
+      return;
+    }
+
+    const selectedItem = selectedItemById.get(id);
+
+    /*
+     * 동일 ID의 선택된 실제 노드가 따로 있을 때만
+     * 중복 노드를 제거한다.
+     */
+    if (
+      selectedItem &&
+      selectedItem !== child
+    ) {
       child.remove();
     }
   });
@@ -2860,4 +2984,90 @@ async function resetShortcutSetFavoriteOrder(setId) {
 function clearShortcutSetFloatingUi() {
   closeShortcutSetMenus();
   clearShortcutSetSwitchFloatingUi();
+}
+
+function moveRemovedFavoritesBackToRecent({
+  favoriteList,
+  recentList,
+  favoriteIdSet,
+  recentOrderIds,
+}) {
+  Array.from(favoriteList.children).forEach((item) => {
+    const id = getEmoteItemId(item);
+
+    if (!id) return;
+    if (favoriteIdSet.has(id)) return;
+
+    item.removeAttribute(FAVORITES_GROUP_ATTR);
+
+    const existingRecentItem = findDirectEmoteItemById({
+      list: recentList,
+      emojiId: id,
+    });
+
+    /*
+     * CHZZK가 같은 이모티콘을 recentList에 이미 다시 만든 경우,
+     * 현재 recent 노드를 유지하고 이전 favorite 노드는 제거한다.
+     */
+    if (
+      existingRecentItem &&
+      existingRecentItem !== item
+    ) {
+      item.remove();
+      return;
+    }
+
+    insertRecentItemByStoredOrder({
+      item,
+      recentList,
+      recentOrderIds,
+    });
+  });
+}
+
+function insertRecentItemByStoredOrder({
+  item,
+  recentList,
+  recentOrderIds,
+}) {
+  const itemId = getEmoteItemId(item);
+  const itemIndex = recentOrderIds.indexOf(itemId);
+
+  if (itemIndex < 0) {
+    recentList.appendChild(item);
+    return;
+  }
+
+  for (
+    let index = itemIndex + 1;
+    index < recentOrderIds.length;
+    index += 1
+  ) {
+    const nextItem = findDirectEmoteItemById({
+      list: recentList,
+      emojiId: recentOrderIds[index],
+    });
+
+    if (!nextItem) {
+      continue;
+    }
+
+    recentList.insertBefore(
+      item,
+      nextItem
+    );
+
+    return;
+  }
+
+  recentList.appendChild(item);
+}
+
+function findDirectEmoteItemById({
+  list,
+  emojiId,
+}) {
+  return Array.from(list.children).find((item) => {
+    return getEmoteItemId(item) === emojiId;
+  }) ?? null;
 }

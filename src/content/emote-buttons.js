@@ -142,20 +142,30 @@ function getNormalEmoteButtons(panel) {
     .sort(compareByGridPosition);
 }
 
-export function isRealEmoteButton(button) {
-  if (!(button instanceof HTMLButtonElement)) return false;
+export function isEmoteButtonStructure(button) {
+  if (!(button instanceof HTMLButtonElement)) {
+    return false;
+  }
 
   const image = button.querySelector('img');
 
-  if (!image) return false;
+  if (!(image instanceof HTMLImageElement)) {
+    return false;
+  }
 
   const alt = getEmoteAltFromButton(button);
 
-  if (!isValidEmoteAlt(alt)) return false;
+  if (!isValidEmoteAlt(alt)) {
+    return false;
+  }
 
-  const item = button.closest('li');
+  return Boolean(button.closest('li'));
+}
 
-  if (!item) return false;
+export function isRealEmoteButton(button) {
+  if (!isEmoteButtonStructure(button)) {
+    return false;
+  }
 
   const rect = button.getBoundingClientRect();
 

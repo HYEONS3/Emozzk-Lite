@@ -31,10 +31,24 @@ export function findRecentEmoteSection(panel) {
     return null;
   }
 
+  const heading = headings[headingIndex];
+  const nextHeading = headings[headingIndex + 1] ?? null;
+
+  const list = findRecentEmoteList({
+    area,
+    heading,
+    nextHeading,
+  });
+
+  if (!list) {
+    return null;
+  }
+
   return {
     area,
-    heading: headings[headingIndex],
-    nextHeading: headings[headingIndex + 1] ?? null,
+    heading,
+    list,
+    nextHeading,
   };
 }
 
@@ -58,15 +72,10 @@ export function getRecentEmoteButtons(panel) {
 
   if (!section) return [];
 
-  return Array.from(section.area.querySelectorAll('button[type="button"]'))
-    .filter(isRealEmoteButton)
-    .filter((button) => {
-      return isElementBetweenHeadings({
-        element: button,
-        heading: section.heading,
-        nextHeading: section.nextHeading,
-      });
-    });
+  return Array.from(
+    section.list.querySelectorAll('button[type="button"]')
+  )
+    .filter(isRealEmoteButton);
 }
 
 function getEmojiArea(panel) {
@@ -149,6 +158,26 @@ function isElementBetweenHeadings({
   );
 
   return beforeNextHeading;
+}
+
+function findRecentEmoteList({
+  area,
+  heading,
+  nextHeading,
+}) {
+  return Array.from(
+    area.querySelectorAll('ul')
+  ).find((list) => {
+    if (list.closest(FAVORITES_SECTION_SELECTOR)) {
+      return false;
+    }
+
+    return isElementBetweenHeadings({
+      element: list,
+      heading,
+      nextHeading,
+    });
+  }) ?? null;
 }
 
 export function isRecentEmoteCategoryActive(panel) {
