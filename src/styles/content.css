@@ -104,6 +104,13 @@
   --emzk-lite-color-neutral-900-rgb: 20, 20, 20;
   --emzk-lite-color-neutral-950-rgb: 12, 12, 12;
 
+	/* Theme roles */
+	--emzk-lite-theme-content-rgb:
+		var(--emzk-lite-color-neutral-white-rgb);
+
+	--emzk-lite-theme-menu-bg-rgb:
+		var(--emzk-lite-color-neutral-800-rgb);
+		
   /* Base */
   --emzk-lite-color-content-rgb: var(--emzk-lite-color-neutral-white-rgb);
   --emzk-lite-color-fixed-black-rgb: var(--emzk-lite-color-neutral-black-rgb);
@@ -116,15 +123,22 @@
   --emzk-lite-color-disabled-opacity: 0.38;
 
   /* Surface */
-  --emzk-lite-color-surface: rgba(var(--emzk-lite-color-content-rgb), 0.04);
-  --emzk-lite-color-surface-hover: rgba(var(--emzk-lite-color-content-rgb), 0.08);
-  --emzk-lite-color-surface-active: rgba(var(--emzk-lite-color-content-rgb), 0.13);
-  --emzk-lite-color-surface-subtle: rgba(var(--emzk-lite-color-content-rgb), 0.025);
+  --emzk-lite-color-surface:
+    color-mix(in srgb, currentColor 4%, transparent);
+  --emzk-lite-color-surface-hover:
+    color-mix(in srgb, currentColor 8%, transparent);
+  --emzk-lite-color-surface-active:
+    color-mix(in srgb, currentColor 13%, transparent);
+  --emzk-lite-color-surface-subtle:
+    color-mix(in srgb, currentColor 2.5%, transparent);
 
   /* Line */
-  --emzk-lite-color-border: rgba(var(--emzk-lite-color-content-rgb), 0.10);
-  --emzk-lite-color-border-hover: rgba(var(--emzk-lite-color-content-rgb), 0.18);
-  --emzk-lite-color-border-subtle: rgba(var(--emzk-lite-color-content-rgb), 0.12);
+  --emzk-lite-color-border:
+    color-mix(in srgb, currentColor 10%, transparent);
+  --emzk-lite-color-border-hover:
+    color-mix(in srgb, currentColor 18%, transparent);
+  --emzk-lite-color-border-subtle:
+    color-mix(in srgb, currentColor 12%, transparent);
 
   /* Shadow / highlight */
   --emzk-lite-color-shadow-soft: rgba(var(--emzk-lite-color-fixed-black-rgb), 0.28);
@@ -147,7 +161,8 @@
 	--emzk-lite-color-segment-shadow:
 		inset 0 0 0 1px rgba(var(--emzk-lite-color-content-rgb), 0.08);
   /* Menu */
-  --emzk-lite-color-menu-bg: rgba(var(--emzk-lite-color-neutral-800-rgb), 0.96);
+  --emzk-lite-color-menu-bg:
+    rgba(var(--emzk-lite-theme-menu-bg-rgb), 0.96);
   --emzk-lite-color-menu-shadow:
     0 8px 20px var(--emzk-lite-color-shadow-soft),
     inset 0 1px 0 rgba(var(--emzk-lite-color-content-rgb), 0.08);
@@ -175,7 +190,8 @@
   --emzk-lite-color-flash-glow: rgba(var(--emzk-lite-color-content-rgb), 0.10);
 
   /* Floating */
-  --emzk-lite-color-floating-text: rgba(var(--emzk-lite-color-content-rgb), 0.82);
+  --emzk-lite-color-floating-text:
+    rgba(var(--emzk-lite-color-fixed-white-rgb), 0.82);
   --emzk-lite-color-floating-bg: rgba(var(--emzk-lite-color-neutral-black-rgb), 0.82);
 
   /* Drag */
@@ -183,8 +199,16 @@
   --emzk-lite-color-drag-placeholder-bg-end: rgba(var(--emzk-lite-color-content-rgb), 0.03);
   --emzk-lite-color-drag-placeholder-outline: rgba(var(--emzk-lite-color-content-rgb), 0.18);
 
+	
 }
 
+html[data-emzk-lite-theme="light"] {
+  --emzk-lite-theme-content-rgb:
+    var(--emzk-lite-color-neutral-black-rgb);
+
+  --emzk-lite-theme-menu-bg-rgb:
+    var(--emzk-lite-color-neutral-white-rgb);
+}
 /* ========================================================================== */
 /* Emoji area render masking                                                  */
 /* ========================================================================== */
@@ -1627,16 +1651,18 @@ html.emzk-lite-quick-insert-panel-stealth
 
 .emzk-lite-quick-insert-trigger-snapshot {
   position: fixed !important;
-  z-index: 2147483647 !important;
+  z-index: 2147483646 !important;
 
   box-sizing: border-box;
   margin: 0 !important;
 
-  background-color: transparent !important;
   opacity: 1 !important;
 
   pointer-events: none !important;
   user-select: none !important;
+
+	transition:
+    background-color var(--emzk-lite-motion-fast) !important;
 }
 
 /* ========================================================================== */

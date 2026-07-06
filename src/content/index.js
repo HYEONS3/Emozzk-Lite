@@ -67,6 +67,10 @@ import {
 	
 } from './shortcut-set-switch-feedback.js';
 
+import {
+  attachChzzkThemeController,
+} from './chzzk-theme-controller.js';
+
 const DEBUG = false;
 
 startContentScript();
@@ -79,6 +83,8 @@ function startContentScript() {
    */
   startRecentEmoteStorageLimitBridge();
 
+	attachChzzkThemeController();
+	
   startBadgeOverlay();
 
   attachQuickEmotePanelSession();

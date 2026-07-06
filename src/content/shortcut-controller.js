@@ -16,6 +16,7 @@ import {
 } from './badge-overlay.js';
 
 import {
+  blurChatInput,
   findChatInput,
   scheduleChatInputFocus,
 } from './chat-input.js';
@@ -79,6 +80,8 @@ import {
 } from './shortcut-set-switch-feedback.js';
 
 import {
+  abortQuickEmotePanelSession,
+  isQuickEmotePanelSessionActive,
   revealQuickEmotePanelForUser,
 } from './quick-emote-panel-session.js';
 
@@ -212,7 +215,7 @@ function handleShortcutEvent(event) {
 		return;
 	}
 
-	if (handleEscapeCloseShortcut({
+	if (handleEscapeShortcut({
 		event,
 		state,
 	})) {
@@ -530,15 +533,50 @@ function handleLooseShortcutKeyUp({
   return true;
 }
 
-function handleEscapeCloseShortcut({
+function handleEscapeShortcut({
   event,
   state,
 }) {
   if (
     event.code !== 'Escape' ||
-    hasAnyModifier(event) ||
-    !state.panel
+    hasAnyModifier(event)
   ) {
+    return false;
+  }
+
+  const isHiddenPanel =
+    isQuickEmotePanelSessionActive();
+
+  /*
+   * 사용자에게 실제로 보이는 패널은 먼저 닫는다.
+   */
+  if (
+    state.panel &&
+    !isHiddenPanel
+  ) {
+    blockKeyboardEvent({
+      event,
+      binding: null,
+    });
+
+    const closed = closeEmotePanel();
+
+    if (!closed) {
+      console.debug(
+        '[Emozzk Lite] failed to close emote panel with Escape'
+      );
+    }
+
+    scheduleChatInputFocus();
+    scheduleBadgeUpdate();
+
+    return true;
+  }
+
+  /*
+   * 채팅 입력창에 포커스가 없으면 Emozzk가 Escape를 처리하지 않는다.
+   */
+  if (!state.isChatTyping) {
     return false;
   }
 
@@ -547,14 +585,14 @@ function handleEscapeCloseShortcut({
     binding: null,
   });
 
-  const closed = closeEmotePanel();
-
-  if (!closed) {
-    console.debug('[Emozzk Lite] failed to close emote panel with Escape');
+  /*
+   * quick-insert용 hidden 패널이 있으면 함께 정리한다.
+   */
+  if (isHiddenPanel) {
+    abortQuickEmotePanelSession();
   }
 
-  scheduleChatInputFocus();
-  scheduleBadgeUpdate();
+  blurChatInput();
 
   return true;
 }

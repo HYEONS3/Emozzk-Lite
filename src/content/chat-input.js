@@ -42,6 +42,30 @@ export function focusChatInputAtEnd() {
   return isFocused(input);
 }
 
+export function blurChatInput() {
+  const input = findChatInput();
+
+  if (!input) {
+    return false;
+  }
+
+  const active = document.activeElement;
+
+  if (
+    !(active instanceof HTMLElement) ||
+    (
+      active !== input &&
+      !input.contains(active)
+    )
+  ) {
+    return false;
+  }
+
+  active.blur();
+
+  return !isFocused(input);
+}
+
 /*
  * 단축키 이모티콘 삽입 전용.
  *

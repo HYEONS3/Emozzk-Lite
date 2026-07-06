@@ -14,7 +14,7 @@ import {
 
 const STEALTH_ROOT_CLASS = 'emzk-lite-quick-insert-panel-stealth';
 const TRIGGER_SNAPSHOT_CLASS = 'emzk-lite-quick-insert-trigger-snapshot';
-const IDLE_RELEASE_DELAY_MS = 300;
+const IDLE_RELEASE_DELAY_MS = 1200;
 const PANEL_CLOSE_TIMEOUT_MS = 700;
 const PANEL_CLOSE_POLL_INTERVAL_MS = 16;
 
@@ -25,6 +25,7 @@ let releasePromise = null;
 let sessionId = 0;
 let triggerSnapshot = null;
 let hiddenTriggerState = null;
+let triggerSnapshotHoverCleanup = null;
 
 export function attachQuickEmotePanelSession() {
   if (attached) return;
@@ -247,9 +248,20 @@ function showInactiveTriggerSnapshot() {
   );
 
   triggerSnapshot = snapshot;
+
+	triggerSnapshotHoverCleanup =
+		attachTriggerSnapshotHover({
+			trigger,
+			snapshot,
+		});
 }
 
 function removeInactiveTriggerSnapshot() {
+
+	if (triggerSnapshotHoverCleanup) {
+		triggerSnapshotHoverCleanup();
+		triggerSnapshotHoverCleanup = null;
+	}
   if (hiddenTriggerState) {
     const {
       element,
@@ -333,4 +345,131 @@ function waitDelay(ms) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+export function isQuickEmotePanelSessionActive() {
+  return ownsHiddenPanel;
+}
+
+function attachTriggerSnapshotHover({
+  trigger,
+  snapshot,
+}) {
+  const applyHoverState = () => {
+    if (
+      !trigger.isConnected ||
+      !snapshot.isConnected
+    ) {
+      return;
+    }
+
+    if (!trigger.matches(':hover')) {
+      snapshot.style.setProperty(
+        'background-color',
+        'transparent',
+        'important'
+      );
+
+      return;
+    }
+
+    snapshot.style.setProperty(
+      'background-color',
+      getTriggerHoverBackgroundColor(trigger),
+      'important'
+    );
+  };
+
+  const handlePointerEnter = () => {
+    applyHoverState();
+  };
+
+  const handlePointerLeave = () => {
+    snapshot.style.setProperty(
+      'background-color',
+      'transparent',
+      'important'
+    );
+  };
+
+  trigger.addEventListener(
+    'pointerenter',
+    handlePointerEnter
+  );
+
+  trigger.addEventListener(
+    'pointerleave',
+    handlePointerLeave
+  );
+
+  /*
+   * 단축키를 누른 순간 이미 커서가 버튼 위에 있을 수도 있다.
+   */
+  applyHoverState();
+
+  return () => {
+    trigger.removeEventListener(
+      'pointerenter',
+      handlePointerEnter
+    );
+
+    trigger.removeEventListener(
+      'pointerleave',
+      handlePointerLeave
+    );
+  };
+}
+
+function getTriggerHoverBackgroundColor(trigger) {
+  const color = window
+    .getComputedStyle(trigger)
+    .color;
+
+  const rgb = parseRgbColor(color);
+
+  if (!rgb) {
+    return 'rgba(255, 255, 255, 0.05)';
+  }
+
+  const luminance =
+    rgb.red * 0.2126 +
+    rgb.green * 0.7152 +
+    rgb.blue * 0.0722;
+
+  /*
+   * 밝은 전경색 → 다크 테마 → 흰색 hover
+   * 어두운 전경색 → 라이트 테마 → 검은색 hover
+   */
+  return luminance >= 128
+    ? 'rgba(255, 255, 255, 0.05)'
+    : 'rgba(0, 0, 0, 0.05)';
+}
+
+function parseRgbColor(value) {
+  const channels = String(value ?? '')
+    .match(/\d+(?:\.\d+)?/g);
+
+  if (!channels || channels.length < 3) {
+    return null;
+  }
+
+  const [
+    red,
+    green,
+    blue,
+  ] = channels.slice(0, 3).map(Number);
+
+  if (
+    !Number.isFinite(red) ||
+    !Number.isFinite(green) ||
+    !Number.isFinite(blue)
+  ) {
+    return null;
+  }
+
+  return {
+    red,
+    green,
+    blue,
+  };
 }
