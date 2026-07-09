@@ -34,20 +34,30 @@ const USER_BINDING_SOURCE = 'user';
 
 let cachedShortcutBindingSetState = createDefaultShortcutBindingSetState();
 let storageSyncStarted = false;
+let writeQueue = Promise.resolve();
+let storageChangeRevision = 0;
+let pendingWriteCount = 0;
 
 export async function initShortcutBindingsStorage() {
+  startShortcutBindingsStorageSync();
+
+  const revisionBeforeRead = storageChangeRevision;
   const storageEntry = await readShortcutBindingsStorageEntry();
 
-  cachedShortcutBindingSetState = normalizeShortcutBindingSetState({
-    storedValue: storageEntry.value,
-    hasStoredValue: storageEntry.hasStoredValue,
-  });
+  if (storageChangeRevision === revisionBeforeRead) {
+    cachedShortcutBindingSetState = normalizeShortcutBindingSetState({
+      storedValue: storageEntry.value,
+      hasStoredValue: storageEntry.hasStoredValue,
+    });
+  }
 
-  if (shouldMigrateShortcutBindingStorage(storageEntry)) {
+  if (
+    storageChangeRevision === revisionBeforeRead &&
+    shouldMigrateShortcutBindingStorage(storageEntry)
+  ) {
     await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
   }
 
-  startShortcutBindingsStorageSync();
   dispatchShortcutBindingsChanged();
 
   return getCachedShortcutBindings();
@@ -76,10 +86,16 @@ export function startShortcutBindingsStorageSync() {
 			return;
 		}
 
+    if (pendingWriteCount > 0) {
+      return;
+    }
+
 		const nextState = normalizeShortcutBindingSetState({
 			storedValue: change.newValue,
 			hasStoredValue: Boolean(change.newValue),
 		});
+
+    storageChangeRevision += 1;
 
 		if (isSameShortcutBindingSetState(
 			cachedShortcutBindingSetState,
@@ -938,9 +954,21 @@ async function writeShortcutBindingSetStateToStorage(state) {
     return;
   }
 
-  await chrome.storage.local.set({
-    [SHORTCUT_BINDINGS_STORAGE_KEY]: storageValue,
+  pendingWriteCount += 1;
+
+  const writeTask = writeQueue.then(() => {
+    return chrome.storage.local.set({
+      [SHORTCUT_BINDINGS_STORAGE_KEY]: storageValue,
+    });
   });
+
+  writeQueue = writeTask.catch(() => {});
+
+  try {
+    await writeTask;
+  } finally {
+    pendingWriteCount -= 1;
+  }
 }
 
 function createShortcutBindingSetStorageValue(state) {

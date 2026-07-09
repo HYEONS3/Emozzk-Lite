@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Emozzk Lite",
-  "version": "0.2.0",
-  "description": "자주 쓰는 CHZZK 이모티콘을 즐겨찾고, 원하는 단축키로 빠르게 입력할 수 있게 해줍니다.",
+  "name": "Emozzk - 치지직 이모티콘 단축키",
+  "version": "0.2.1",
+  "description": "자주 쓰는 치지직 이모티콘을 즐겨찾기에 모아두고, 원하는 키에 등록해 바로 사용할 수 있게 해주는 브라우저 확장 프로그램입니다.",
   "permissions": [
     "storage"
   ],
   "action": {
-    "default_title": "Emozzk Lite",
+    "default_title": "Emozzk - 치지직 이모티콘 단축키",
     "default_popup": "popup.html"
   },
   "content_scripts": [

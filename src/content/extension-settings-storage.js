@@ -15,11 +15,20 @@ let cachedExtensionSettings = {
 };
 
 let storageSyncStarted = false;
+let writeQueue = Promise.resolve();
+let storageChangeRevision = 0;
+let pendingWriteCount = 0;
 
 export async function initExtensionSettingsStorage() {
-  cachedExtensionSettings = await readExtensionSettingsFromStorage();
-
   startExtensionSettingsStorageSync();
+
+  const revisionBeforeRead = storageChangeRevision;
+  const storedSettings = await readExtensionSettingsFromStorage();
+
+  if (storageChangeRevision === revisionBeforeRead) {
+    cachedExtensionSettings = storedSettings;
+  }
+
   dispatchExtensionSettingsChanged();
 
   return getCachedExtensionSettings();
@@ -47,7 +56,13 @@ export function startExtensionSettingsStorageSync() {
       return;
     }
 
+    if (pendingWriteCount > 0) {
+      return;
+    }
+
     const nextSettings = normalizeExtensionSettings(change.newValue);
+
+    storageChangeRevision += 1;
 
     if (isSameExtensionSettings(cachedExtensionSettings, nextSettings)) {
       return;
@@ -130,9 +145,21 @@ async function writeExtensionSettingsToStorage(settings) {
     return;
   }
 
-  await chrome.storage.local.set({
-    [EXTENSION_SETTINGS_STORAGE_KEY]: normalizedSettings,
+  pendingWriteCount += 1;
+
+  const writeTask = writeQueue.then(() => {
+    return chrome.storage.local.set({
+      [EXTENSION_SETTINGS_STORAGE_KEY]: normalizedSettings,
+    });
   });
+
+  writeQueue = writeTask.catch(() => {});
+
+  try {
+    await writeTask;
+  } finally {
+    pendingWriteCount -= 1;
+  }
 }
 
 function readExtensionSettingsFromLocalStorage() {

@@ -17,6 +17,11 @@ import {
 } from './badge-render.js';
 
 import {
+  subscribePanelDomMutations,
+  unsubscribePanelDomMutations,
+} from './panel-dom-mutations.js';
+
+import {
   EMOTE_BIND_MODE_CHANGED_EVENT,
   getEmoteBindModeState,
   isEmoteBindAssignMode,
@@ -44,7 +49,6 @@ const EMOTE_BUTTON_SELECTOR = 'button[type="button"] img[alt^="{:"]';
 
 let rafId = 0;
 let started = false;
-let observer = null;
 let lastHadPanel = false;
 
 export function startBadgeOverlay() {
@@ -337,38 +341,23 @@ function handleBadgeStateChanged() {
 }
 
 function startPanelMutationObserver() {
-  if (observer) return;
-
-  observer = new MutationObserver((mutations) => {
-    const hasRelevantMutation = mutations.some((mutation) => {
-      return isRelevantMutation(mutation);
-    });
-
-    if (!hasRelevantMutation) {
-      return;
-    }
-
-    scheduleBadgeUpdate();
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: [
-      'class',
-      'style',
-      'aria-hidden',
-      BADGE_TARGET_ATTR,
-    ],
-  });
+  subscribePanelDomMutations(handlePanelMutations);
 }
 
 function stopPanelMutationObserver() {
-  if (!observer) return;
+  unsubscribePanelDomMutations(handlePanelMutations);
+}
 
-  observer.disconnect();
-  observer = null;
+function handlePanelMutations(mutations) {
+  const hasRelevantMutation = mutations.some((mutation) => {
+    return isRelevantMutation(mutation);
+  });
+
+  if (!hasRelevantMutation) {
+    return;
+  }
+
+  scheduleBadgeUpdate();
 }
 
 function isRelevantMutation(mutation) {

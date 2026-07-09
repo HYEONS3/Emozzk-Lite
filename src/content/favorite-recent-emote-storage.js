@@ -17,11 +17,18 @@ let initialized = false;
 
 let initializePromise = null;
 let storageSyncStarted = false;
+let writeQueue = Promise.resolve();
+let storageChangeRevision = 0;
+let pendingWriteCount = 0;
 
 export function initFavoriteRecentEmoteStorage() {
   if (initializePromise) {
     return initializePromise;
   }
+
+  startFavoriteRecentEmoteStorageSync();
+
+  const revisionBeforeRead = storageChangeRevision;
 
   initializePromise = readStorage()
 					.then((storage) => {
@@ -29,8 +36,10 @@ export function initFavoriteRecentEmoteStorage() {
 				storage[FAVORITE_RECENT_EMOTES_STORAGE_KEY]
 			);
 
-			favoriteEmotesCache = normalizedStorage.favorites;
-			favoriteSetOrdersCache = normalizedStorage.setOrders;
+      if (storageChangeRevision === revisionBeforeRead) {
+        favoriteEmotesCache = normalizedStorage.favorites;
+        favoriteSetOrdersCache = normalizedStorage.setOrders;
+      }
 
 			initialized = true;
 
@@ -42,8 +51,10 @@ export function initFavoriteRecentEmoteStorage() {
         error
       );
 
-			favoriteEmotesCache = [];
-			favoriteSetOrdersCache = {};
+      if (storageChangeRevision === revisionBeforeRead) {
+        favoriteEmotesCache = [];
+        favoriteSetOrdersCache = {};
+      }
 			initialized = true;
       return [];
     });
@@ -66,9 +77,11 @@ export function startFavoriteRecentEmoteStorageSync() {
     const change = changes[FAVORITE_RECENT_EMOTES_STORAGE_KEY];
 
     if (!change) return;
+    if (pendingWriteCount > 0) return;
 
 		const normalizedStorage = normalizeFavoriteRecentEmoteStorage(change.newValue);
 
+    storageChangeRevision += 1;
 		favoriteEmotesCache = normalizedStorage.favorites;
 		favoriteSetOrdersCache = normalizedStorage.setOrders;
 		initialized = true;
@@ -712,9 +725,28 @@ async function writeFavoriteRecentEmoteStorage({
     setOrders,
   });
 
-  await writeStorage({
-    [FAVORITE_RECENT_EMOTES_STORAGE_KEY]: snapshot,
+  /*
+   * 캐시를 await 이전에 갱신해야 같은 컨텍스트에서 연속으로 들어온
+   * read-modify-write가 모두 같은 과거 스냅샷을 기반으로 계산되지 않는다.
+   * 실제 저장은 queue로 직렬화해 완료 순서가 호출 순서를 뒤집지 않게 한다.
+   */
+  favoriteEmotesCache = snapshot.favorites;
+  favoriteSetOrdersCache = snapshot.setOrders;
+  pendingWriteCount += 1;
+
+  const writeTask = writeQueue.then(() => {
+    return writeStorage({
+      [FAVORITE_RECENT_EMOTES_STORAGE_KEY]: snapshot,
+    });
   });
+
+  writeQueue = writeTask.catch(() => {});
+
+  try {
+    await writeTask;
+  } finally {
+    pendingWriteCount -= 1;
+  }
 
   return snapshot;
 }

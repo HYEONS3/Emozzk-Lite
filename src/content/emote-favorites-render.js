@@ -123,6 +123,11 @@ import {
   getShortcutSetSegmentLabel,
 } from './shortcut-set-label.js';
 
+import {
+  subscribePanelDomMutations,
+  unsubscribePanelDomMutations,
+} from './panel-dom-mutations.js';
+
 const FAVORITES_SECTION_CLASS = 'emzk-lite-favorites-section';
 const FAVORITES_TITLE_CLASS = 'emzk-lite-favorites-title';
 const FAVORITES_LIST_CLASS = 'emzk-lite-favorites-list';
@@ -183,7 +188,6 @@ let phaseFirstHintConsumeScheduled = false;
 
 let started = false;
 let rafId = 0;
-let observer = null;
 let isRendering = false;
 
 export function startFavoriteEmoteSectionRenderer() {
@@ -2546,38 +2550,23 @@ function removeFavoriteSection() {
 }
 
 function startFavoriteSectionMutationObserver() {
-  if (observer) return;
-
-  observer = new MutationObserver((mutations) => {
-    if (isRendering) return;
-
-    const hasRelevantMutation = mutations.some((mutation) => {
-      return isRelevantMutation(mutation);
-    });
-
-    if (!hasRelevantMutation) return;
-
-    scheduleFavoriteEmoteSectionRender();
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: [
-      'class',
-      'style',
-      'aria-hidden',
-      BADGE_TARGET_ATTR,
-    ],
-  });
+  subscribePanelDomMutations(handleFavoriteSectionMutations);
 }
 
 function stopFavoriteSectionMutationObserver() {
-  if (!observer) return;
+  unsubscribePanelDomMutations(handleFavoriteSectionMutations);
+}
 
-  observer.disconnect();
-  observer = null;
+function handleFavoriteSectionMutations(mutations) {
+  if (isRendering) return;
+
+  const hasRelevantMutation = mutations.some((mutation) => {
+    return isRelevantMutation(mutation);
+  });
+
+  if (!hasRelevantMutation) return;
+
+  scheduleFavoriteEmoteSectionRender();
 }
 
 function isRelevantMutation(mutation) {
