@@ -24,6 +24,7 @@ const RECENT_STORAGE_LIMIT_MESSAGE =
 
 let started = false;
 let injected = false;
+let injecting = false;
 let bridgeGeneration = 0;
 let cachedRecentStorageLimit = DEFAULT_RECENT_STORAGE_LIMIT;
 const eventListeners = createEventListenerGroup();
@@ -48,7 +49,7 @@ export function startRecentEmoteStorageLimitBridge() {
     handleFavoritesChanged
   );
 
-  chrome.storage?.onChanged?.addListener?.(handleStorageChanged);
+  globalThis.chrome?.storage?.onChanged?.addListener?.(handleStorageChanged);
 }
 
 export function stopRecentEmoteStorageLimitBridge() {
@@ -60,7 +61,7 @@ export function stopRecentEmoteStorageLimitBridge() {
   bridgeGeneration += 1;
 
   eventListeners.removeAll();
-  chrome.storage?.onChanged?.removeListener?.(handleStorageChanged);
+  globalThis.chrome?.storage?.onChanged?.removeListener?.(handleStorageChanged);
 }
 
 export function getCachedRecentStorageLimit() {
@@ -72,24 +73,31 @@ export function syncRecentStorageLimitBridgeState() {
 }
 
 function injectPageScript() {
-  if (injected) {
+  if (
+    injected ||
+    injecting
+  ) {
     return;
   }
 
-  injected = true;
   const generation = bridgeGeneration;
+  const getRuntimeUrl = globalThis.chrome?.runtime?.getURL;
 
-  if (!chrome.runtime?.getURL) {
+  if (typeof getRuntimeUrl !== 'function') {
     console.error('[Emozzk Lite] chrome.runtime.getURL is not available.');
     return;
   }
 
   const script = document.createElement('script');
 
-  script.src = chrome.runtime.getURL('inject.js');
+  injecting = true;
+
+  script.src = getRuntimeUrl('inject.js');
   script.async = false;
 
   script.onload = () => {
+    injecting = false;
+    injected = true;
     script.remove();
 
     if (
@@ -103,12 +111,19 @@ function injectPageScript() {
   };
 
   script.onerror = () => {
+    injecting = false;
     console.error('[Emozzk Lite] failed to inject page script.');
     script.remove();
   };
 
-  (document.documentElement || document.head || document.body)
-    .appendChild(script);
+  try {
+    (document.documentElement || document.head || document.body)
+      .appendChild(script);
+  } catch (error) {
+    injecting = false;
+    console.error('[Emozzk Lite] failed to append page script:', error);
+    script.remove();
+  }
 }
 
 async function syncRecentStorageLimitFromSettings({
@@ -135,11 +150,13 @@ async function syncRecentStorageLimitFromSettings({
 
 async function readExtensionSettings() {
   try {
-    if (!chrome.storage?.local?.get) {
+    if (!globalThis.chrome?.storage?.local?.get) {
       return {};
     }
 
-    const result = await chrome.storage.local.get(EXTENSION_SETTINGS_STORAGE_KEY);
+    const result = await globalThis.chrome.storage.local.get(
+      EXTENSION_SETTINGS_STORAGE_KEY
+    );
 
     return result?.[EXTENSION_SETTINGS_STORAGE_KEY] || {};
   } catch (error) {
