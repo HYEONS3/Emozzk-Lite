@@ -38,16 +38,22 @@ const USER_BINDING_SOURCE = 'user';
 
 let cachedShortcutBindingSetState = createDefaultShortcutBindingSetState();
 let storageSyncStarted = false;
+let storageSyncGeneration = 0;
 let storageChangeRevision = 0;
 const storageWriteQueue = createStorageWriteQueue();
 
 export async function initShortcutBindingsStorage() {
   startShortcutBindingsStorageSync();
 
+  const generationBeforeRead = storageSyncGeneration;
   const revisionBeforeRead = storageChangeRevision;
   const storageEntry = await readShortcutBindingsStorageEntry();
 
-  if (storageChangeRevision === revisionBeforeRead) {
+  if (
+    storageSyncStarted &&
+    storageSyncGeneration === generationBeforeRead &&
+    storageChangeRevision === revisionBeforeRead
+  ) {
     cachedShortcutBindingSetState = normalizeShortcutBindingSetState({
       storedValue: storageEntry.value,
       hasStoredValue: storageEntry.hasStoredValue,
@@ -55,13 +61,20 @@ export async function initShortcutBindingsStorage() {
   }
 
   if (
+    storageSyncStarted &&
+    storageSyncGeneration === generationBeforeRead &&
     storageChangeRevision === revisionBeforeRead &&
     shouldMigrateShortcutBindingStorage(storageEntry)
   ) {
     await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
   }
 
-  dispatchShortcutBindingsChanged();
+  if (
+    storageSyncStarted &&
+    storageSyncGeneration === generationBeforeRead
+  ) {
+    dispatchShortcutBindingsChanged();
+  }
 
   return getCachedShortcutBindings();
 }
@@ -72,6 +85,7 @@ export function startShortcutBindingsStorageSync() {
   }
 
   storageSyncStarted = true;
+  storageSyncGeneration += 1;
 
   if (!globalThis.chrome?.storage?.onChanged?.addListener) {
     return;
@@ -86,6 +100,7 @@ export function stopShortcutBindingsStorageSync() {
   }
 
   storageSyncStarted = false;
+  storageSyncGeneration += 1;
 
   chrome.storage?.onChanged?.removeListener?.(
     handleShortcutBindingsStorageChanged

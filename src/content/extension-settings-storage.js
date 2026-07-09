@@ -19,20 +19,31 @@ let cachedExtensionSettings = {
 };
 
 let storageSyncStarted = false;
+let storageSyncGeneration = 0;
 let storageChangeRevision = 0;
 const storageWriteQueue = createStorageWriteQueue();
 
 export async function initExtensionSettingsStorage() {
   startExtensionSettingsStorageSync();
 
+  const generationBeforeRead = storageSyncGeneration;
   const revisionBeforeRead = storageChangeRevision;
   const storedSettings = await readExtensionSettingsFromStorage();
 
-  if (storageChangeRevision === revisionBeforeRead) {
+  if (
+    storageSyncStarted &&
+    storageSyncGeneration === generationBeforeRead &&
+    storageChangeRevision === revisionBeforeRead
+  ) {
     cachedExtensionSettings = storedSettings;
   }
 
-  dispatchExtensionSettingsChanged();
+  if (
+    storageSyncStarted &&
+    storageSyncGeneration === generationBeforeRead
+  ) {
+    dispatchExtensionSettingsChanged();
+  }
 
   return getCachedExtensionSettings();
 }
@@ -43,6 +54,7 @@ export function startExtensionSettingsStorageSync() {
   }
 
   storageSyncStarted = true;
+  storageSyncGeneration += 1;
 
   if (!globalThis.chrome?.storage?.onChanged?.addListener) {
     return;
@@ -57,6 +69,7 @@ export function stopExtensionSettingsStorageSync() {
   }
 
   storageSyncStarted = false;
+  storageSyncGeneration += 1;
 
   chrome.storage?.onChanged?.removeListener?.(
     handleExtensionSettingsStorageChanged

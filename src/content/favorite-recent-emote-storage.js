@@ -21,6 +21,7 @@ let initialized = false;
 
 let initializePromise = null;
 let storageSyncStarted = false;
+let storageSyncGeneration = 0;
 let storageChangeRevision = 0;
 const storageWriteQueue = createStorageWriteQueue();
 
@@ -31,6 +32,7 @@ export function initFavoriteRecentEmoteStorage() {
 
   startFavoriteRecentEmoteStorageSync();
 
+  const generationBeforeRead = storageSyncGeneration;
   const revisionBeforeRead = storageChangeRevision;
 
   initializePromise = readStorage()
@@ -39,12 +41,21 @@ export function initFavoriteRecentEmoteStorage() {
 				storage[FAVORITE_RECENT_EMOTES_STORAGE_KEY]
 			);
 
-      if (storageChangeRevision === revisionBeforeRead) {
+      if (
+        storageSyncStarted &&
+        storageSyncGeneration === generationBeforeRead &&
+        storageChangeRevision === revisionBeforeRead
+      ) {
         favoriteEmotesCache = normalizedStorage.favorites;
         favoriteSetOrdersCache = normalizedStorage.setOrders;
       }
 
-			initialized = true;
+      if (
+        storageSyncStarted &&
+        storageSyncGeneration === generationBeforeRead
+      ) {
+			  initialized = true;
+      }
 
       return getCachedFavoriteRecentEmotes();
     })
@@ -54,11 +65,22 @@ export function initFavoriteRecentEmoteStorage() {
         error
       );
 
-      if (storageChangeRevision === revisionBeforeRead) {
+      if (
+        storageSyncStarted &&
+        storageSyncGeneration === generationBeforeRead &&
+        storageChangeRevision === revisionBeforeRead
+      ) {
         favoriteEmotesCache = [];
         favoriteSetOrdersCache = {};
       }
-			initialized = true;
+
+      if (
+        storageSyncStarted &&
+        storageSyncGeneration === generationBeforeRead
+      ) {
+			  initialized = true;
+      }
+
       return [];
     });
 
@@ -69,6 +91,7 @@ export function startFavoriteRecentEmoteStorageSync() {
   if (storageSyncStarted) return;
 
   storageSyncStarted = true;
+  storageSyncGeneration += 1;
 
   if (!globalThis.chrome?.storage?.onChanged?.addListener) {
     return;
@@ -81,6 +104,8 @@ export function stopFavoriteRecentEmoteStorageSync() {
   if (!storageSyncStarted) return;
 
   storageSyncStarted = false;
+  storageSyncGeneration += 1;
+  initializePromise = null;
 
   chrome.storage?.onChanged?.removeListener?.(
     handleFavoriteRecentEmoteStorageChanged
