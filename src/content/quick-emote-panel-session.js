@@ -12,6 +12,10 @@ import {
   getCachedExtensionSettings,
 } from './extension-settings-storage.js';
 
+import {
+  createEventListenerGroup,
+} from './event-listener-group.js';
+
 const STEALTH_ROOT_CLASS = 'emzk-lite-quick-insert-panel-stealth';
 const TRIGGER_SNAPSHOT_CLASS = 'emzk-lite-quick-insert-trigger-snapshot';
 const IDLE_RELEASE_DELAY_MS = 1200;
@@ -26,20 +30,36 @@ let sessionId = 0;
 let triggerSnapshot = null;
 let hiddenTriggerState = null;
 let triggerSnapshotHoverCleanup = null;
+const eventListeners = createEventListenerGroup();
 
 export function attachQuickEmotePanelSession() {
   if (attached) return;
 
   attached = true;
 
-  document.addEventListener('click', handleDocumentClick, true);
-  window.addEventListener(
+  eventListeners.add(document, 'click', handleDocumentClick, true);
+  eventListeners.add(
+    window,
     EXTENSION_SETTINGS_CHANGED_EVENT,
     handleExtensionSettingsChanged
   );
 }
 
+export function detachQuickEmotePanelSession() {
+  if (!attached) return;
+
+  attached = false;
+
+  eventListeners.removeAll();
+  cancelQuickEmotePanelSessionRelease();
+  revealQuickEmotePanelForUser();
+}
+
 export function beginQuickEmotePanelSession() {
+  if (releasePromise) {
+    return false;
+  }
+
   cancelQuickEmotePanelSessionRelease();
 
   if (
@@ -177,7 +197,19 @@ async function releaseOwnedHiddenPanel({
 
   if (panel) {
     closeEmotePanel();
-    await waitForPanelToClose(panel);
+    const closed = await waitForPanelToClose(panel);
+
+    if (!closed) {
+      if (
+        !ownsHiddenPanel ||
+        targetSessionId !== sessionId
+      ) {
+        return;
+      }
+
+      revealQuickEmotePanelForUser();
+      return;
+    }
   }
 
   if (
@@ -299,11 +331,13 @@ async function waitForPanelToClose(panel) {
       !panel.isConnected ||
       !findEmotePanel()
     ) {
-      return;
+      return true;
     }
 
     await waitDelay(PANEL_CLOSE_POLL_INTERVAL_MS);
   }
+
+  return false;
 }
 
 function handleDocumentClick(event) {
