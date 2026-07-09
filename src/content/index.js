@@ -1,30 +1,37 @@
 import {
   attachShortcutController,
+  detachShortcutController,
   setShortcutBindings,
 } from './shortcut-controller.js';
 
 import {
   startBadgeOverlay,
+  stopBadgeOverlay,
 } from './badge-overlay.js';
 
 import {
   attachEmoteClickFocusRestore,
+  detachEmoteClickFocusRestore,
 } from './emote-click-focus.js';
 
 import {
   attachEmoteFavoriteEvents,
+  detachEmoteFavoriteEvents,
 } from './emote-favorites-events.js';
 
 import {
   attachEmoteBindEvents,
+  detachEmoteBindEvents,
 } from './emote-bind-events.js';
 
 import {
   startFavoriteEmoteSectionRenderer,
+  stopFavoriteEmoteSectionRenderer,
 } from './emote-favorites-render.js';
 
 import {
   startRecentEmoteStorageLimitBridge,
+  stopRecentEmoteStorageLimitBridge,
   syncRecentStorageLimitBridgeState,
 } from './recent-emote-storage-limit-bridge.js';
 
@@ -60,6 +67,7 @@ import {
 
 import {
   attachQuickEmotePanelSession,
+  detachQuickEmotePanelSession,
 } from './quick-emote-panel-session.js';
 
 import {
@@ -71,11 +79,25 @@ import {
   attachChzzkThemeController,
 } from './chzzk-theme-controller.js';
 
+import {
+  createEventListenerGroup,
+} from './event-listener-group.js';
+
 const DEBUG = false;
+
+let started = false;
+let startGeneration = 0;
+const eventListeners = createEventListenerGroup();
 
 startContentScript();
 
-function startContentScript() {
+export function startContentScript() {
+  if (started) return;
+
+  started = true;
+  startGeneration += 1;
+  const generation = startGeneration;
+
   /*
    * page context inject는 최대한 빨리 넣는다.
    * CHZZK가 livechat-emoticon#... 을 저장하기 전에
@@ -95,6 +117,13 @@ function startContentScript() {
 
 	initializeStorages()
 		.finally(() => {
+      if (
+        !started ||
+        generation !== startGeneration
+      ) {
+        return;
+      }
+
 			syncRecentLocalStorageWithFavoriteCache();
 			syncRecentStorageLimitBridgeState();
 
@@ -109,6 +138,24 @@ function startContentScript() {
 				logStorageSnapshot();
 			}
 		});
+}
+
+export function stopContentScript() {
+  if (!started) return;
+
+  started = false;
+  startGeneration += 1;
+
+  eventListeners.removeAll();
+
+  stopFavoriteEmoteSectionRenderer();
+  detachShortcutController();
+  detachEmoteBindEvents();
+  detachEmoteClickFocusRestore();
+  detachEmoteFavoriteEvents();
+  detachQuickEmotePanelSession();
+  stopBadgeOverlay();
+  stopRecentEmoteStorageLimitBridge();
 }
 
 async function initializeStorages() {
@@ -208,13 +255,16 @@ function logShortcutBindingsStorageSnapshot() {
 }
 
 function attachExtensionSettingsChangedHandler() {
-  window.addEventListener(
+  eventListeners.add(
+    window,
     EXTENSION_SETTINGS_CHANGED_EVENT,
     handleExtensionSettingsChanged
   );
 }
 
 function handleExtensionSettingsChanged() {
+  if (!started) return;
+
   refreshEmoteBindModeStateForSettings();
 }
 
