@@ -7,6 +7,10 @@ import {
   mergeReorderedFavoriteSubset,
 } from './emote-favorite-groups.js';
 
+import {
+  createStorageWriteQueue,
+} from './storage-write-queue.js';
+
 const FAVORITE_RECENT_EMOTES_STORAGE_KEY = 'emozzk_lite_favorite_recent_emotes_v1';
 const FAVORITE_RECENT_EMOTES_STORAGE_VERSION = 2;
 const MAX_FAVORITE_RECENT_EMOTE_COUNT = 200;
@@ -17,9 +21,8 @@ let initialized = false;
 
 let initializePromise = null;
 let storageSyncStarted = false;
-let writeQueue = Promise.resolve();
 let storageChangeRevision = 0;
-let pendingWriteCount = 0;
+const storageWriteQueue = createStorageWriteQueue();
 
 export function initFavoriteRecentEmoteStorage() {
   if (initializePromise) {
@@ -77,7 +80,7 @@ export function startFavoriteRecentEmoteStorageSync() {
     const change = changes[FAVORITE_RECENT_EMOTES_STORAGE_KEY];
 
     if (!change) return;
-    if (pendingWriteCount > 0) return;
+    if (storageWriteQueue.hasPending()) return;
 
 		const normalizedStorage = normalizeFavoriteRecentEmoteStorage(change.newValue);
 
@@ -720,6 +723,11 @@ async function writeFavoriteRecentEmoteStorage({
   favorites,
   setOrders,
 }) {
+  const previousSnapshot = createFavoriteRecentEmoteStorageSnapshot({
+    favorites: favoriteEmotesCache,
+    setOrders: favoriteSetOrdersCache,
+  });
+
   const snapshot = createFavoriteRecentEmoteStorageSnapshot({
     favorites,
     setOrders,
@@ -729,23 +737,26 @@ async function writeFavoriteRecentEmoteStorage({
    * 캐시를 await 이전에 갱신해야 같은 컨텍스트에서 연속으로 들어온
    * read-modify-write가 모두 같은 과거 스냅샷을 기반으로 계산되지 않는다.
    * 실제 저장은 queue로 직렬화해 완료 순서가 호출 순서를 뒤집지 않게 한다.
-   */
+  */
   favoriteEmotesCache = snapshot.favorites;
   favoriteSetOrdersCache = snapshot.setOrders;
-  pendingWriteCount += 1;
-
-  const writeTask = writeQueue.then(() => {
-    return writeStorage({
-      [FAVORITE_RECENT_EMOTES_STORAGE_KEY]: snapshot,
-    });
-  });
-
-  writeQueue = writeTask.catch(() => {});
 
   try {
-    await writeTask;
-  } finally {
-    pendingWriteCount -= 1;
+    await storageWriteQueue.run(() => {
+      return writeStorage({
+        [FAVORITE_RECENT_EMOTES_STORAGE_KEY]: snapshot,
+      });
+    });
+  } catch (error) {
+    if (
+      favoriteEmotesCache === snapshot.favorites &&
+      favoriteSetOrdersCache === snapshot.setOrders
+    ) {
+      favoriteEmotesCache = previousSnapshot.favorites;
+      favoriteSetOrdersCache = previousSnapshot.setOrders;
+    }
+
+    throw error;
   }
 
   return snapshot;

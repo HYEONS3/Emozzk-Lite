@@ -46,25 +46,29 @@ import {
   isImeKeyboardEvent,
 } from '../shared/shortcut-key-code.js';
 
+import {
+  createEventListenerGroup,
+} from './event-listener-group.js';
+
 const BADGE_CLASS = 'emzk-lite-badge';
 
 let attached = false;
 let observer = null;
 let boundaryCheckRafId = 0;
 let bindModePanelSignature = '';
+const eventListeners = createEventListenerGroup();
 
 export function attachEmoteBindEvents() {
   if (attached) return;
 
   attached = true;
 
-  document.addEventListener('pointerdown', handleBindModePointerDown, true);
-  document.addEventListener('dragstart', handleBindModeDragStart, true);
-
-  document.addEventListener('click', handleBindModeClick, true);
-  document.addEventListener('keydown', handleBindModeKeyDown, true);
-
-  window.addEventListener(
+  eventListeners.add(document, 'pointerdown', handleBindModePointerDown, true);
+  eventListeners.add(document, 'dragstart', handleBindModeDragStart, true);
+  eventListeners.add(document, 'click', handleBindModeClick, true);
+  eventListeners.add(document, 'keydown', handleBindModeKeyDown, true);
+  eventListeners.add(
+    window,
     EMOTE_BIND_MODE_CHANGED_EVENT,
     handleBindModeChanged
   );
@@ -77,16 +81,7 @@ export function detachEmoteBindEvents() {
 
   attached = false;
 
-  document.removeEventListener('pointerdown', handleBindModePointerDown, true);
-  document.removeEventListener('dragstart', handleBindModeDragStart, true);
-
-  document.removeEventListener('click', handleBindModeClick, true);
-  document.removeEventListener('keydown', handleBindModeKeyDown, true);
-
-  window.removeEventListener(
-    EMOTE_BIND_MODE_CHANGED_EVENT,
-    handleBindModeChanged
-  );
+  eventListeners.removeAll();
 
   stopBindBoundaryObserver();
 

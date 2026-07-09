@@ -2,34 +2,37 @@ import {
   findChatInput,
 } from './chat-input.js';
 
+import {
+  createFrameScheduler,
+} from './frame-scheduler.js';
+
 const THEME_ATTRIBUTE = 'data-emzk-lite-theme';
 
 const THEME_DARK = 'dark';
 const THEME_LIGHT = 'light';
 
-const THEME_SYNC_INTERVAL_MS = 1000;
 const THEME_LUMINANCE_THRESHOLD = 128;
 
 let attached = false;
-let syncTimer = 0;
+let bodyObserver = null;
+let rootAttributeObserver = null;
+let referenceObserver = null;
+let observedReference = null;
 let cachedTheme = '';
+const themeSyncScheduler = createFrameScheduler(() => {
+  syncChzzkTheme();
+});
 
 export function attachChzzkThemeController() {
   if (attached) return;
 
   attached = true;
+  themeSyncScheduler.start();
 
   syncChzzkTheme();
+  startThemeMutationObserver();
 
-  syncTimer = window.setInterval(() => {
-    if (document.visibilityState !== 'visible') {
-      return;
-    }
-
-    syncChzzkTheme();
-  }, THEME_SYNC_INTERVAL_MS);
-
-  window.addEventListener('focus', syncChzzkTheme);
+  window.addEventListener('focus', scheduleChzzkThemeSync);
 
   document.addEventListener(
     'visibilitychange',
@@ -42,7 +45,82 @@ function handleVisibilityChange() {
     return;
   }
 
-  syncChzzkTheme();
+  scheduleChzzkThemeSync();
+}
+
+function startThemeMutationObserver() {
+  if (bodyObserver || !document.body) {
+    return;
+  }
+
+  bodyObserver = new MutationObserver(() => {
+    refreshThemeReferenceObserver();
+    scheduleChzzkThemeSync();
+  });
+
+  bodyObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  rootAttributeObserver = new MutationObserver(scheduleChzzkThemeSync);
+
+  rootAttributeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: [
+      'class',
+      'style',
+    ],
+  });
+
+  rootAttributeObserver.observe(document.body, {
+    attributes: true,
+    attributeFilter: [
+      'class',
+      'style',
+    ],
+  });
+
+  refreshThemeReferenceObserver();
+}
+
+function refreshThemeReferenceObserver() {
+  const reference = findChatInput();
+
+  if (reference === observedReference) {
+    return;
+  }
+
+  if (referenceObserver) {
+    referenceObserver.disconnect();
+    referenceObserver = null;
+  }
+
+  observedReference = reference instanceof HTMLElement
+    ? reference
+    : null;
+
+  if (!observedReference) {
+    return;
+  }
+
+  referenceObserver = new MutationObserver(scheduleChzzkThemeSync);
+
+  referenceObserver.observe(observedReference, {
+    attributes: true,
+    attributeFilter: [
+      'class',
+      'style',
+    ],
+  });
+}
+
+function scheduleChzzkThemeSync() {
+  if (document.visibilityState !== 'visible') {
+    return;
+  }
+
+  themeSyncScheduler.schedule();
 }
 
 function syncChzzkTheme() {

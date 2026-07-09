@@ -80,6 +80,10 @@ import {
 } from './shortcut-set-switch-feedback.js';
 
 import {
+  createEventListenerGroup,
+} from './event-listener-group.js';
+
+import {
   abortQuickEmotePanelSession,
   isQuickEmotePanelSessionActive,
   revealQuickEmotePanelForUser,
@@ -95,6 +99,7 @@ let attached = false;
 let shortcutBindings = [];
 let activeShortcutBindingSetId = '';
 let suppressNextRenameEscapeKeyUp = false;
+const eventListeners = createEventListenerGroup();
 
 export function attachShortcutController() {
   if (attached) return;
@@ -103,12 +108,11 @@ export function attachShortcutController() {
 
   syncShortcutBindingsFromStorage();
 
-  document.addEventListener(EVENT_PHASE_KEYDOWN, handleShortcutEvent, true);
-  document.addEventListener(EVENT_PHASE_KEYUP, handleShortcutEvent, true);
-
-  window.addEventListener('blur', clearActivePresses, true);
-
-  window.addEventListener(
+  eventListeners.add(document, EVENT_PHASE_KEYDOWN, handleShortcutEvent, true);
+  eventListeners.add(document, EVENT_PHASE_KEYUP, handleShortcutEvent, true);
+  eventListeners.add(window, 'blur', clearActivePresses, true);
+  eventListeners.add(
+    window,
     SHORTCUT_BINDINGS_CHANGED_EVENT,
     handleShortcutBindingsChanged
   );
@@ -119,15 +123,7 @@ export function detachShortcutController() {
 
   attached = false;
 
-  document.removeEventListener(EVENT_PHASE_KEYDOWN, handleShortcutEvent, true);
-  document.removeEventListener(EVENT_PHASE_KEYUP, handleShortcutEvent, true);
-
-  window.removeEventListener('blur', clearActivePresses, true);
-
-  window.removeEventListener(
-    SHORTCUT_BINDINGS_CHANGED_EVENT,
-    handleShortcutBindingsChanged
-  );
+  eventListeners.removeAll();
 
   clearActivePresses();
 }

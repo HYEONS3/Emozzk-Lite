@@ -7,6 +7,10 @@ import {
   normalizeStoredShortcutCode,
 } from '../shared/shortcut-key-code.js';
 
+import {
+  createStorageWriteQueue,
+} from './storage-write-queue.js';
+
 export const SHORTCUT_BINDINGS_STORAGE_KEY = 'emzk_lite_shortcut_bindings_v1';
 export const SHORTCUT_BINDINGS_CHANGED_EVENT = 'emzk-lite-shortcut-bindings-changed';
 
@@ -34,9 +38,8 @@ const USER_BINDING_SOURCE = 'user';
 
 let cachedShortcutBindingSetState = createDefaultShortcutBindingSetState();
 let storageSyncStarted = false;
-let writeQueue = Promise.resolve();
 let storageChangeRevision = 0;
-let pendingWriteCount = 0;
+const storageWriteQueue = createStorageWriteQueue();
 
 export async function initShortcutBindingsStorage() {
   startShortcutBindingsStorageSync();
@@ -86,7 +89,7 @@ export function startShortcutBindingsStorageSync() {
 			return;
 		}
 
-    if (pendingWriteCount > 0) {
+    if (storageWriteQueue.hasPending()) {
       return;
     }
 
@@ -145,14 +148,12 @@ export async function setActiveShortcutBindingSet(setId) {
     return getCachedShortcutBindings();
   }
 
-  cachedShortcutBindingSetState = {
+  const nextState = {
     ...cachedShortcutBindingSetState,
     activeSetId: normalizedSetId,
   };
 
-  await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
-
-  dispatchShortcutBindingsChanged();
+  await persistShortcutBindingSetState(nextState);
 
   return getCachedShortcutBindings();
 }
@@ -160,7 +161,7 @@ export async function setActiveShortcutBindingSet(setId) {
 export async function setShortcutBindingSetCount(count) {
   const setCount = normalizeShortcutBindingSetCount(count);
 
-  cachedShortcutBindingSetState = normalizeShortcutBindingSetStateValue({
+  const nextState = normalizeShortcutBindingSetStateValue({
     ...cachedShortcutBindingSetState,
     setCount,
     activeSetId: normalizeActiveShortcutBindingSetIdForCount({
@@ -169,9 +170,7 @@ export async function setShortcutBindingSetCount(count) {
     }),
   });
 
-  await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
-
-  dispatchShortcutBindingsChanged();
+  await persistShortcutBindingSetState(nextState);
 
   return getCachedShortcutBindingSetState();
 }
@@ -179,37 +178,34 @@ export async function setShortcutBindingSetCount(count) {
 export async function setShortcutBindings(bindings) {
   const normalizedBindings = normalizeShortcutBindings(bindings);
 
-  cachedShortcutBindingSetState = setShortcutBindingsForActiveSet({
+  const nextState = setShortcutBindingsForActiveSet({
     state: cachedShortcutBindingSetState,
     bindings: normalizedBindings,
   });
 
-  await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
-
-  dispatchShortcutBindingsChanged();
+  await persistShortcutBindingSetState(nextState);
 
   return getCachedShortcutBindings();
 }
 
 export async function resetShortcutBindingsToDefault() {
-  cachedShortcutBindingSetState = createDefaultShortcutBindingSetState();
-
-  await removeShortcutBindingsFromStorage();
-
-  dispatchShortcutBindingsChanged();
+  await persistShortcutBindingSetState(
+    createDefaultShortcutBindingSetState(),
+    {
+      removeStorage: true,
+    }
+  );
 
   return getCachedShortcutBindings();
 }
 
 export async function clearShortcutBindings() {
-  cachedShortcutBindingSetState = setShortcutBindingsForActiveSet({
+  const nextState = setShortcutBindingsForActiveSet({
     state: cachedShortcutBindingSetState,
     bindings: [],
   });
 
-  await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
-
-  dispatchShortcutBindingsChanged();
+  await persistShortcutBindingSetState(nextState);
 
   return getCachedShortcutBindings();
 }
@@ -954,21 +950,39 @@ async function writeShortcutBindingSetStateToStorage(state) {
     return;
   }
 
-  pendingWriteCount += 1;
-
-  const writeTask = writeQueue.then(() => {
+  await storageWriteQueue.run(() => {
     return chrome.storage.local.set({
       [SHORTCUT_BINDINGS_STORAGE_KEY]: storageValue,
     });
   });
+}
 
-  writeQueue = writeTask.catch(() => {});
+async function persistShortcutBindingSetState(
+  nextState,
+  {
+    removeStorage = false,
+  } = {}
+) {
+  const previousState = cachedShortcutBindingSetState;
+  const normalizedNextState = normalizeShortcutBindingSetStateValue(nextState);
+
+  cachedShortcutBindingSetState = normalizedNextState;
 
   try {
-    await writeTask;
-  } finally {
-    pendingWriteCount -= 1;
+    if (removeStorage) {
+      await removeShortcutBindingsFromStorage();
+    } else {
+      await writeShortcutBindingSetStateToStorage(normalizedNextState);
+    }
+  } catch (error) {
+    if (cachedShortcutBindingSetState === normalizedNextState) {
+      cachedShortcutBindingSetState = previousState;
+    }
+
+    throw error;
   }
+
+  dispatchShortcutBindingsChanged();
 }
 
 function createShortcutBindingSetStorageValue(state) {
@@ -1016,7 +1030,9 @@ async function removeShortcutBindingsFromStorage() {
     return;
   }
 
-  await chrome.storage.local.remove(SHORTCUT_BINDINGS_STORAGE_KEY);
+  await storageWriteQueue.run(() => {
+    return chrome.storage.local.remove(SHORTCUT_BINDINGS_STORAGE_KEY);
+  });
 }
 
 function readShortcutBindingsStorageEntryFromLocalStorage() {
@@ -1127,20 +1143,19 @@ export async function renameShortcutBindingSet({
     });
   }
 
-	const previousState = cachedShortcutBindingSetState;
-
-	cachedShortcutBindingSetState = normalizeShortcutBindingSetStateValue({
+	const nextState = normalizeShortcutBindingSetStateValue({
 		...cachedShortcutBindingSetState,
 		sets: nextSets,
 	});
 
-	if (isSameShortcutBindingSetState(previousState, cachedShortcutBindingSetState)) {
+	if (isSameShortcutBindingSetState(
+    cachedShortcutBindingSetState,
+    nextState
+  )) {
 		return getCachedShortcutBindingSetState();
 	}
 
-	await writeShortcutBindingSetStateToStorage(cachedShortcutBindingSetState);
-
-	dispatchShortcutBindingsChanged();
+	await persistShortcutBindingSetState(nextState);
 
 	return getCachedShortcutBindingSetState();
 }

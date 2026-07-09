@@ -128,6 +128,14 @@ import {
   unsubscribePanelDomMutations,
 } from './panel-dom-mutations.js';
 
+import {
+  createFrameScheduler,
+} from './frame-scheduler.js';
+
+import {
+  createEventListenerGroup,
+} from './event-listener-group.js';
+
 const FAVORITES_SECTION_CLASS = 'emzk-lite-favorites-section';
 const FAVORITES_TITLE_CLASS = 'emzk-lite-favorites-title';
 const FAVORITES_LIST_CLASS = 'emzk-lite-favorites-list';
@@ -187,26 +195,31 @@ const PHASE_FIRST_HINT_CONSUME_FALLBACK_MS = 420 * 3 + 160;
 let phaseFirstHintConsumeScheduled = false;
 
 let started = false;
-let rafId = 0;
 let isRendering = false;
+const favoriteRenderScheduler = createFrameScheduler(() => {
+  renderFavoriteEmoteSection();
+});
+const eventListeners = createEventListenerGroup();
 
 export function startFavoriteEmoteSectionRenderer() {
   if (started) return;
 
   started = true;
+  favoriteRenderScheduler.start();
 
-  document.addEventListener('click', handlePossibleFavoriteRender, true);
-  document.addEventListener(
+  eventListeners.add(document, 'click', handlePossibleFavoriteRender, true);
+  eventListeners.add(
+    document,
     getFavoritesChangedEventName(),
     scheduleFavoriteEmoteSectionRender
   );
-
-  window.addEventListener(
+  eventListeners.add(
+    window,
     EMOTE_BIND_MODE_CHANGED_EVENT,
     scheduleFavoriteEmoteSectionRender
   );
-
-  window.addEventListener(
+  eventListeners.add(
+    window,
     SHORTCUT_BINDINGS_CHANGED_EVENT,
     handleShortcutBindingsChanged
   );
@@ -220,28 +233,11 @@ export function stopFavoriteEmoteSectionRenderer() {
 
   started = false;
 
-  document.removeEventListener('click', handlePossibleFavoriteRender, true);
-  document.removeEventListener(
-    getFavoritesChangedEventName(),
-    scheduleFavoriteEmoteSectionRender
-  );
-
-  window.removeEventListener(
-    EMOTE_BIND_MODE_CHANGED_EVENT,
-    scheduleFavoriteEmoteSectionRender
-  );
-
-  window.removeEventListener(
-    SHORTCUT_BINDINGS_CHANGED_EVENT,
-    handleShortcutBindingsChanged
-  );
+  eventListeners.removeAll();
 
   stopFavoriteSectionMutationObserver();
 
-  if (rafId) {
-    cancelAnimationFrame(rafId);
-    rafId = 0;
-  }
+  favoriteRenderScheduler.stop();
 
   clearFavoriteRenderState();
   exitShortcutSetRenameModeSilently();
@@ -250,15 +246,14 @@ export function stopFavoriteEmoteSectionRenderer() {
 }
 
 export function scheduleFavoriteEmoteSectionRender() {
-  if (rafId) return;
+  if (!started) return;
 
-  rafId = requestAnimationFrame(() => {
-    rafId = 0;
-    renderFavoriteEmoteSection();
-  });
+  favoriteRenderScheduler.schedule();
 }
 
 export function renderFavoriteEmoteSection() {
+  if (!started) return;
+
   const panel = findEmotePanel();
 
   if (!panel) {

@@ -8,6 +8,10 @@ import {
   normalizeStoredShortcutCode,
 } from '../shared/shortcut-key-code.js';
 
+import {
+  createStorageWriteQueue,
+} from './storage-write-queue.js';
+
 export const EXTENSION_SETTINGS_CHANGED_EVENT = 'emzk-lite-extension-settings-changed';
 
 let cachedExtensionSettings = {
@@ -15,9 +19,8 @@ let cachedExtensionSettings = {
 };
 
 let storageSyncStarted = false;
-let writeQueue = Promise.resolve();
 let storageChangeRevision = 0;
-let pendingWriteCount = 0;
+const storageWriteQueue = createStorageWriteQueue();
 
 export async function initExtensionSettingsStorage() {
   startExtensionSettingsStorageSync();
@@ -56,7 +59,7 @@ export function startExtensionSettingsStorageSync() {
       return;
     }
 
-    if (pendingWriteCount > 0) {
+    if (storageWriteQueue.hasPending()) {
       return;
     }
 
@@ -81,6 +84,7 @@ export function getCachedExtensionSettings() {
 }
 
 export async function setExtensionSettings(nextSettings = {}) {
+  const previousSettings = cachedExtensionSettings;
   const normalizedSettings = normalizeExtensionSettings({
     ...cachedExtensionSettings,
     ...nextSettings,
@@ -92,7 +96,15 @@ export async function setExtensionSettings(nextSettings = {}) {
 
   cachedExtensionSettings = normalizedSettings;
 
-  await writeExtensionSettingsToStorage(cachedExtensionSettings);
+  try {
+    await writeExtensionSettingsToStorage(cachedExtensionSettings);
+  } catch (error) {
+    if (cachedExtensionSettings === normalizedSettings) {
+      cachedExtensionSettings = previousSettings;
+    }
+
+    throw error;
+  }
 
   dispatchExtensionSettingsChanged();
 
@@ -145,21 +157,11 @@ async function writeExtensionSettingsToStorage(settings) {
     return;
   }
 
-  pendingWriteCount += 1;
-
-  const writeTask = writeQueue.then(() => {
+  await storageWriteQueue.run(() => {
     return chrome.storage.local.set({
       [EXTENSION_SETTINGS_STORAGE_KEY]: normalizedSettings,
     });
   });
-
-  writeQueue = writeTask.catch(() => {});
-
-  try {
-    await writeTask;
-  } finally {
-    pendingWriteCount -= 1;
-  }
 }
 
 function readExtensionSettingsFromLocalStorage() {

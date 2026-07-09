@@ -40,6 +40,14 @@ import {
   normalizeStoredShortcutCode,
 } from '../shared/shortcut-key-code.js';
 
+import {
+  createFrameScheduler,
+} from './frame-scheduler.js';
+
+import {
+  createEventListenerGroup,
+} from './event-listener-group.js';
+
 const BADGE_CLASS = 'emzk-lite-badge';
 const BADGE_TARGET_ATTR = 'data-emzk-lite-badge-target';
 
@@ -47,27 +55,30 @@ const EMOJI_AREA_SELECTOR = '#emoji_area';
 const EMOJI_ITEM_SELECTOR = 'li[id^="emoji_"]';
 const EMOTE_BUTTON_SELECTOR = 'button[type="button"] img[alt^="{:"]';
 
-let rafId = 0;
 let started = false;
 let lastHadPanel = false;
+const badgeUpdateScheduler = createFrameScheduler(() => {
+  updateBadgeOverlay();
+});
+const eventListeners = createEventListenerGroup();
 
 export function startBadgeOverlay() {
   if (started) return;
 
   started = true;
+  badgeUpdateScheduler.start();
 
-  document.addEventListener('click', handlePossibleBadgeUpdate, true);
-  document.addEventListener('keydown', handlePossibleBadgeUpdate, true);
-  document.addEventListener('scroll', handlePossibleBadgeUpdate, true);
-
-  window.addEventListener('resize', scheduleBadgeUpdate, true);
-
-  window.addEventListener(
+  eventListeners.add(document, 'click', handlePossibleBadgeUpdate, true);
+  eventListeners.add(document, 'keydown', handlePossibleBadgeUpdate, true);
+  eventListeners.add(document, 'scroll', handlePossibleBadgeUpdate, true);
+  eventListeners.add(window, 'resize', scheduleBadgeUpdate, true);
+  eventListeners.add(
+    window,
     SHORTCUT_BINDINGS_CHANGED_EVENT,
     handleBadgeStateChanged
   );
-
-  window.addEventListener(
+  eventListeners.add(
+    window,
     EMOTE_BIND_MODE_CHANGED_EVENT,
     handleBadgeStateChanged
   );
@@ -81,28 +92,11 @@ export function stopBadgeOverlay() {
 
   started = false;
 
-  document.removeEventListener('click', handlePossibleBadgeUpdate, true);
-  document.removeEventListener('keydown', handlePossibleBadgeUpdate, true);
-  document.removeEventListener('scroll', handlePossibleBadgeUpdate, true);
-
-  window.removeEventListener('resize', scheduleBadgeUpdate, true);
-
-  window.removeEventListener(
-    SHORTCUT_BINDINGS_CHANGED_EVENT,
-    handleBadgeStateChanged
-  );
-
-  window.removeEventListener(
-    EMOTE_BIND_MODE_CHANGED_EVENT,
-    handleBadgeStateChanged
-  );
+  eventListeners.removeAll();
 
   stopPanelMutationObserver();
 
-  if (rafId) {
-    cancelAnimationFrame(rafId);
-    rafId = 0;
-  }
+  badgeUpdateScheduler.stop();
 
   lastHadPanel = false;
   clearEmoteBadges();
@@ -110,12 +104,8 @@ export function stopBadgeOverlay() {
 
 export function scheduleBadgeUpdate() {
   if (!started) return;
-  if (rafId) return;
 
-  rafId = requestAnimationFrame(() => {
-    rafId = 0;
-    updateBadgeOverlay();
-  });
+  badgeUpdateScheduler.schedule();
 }
 
 export function updateBadgeOverlay() {
