@@ -6,6 +6,10 @@ import {
   createFrameScheduler,
 } from './frame-scheduler.js';
 
+import {
+  createEventListenerGroup,
+} from './event-listener-group.js';
+
 const THEME_ATTRIBUTE = 'data-emzk-lite-theme';
 
 const THEME_DARK = 'dark';
@@ -22,6 +26,7 @@ let cachedTheme = '';
 const themeSyncScheduler = createFrameScheduler(() => {
   syncChzzkTheme();
 });
+const eventListeners = createEventListenerGroup();
 
 export function attachChzzkThemeController() {
   if (attached) return;
@@ -32,12 +37,24 @@ export function attachChzzkThemeController() {
   syncChzzkTheme();
   startThemeMutationObserver();
 
-  window.addEventListener('focus', scheduleChzzkThemeSync);
-
-  document.addEventListener(
+  eventListeners.add(window, 'focus', scheduleChzzkThemeSync);
+  eventListeners.add(
+    document,
     'visibilitychange',
     handleVisibilityChange
   );
+}
+
+export function detachChzzkThemeController() {
+  if (!attached) return;
+
+  attached = false;
+
+  eventListeners.removeAll();
+  disconnectThemeMutationObservers();
+  themeSyncScheduler.stop();
+  cachedTheme = '';
+  document.documentElement.removeAttribute(THEME_ATTRIBUTE);
 }
 
 function handleVisibilityChange() {
@@ -116,6 +133,10 @@ function refreshThemeReferenceObserver() {
 }
 
 function scheduleChzzkThemeSync() {
+  if (!attached) {
+    return;
+  }
+
   if (document.visibilityState !== 'visible') {
     return;
   }
@@ -124,6 +145,10 @@ function scheduleChzzkThemeSync() {
 }
 
 function syncChzzkTheme() {
+  if (!attached) {
+    return;
+  }
+
   const reference = findChatInput();
 
   if (!(reference instanceof HTMLElement)) {
@@ -145,6 +170,25 @@ function syncChzzkTheme() {
     THEME_ATTRIBUTE,
     theme
   );
+}
+
+function disconnectThemeMutationObservers() {
+  if (bodyObserver) {
+    bodyObserver.disconnect();
+    bodyObserver = null;
+  }
+
+  if (rootAttributeObserver) {
+    rootAttributeObserver.disconnect();
+    rootAttributeObserver = null;
+  }
+
+  if (referenceObserver) {
+    referenceObserver.disconnect();
+    referenceObserver = null;
+  }
+
+  observedReference = null;
 }
 
 function detectThemeFromElement(element) {

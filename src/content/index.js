@@ -77,6 +77,7 @@ import {
 
 import {
   attachChzzkThemeController,
+  detachChzzkThemeController,
 } from './chzzk-theme-controller.js';
 
 import {
@@ -154,6 +155,7 @@ export function stopContentScript() {
   detachEmoteClickFocusRestore();
   detachEmoteFavoriteEvents();
   detachQuickEmotePanelSession();
+  detachChzzkThemeController();
   stopBadgeOverlay();
   stopRecentEmoteStorageLimitBridge();
 }
