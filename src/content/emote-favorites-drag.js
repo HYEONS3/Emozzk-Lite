@@ -37,6 +37,10 @@ import {
 } from './badge-overlay.js';
 
 import {
+  createEventListenerGroup,
+} from './event-listener-group.js';
+
+import {
   EMOTE_BIND_MODE_CHANGED_EVENT,
   EMOTE_BIND_MODE_RENAME,
   exitShortcutSetRenameMode,
@@ -74,6 +78,7 @@ const CLICK_SUPPRESS_MS = 350;
 const NO_INSERTION_HIT = Symbol('NO_INSERTION_HIT');
 
 let activeDrag = null;
+const activeDragListeners = createEventListenerGroup();
 let suppressClickUntil = 0;
 let clickSuppressListenerAttached = false;
 let bindModeListenerAttached = false;
@@ -180,9 +185,16 @@ function handlePointerDown(event) {
     cancelled: false,
   };
 
-  document.addEventListener('pointermove', handlePointerMove, true);
-  document.addEventListener('pointerup', handlePointerUp, true);
-  document.addEventListener('pointercancel', handlePointerCancel, true);
+  activeDragListeners.add(document, 'pointermove', handlePointerMove, true);
+  activeDragListeners.add(document, 'pointerup', handlePointerUp, true);
+  activeDragListeners.add(document, 'pointercancel', handlePointerCancel, true);
+  activeDragListeners.add(document, 'keydown', handleActiveDragKeyDown, true);
+  activeDragListeners.add(
+    document,
+    'visibilitychange',
+    handleActiveDragVisibilityChange
+  );
+  activeDragListeners.add(window, 'blur', handleActiveDragWindowBlur, true);
 }
 
 function handlePointerMove(event) {
@@ -190,6 +202,11 @@ function handlePointerMove(event) {
   if (event.pointerId !== activeDrag.pointerId) return;
 
   if (isEmoteBindInteractionModeActive()) {
+    cancelActiveDrag();
+    return;
+  }
+
+  if (!isActiveDragDomConnected()) {
     cancelActiveDrag();
     return;
   }
@@ -270,6 +287,29 @@ function handlePointerCancel(event) {
   cleanupDrag({
     restoreOrder: true,
   });
+}
+
+function handleActiveDragKeyDown(event) {
+  if (!activeDrag) return;
+  if (event.key !== 'Escape') return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+
+  cancelActiveDrag();
+}
+
+function handleActiveDragVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    return;
+  }
+
+  cancelActiveDrag();
+}
+
+function handleActiveDragWindowBlur() {
+  cancelActiveDrag();
 }
 
 function handleNativeDragStart(event) {
@@ -366,6 +406,12 @@ function startDrag(event) {
 
 function scheduleDragFrame() {
   if (!activeDrag) return;
+
+  if (!isActiveDragDomConnected()) {
+    cancelActiveDrag();
+    return;
+  }
+
   if (activeDrag.frameId) return;
 
   activeDrag.frameId = requestAnimationFrame(updateDragFrame);
@@ -375,6 +421,11 @@ function updateDragFrame() {
   if (!activeDrag) return;
 
   activeDrag.frameId = 0;
+
+  if (!isActiveDragDomConnected()) {
+    cancelActiveDrag();
+    return;
+  }
 
   if (isEmoteBindInteractionModeActive()) {
     cancelActiveDrag();
@@ -654,6 +705,12 @@ function movePlaceholder({
 
 function scheduleAutoScrollFrame() {
   if (!activeDrag) return;
+
+  if (!isActiveDragDomConnected()) {
+    cancelActiveDrag();
+    return;
+  }
+
   if (!activeDrag.scrollContainer) return;
   if (activeDrag.autoScrollFrameId) return;
 
@@ -664,6 +721,11 @@ function updateAutoScrollFrame(timestamp) {
   if (!activeDrag) return;
 
   activeDrag.autoScrollFrameId = 0;
+
+  if (!isActiveDragDomConnected()) {
+    cancelActiveDrag();
+    return;
+  }
 
   if (isEmoteBindInteractionModeActive()) {
     cancelActiveDrag();
@@ -734,9 +796,7 @@ function cleanupDrag({
     cancelAnimationFrame(autoScrollFrameId);
   }
 
-  document.removeEventListener('pointermove', handlePointerMove, true);
-  document.removeEventListener('pointerup', handlePointerUp, true);
-  document.removeEventListener('pointercancel', handlePointerCancel, true);
+  activeDragListeners.removeAll();
 
   if (ghostItem?.isConnected) {
     ghostItem.remove();
@@ -763,6 +823,21 @@ function cleanupDrag({
   }
 
   activeDrag = null;
+}
+
+function isActiveDragDomConnected() {
+  if (!activeDrag) {
+    return false;
+  }
+
+  return Boolean(
+    activeDrag.section?.isConnected &&
+    activeDrag.list?.isConnected &&
+    (
+      activeDrag.item?.isConnected ||
+      activeDrag.placeholder?.isConnected
+    )
+  );
 }
 
 function getDragMetrics(item) {
