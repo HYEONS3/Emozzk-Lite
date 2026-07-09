@@ -48,17 +48,20 @@ import {
 import {
   initFavoriteRecentEmoteStorage,
   getCachedFavoriteRecentEmotes,
+  stopFavoriteRecentEmoteStorageSync,
 } from './favorite-recent-emote-storage.js';
 
 import {
   initShortcutBindingsStorage,
   getCachedShortcutBindings,
+  stopShortcutBindingsStorageSync,
 } from './shortcut-storage.js';
 
 import {
   EXTENSION_SETTINGS_CHANGED_EVENT,
   getCachedExtensionSettings,
   initExtensionSettingsStorage,
+  stopExtensionSettingsStorageSync,
 } from './extension-settings-storage.js';
 
 import {
@@ -158,6 +161,9 @@ export function stopContentScript() {
   detachChzzkThemeController();
   stopBadgeOverlay();
   stopRecentEmoteStorageLimitBridge();
+  stopShortcutBindingsStorageSync();
+  stopFavoriteRecentEmoteStorageSync();
+  stopExtensionSettingsStorageSync();
 }
 
 async function initializeStorages() {

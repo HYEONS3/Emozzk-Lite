@@ -48,33 +48,51 @@ export function startExtensionSettingsStorageSync() {
     return;
   }
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== 'local') {
-      return;
-    }
+  chrome.storage.onChanged.addListener(handleExtensionSettingsStorageChanged);
+}
 
-    const change = changes[EXTENSION_SETTINGS_STORAGE_KEY];
+export function stopExtensionSettingsStorageSync() {
+  if (!storageSyncStarted) {
+    return;
+  }
 
-    if (!change) {
-      return;
-    }
+  storageSyncStarted = false;
 
-    if (storageWriteQueue.hasPending()) {
-      return;
-    }
+  chrome.storage?.onChanged?.removeListener?.(
+    handleExtensionSettingsStorageChanged
+  );
+}
 
-    const nextSettings = normalizeExtensionSettings(change.newValue);
+function handleExtensionSettingsStorageChanged(changes, areaName) {
+  if (!storageSyncStarted) {
+    return;
+  }
 
-    storageChangeRevision += 1;
+  if (areaName !== 'local') {
+    return;
+  }
 
-    if (isSameExtensionSettings(cachedExtensionSettings, nextSettings)) {
-      return;
-    }
+  const change = changes[EXTENSION_SETTINGS_STORAGE_KEY];
 
-    cachedExtensionSettings = nextSettings;
+  if (!change) {
+    return;
+  }
 
-    dispatchExtensionSettingsChanged();
-  });
+  if (storageWriteQueue.hasPending()) {
+    return;
+  }
+
+  const nextSettings = normalizeExtensionSettings(change.newValue);
+
+  storageChangeRevision += 1;
+
+  if (isSameExtensionSettings(cachedExtensionSettings, nextSettings)) {
+    return;
+  }
+
+  cachedExtensionSettings = nextSettings;
+
+  dispatchExtensionSettingsChanged();
 }
 
 export function getCachedExtensionSettings() {

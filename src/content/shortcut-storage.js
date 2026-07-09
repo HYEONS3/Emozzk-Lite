@@ -77,41 +77,57 @@ export function startShortcutBindingsStorageSync() {
     return;
   }
 
+  chrome.storage.onChanged.addListener(handleShortcutBindingsStorageChanged);
+}
 
-	chrome.storage.onChanged.addListener((changes, areaName) => {
-		if (areaName !== 'local') {
-			return;
-		}
+export function stopShortcutBindingsStorageSync() {
+  if (!storageSyncStarted) {
+    return;
+  }
 
-		const change = changes[SHORTCUT_BINDINGS_STORAGE_KEY];
+  storageSyncStarted = false;
 
-		if (!change) {
-			return;
-		}
+  chrome.storage?.onChanged?.removeListener?.(
+    handleShortcutBindingsStorageChanged
+  );
+}
 
-    if (storageWriteQueue.hasPending()) {
-      return;
-    }
+function handleShortcutBindingsStorageChanged(changes, areaName) {
+	if (!storageSyncStarted) {
+		return;
+	}
 
-		const nextState = normalizeShortcutBindingSetState({
-			storedValue: change.newValue,
-			hasStoredValue: Boolean(change.newValue),
-		});
+	if (areaName !== 'local') {
+		return;
+	}
 
-    storageChangeRevision += 1;
+	const change = changes[SHORTCUT_BINDINGS_STORAGE_KEY];
 
-		if (isSameShortcutBindingSetState(
-			cachedShortcutBindingSetState,
-			nextState
-		)) {
-			return;
-		}
+	if (!change) {
+		return;
+	}
 
-		cachedShortcutBindingSetState = nextState;
+  if (storageWriteQueue.hasPending()) {
+    return;
+  }
 
-		dispatchShortcutBindingsChanged();
+	const nextState = normalizeShortcutBindingSetState({
+		storedValue: change.newValue,
+		hasStoredValue: Boolean(change.newValue),
 	});
 
+  storageChangeRevision += 1;
+
+	if (isSameShortcutBindingSetState(
+		cachedShortcutBindingSetState,
+		nextState
+	)) {
+		return;
+	}
+
+	cachedShortcutBindingSetState = nextState;
+
+	dispatchShortcutBindingsChanged();
 
 }
 

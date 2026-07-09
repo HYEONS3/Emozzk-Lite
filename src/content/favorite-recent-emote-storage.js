@@ -74,21 +74,34 @@ export function startFavoriteRecentEmoteStorageSync() {
     return;
   }
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== 'local') return;
+  chrome.storage.onChanged.addListener(handleFavoriteRecentEmoteStorageChanged);
+}
 
-    const change = changes[FAVORITE_RECENT_EMOTES_STORAGE_KEY];
+export function stopFavoriteRecentEmoteStorageSync() {
+  if (!storageSyncStarted) return;
 
-    if (!change) return;
-    if (storageWriteQueue.hasPending()) return;
+  storageSyncStarted = false;
 
-		const normalizedStorage = normalizeFavoriteRecentEmoteStorage(change.newValue);
+  chrome.storage?.onChanged?.removeListener?.(
+    handleFavoriteRecentEmoteStorageChanged
+  );
+}
 
-    storageChangeRevision += 1;
-		favoriteEmotesCache = normalizedStorage.favorites;
-		favoriteSetOrdersCache = normalizedStorage.setOrders;
-		initialized = true;
-  });
+function handleFavoriteRecentEmoteStorageChanged(changes, areaName) {
+  if (!storageSyncStarted) return;
+  if (areaName !== 'local') return;
+
+  const change = changes[FAVORITE_RECENT_EMOTES_STORAGE_KEY];
+
+  if (!change) return;
+  if (storageWriteQueue.hasPending()) return;
+
+	const normalizedStorage = normalizeFavoriteRecentEmoteStorage(change.newValue);
+
+  storageChangeRevision += 1;
+	favoriteEmotesCache = normalizedStorage.favorites;
+	favoriteSetOrdersCache = normalizedStorage.setOrders;
+	initialized = true;
 }
 
 export function getCachedFavoriteRecentEmotes() {
