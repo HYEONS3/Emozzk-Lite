@@ -45,6 +45,10 @@ import {
 } from './emote-favorites-event-name.js';
 
 import {
+  createEventListenerGroup,
+} from './event-listener-group.js';
+
+import {
   isEmoteBindAssignMode,
   isEmoteBindClearMode,
 } from './emote-bind-mode-state.js';
@@ -64,14 +68,28 @@ const SHORTCUT_SET_FLASH_VISIBLE_TIME = 1400;
 let shortcutSetFlashTimer = 0;
 
 let attached = false;
+let eventGeneration = 0;
+const eventListeners = createEventListenerGroup();
 
 export function attachEmoteFavoriteEvents() {
   if (attached) return;
 
   attached = true;
+  eventGeneration += 1;
 
-  document.addEventListener('mousedown', handleFavoriteMouseDown, true);
-  document.addEventListener('click', handleFavoriteClick, true);
+  eventListeners.add(document, 'mousedown', handleFavoriteMouseDown, true);
+  eventListeners.add(document, 'click', handleFavoriteClick, true);
+}
+
+export function detachEmoteFavoriteEvents() {
+  if (!attached) return;
+
+  attached = false;
+  eventGeneration += 1;
+
+  eventListeners.removeAll();
+  clearShortcutSetFlashTimer();
+  clearFlashingShortcutSetButtons(document);
 }
 
 function handleFavoriteMouseDown(event) {
@@ -86,6 +104,8 @@ function handleFavoriteMouseDown(event) {
 }
 
 async function handleFavoriteClick(event) {
+  const generation = eventGeneration;
+
   if (isEmoteBindInteractionModeActive()) return;
   if (!isFavoriteToggleEvent(event)) return;
 
@@ -117,6 +137,13 @@ async function handleFavoriteClick(event) {
   try {
     const favoriteEmotes = await getFavoriteRecentEmotes();
 
+    if (!isFavoriteToggleContextStillValid({
+      context,
+      generation,
+    })) {
+      return;
+    }
+
     const willRemoveFavorite = favoriteEmotes.some((favoriteEmote) => {
       return getRecentEmoteId(favoriteEmote) === emojiId;
     });
@@ -132,9 +159,13 @@ async function handleFavoriteClick(event) {
 
 				return;
 			}
-		}
+    }
 
     const result = await toggleFavoriteRecentEmote(recentEmote);
+
+    if (!isFavoriteEventGenerationCurrent(generation)) {
+      return;
+    }
 
     if (!result.changed) {
       return;
@@ -313,6 +344,9 @@ function flashShortcutSetButtons({
   setIds,
 }) {
   if (!(panel instanceof HTMLElement)) return;
+  if (!attached) return;
+
+  const generation = eventGeneration;
 
   const targetSetIds = new Set(
     setIds
@@ -343,21 +377,58 @@ function flashShortcutSetButtons({
     button.classList.add(SHORTCUT_SET_BUTTON_FLASH_CLASS);
   });
 
-  if (shortcutSetFlashTimer) {
-    window.clearTimeout(shortcutSetFlashTimer);
-  }
+  clearShortcutSetFlashTimer();
 
   shortcutSetFlashTimer = window.setTimeout(() => {
+    shortcutSetFlashTimer = 0;
+
+    if (
+      !attached ||
+      generation !== eventGeneration ||
+      !panel.isConnected
+    ) {
+      return;
+    }
+
     clearFlashingShortcutSetButtons(panel);
   }, SHORTCUT_SET_FLASH_VISIBLE_TIME);
 }
 
-function clearFlashingShortcutSetButtons(panel) {
-  if (!(panel instanceof HTMLElement)) return;
+function clearShortcutSetFlashTimer() {
+  if (!shortcutSetFlashTimer) {
+    return;
+  }
 
-  panel
+  window.clearTimeout(shortcutSetFlashTimer);
+  shortcutSetFlashTimer = 0;
+}
+
+function clearFlashingShortcutSetButtons(root) {
+  if (!(root instanceof Element) && root !== document) return;
+
+  root
     .querySelectorAll(`.${SHORTCUT_SET_BUTTON_FLASH_CLASS}`)
     .forEach((button) => {
       button.classList.remove(SHORTCUT_SET_BUTTON_FLASH_CLASS);
     });
+}
+
+function isFavoriteEventGenerationCurrent(generation) {
+  return Boolean(
+    attached &&
+    generation === eventGeneration
+  );
+}
+
+function isFavoriteToggleContextStillValid({
+  context,
+  generation,
+}) {
+  return Boolean(
+    attached &&
+    generation === eventGeneration &&
+    context?.button?.isConnected &&
+    context?.panel?.isConnected &&
+    context.panel.contains(context.button)
+  );
 }
