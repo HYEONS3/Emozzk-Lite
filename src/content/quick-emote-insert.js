@@ -56,6 +56,7 @@ let insertQueue = [];
 let nextInsertItemId = 1;
 let isExecutingInsertQueue = false;
 let quickInsertClickDepth = 0;
+let insertQueueGeneration = 0;
 
 export function isQuickEmoteInsertInProgress() {
   return Boolean(
@@ -164,6 +165,7 @@ function enqueueInsertItem(target) {
 
 function clearInsertQueue() {
   insertQueue = [];
+  insertQueueGeneration += 1;
 }
 
 function ensureEmotePanelReady() {
@@ -259,6 +261,8 @@ function scheduleInsertQueueExecution() {
 }
 
 async function executeInsertQueue() {
+  const generation = insertQueueGeneration;
+
   if (isChatInputEmoteLimitReached()) {
     clearInsertQueue();
     scheduleBadgeUpdate();
@@ -266,6 +270,10 @@ async function executeInsertQueue() {
   }
 
   const panel = await ensureEmotePanelReady();
+
+  if (generation !== insertQueueGeneration) {
+    return;
+  }
 
   if (!panel) {
     clearInsertQueue();
@@ -283,7 +291,10 @@ async function executeInsertQueue() {
 
 	await waitAnimationFrames(PANEL_OPEN_SETTLE_FRAMES);
 
-  while (insertQueue.length) {
+  while (
+    generation === insertQueueGeneration &&
+    insertQueue.length
+  ) {
     /*
      * 실제 item을 꺼내기 전에 제한을 본다.
      * 여기서 queue를 비우면 남은 keyup/repeat 입력이 버튼 click까지 가지 않는다.
@@ -303,6 +314,7 @@ async function executeInsertQueue() {
     await executeInsertItem({
       item,
       panel,
+      generation,
     });
 
     await waitAnimationFrames(BETWEEN_INSERT_FRAMES);
@@ -312,8 +324,13 @@ async function executeInsertQueue() {
 async function executeInsertItem({
   item,
   panel,
+  generation,
 }) {
   for (let attempt = 0; attempt < INSERT_RETRY_COUNT; attempt += 1) {
+    if (generation !== insertQueueGeneration) {
+      return false;
+    }
+
     /*
      * retry 루프 안에서도 매번 제한을 본다.
      * 버튼을 못 찾아 retry하던 중 입력창이 10개가 될 수 있다.
@@ -332,6 +349,10 @@ async function executeInsertItem({
      */
     const prepared = await prepareChatInputForQuickEmoteInsert();
 
+    if (generation !== insertQueueGeneration) {
+      return false;
+    }
+
     if (!prepared) {
       await waitRetryInterval();
       continue;
@@ -348,6 +369,10 @@ async function executeInsertItem({
 
     if (cleanedBeforeClick) {
       await waitAnimationFrames(1);
+    }
+
+    if (generation !== insertQueueGeneration) {
+      return false;
     }
 
     /*

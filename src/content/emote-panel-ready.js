@@ -8,7 +8,7 @@ import {
 
 const DEFAULT_READY_TIMEOUT_MS = 1200;
 
-let pendingReadyPromise = null;
+const pendingReadyPromiseByTimeout = new Map();
 
 export function getReadyEmotePanelState() {
   const panel = findEmotePanel();
@@ -33,18 +33,28 @@ export function getReadyEmotePanelState() {
 export function waitForEmotePanelReady({
   timeoutMs = DEFAULT_READY_TIMEOUT_MS,
 } = {}) {
+  const normalizedTimeoutMs = normalizeReadyTimeout(timeoutMs);
+  const pendingReadyPromise = pendingReadyPromiseByTimeout.get(
+    normalizedTimeoutMs
+  );
+
   if (pendingReadyPromise) {
     return pendingReadyPromise;
   }
 
-  pendingReadyPromise = waitForReadyState({
-    timeoutMs,
+  const nextPendingReadyPromise = waitForReadyState({
+    timeoutMs: normalizedTimeoutMs,
   })
     .finally(() => {
-      pendingReadyPromise = null;
+      pendingReadyPromiseByTimeout.delete(normalizedTimeoutMs);
     });
 
-  return pendingReadyPromise;
+  pendingReadyPromiseByTimeout.set(
+    normalizedTimeoutMs,
+    nextPendingReadyPromise
+  );
+
+  return nextPendingReadyPromise;
 }
 
 async function waitForReadyState({
@@ -132,4 +142,14 @@ function waitNextFrame() {
   return new Promise((resolve) => {
     requestAnimationFrame(resolve);
   });
+}
+
+function normalizeReadyTimeout(timeoutMs) {
+  const normalizedTimeoutMs = Number(timeoutMs);
+
+  if (!Number.isFinite(normalizedTimeoutMs) || normalizedTimeoutMs < 0) {
+    return DEFAULT_READY_TIMEOUT_MS;
+  }
+
+  return Math.round(normalizedTimeoutMs);
 }
