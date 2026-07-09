@@ -97,7 +97,9 @@ export function startFavoriteRecentEmoteStorageSync() {
     return;
   }
 
-  chrome.storage.onChanged.addListener(handleFavoriteRecentEmoteStorageChanged);
+  globalThis.chrome.storage.onChanged.addListener(
+    handleFavoriteRecentEmoteStorageChanged
+  );
 }
 
 export function stopFavoriteRecentEmoteStorageSync() {
@@ -107,7 +109,7 @@ export function stopFavoriteRecentEmoteStorageSync() {
   storageSyncGeneration += 1;
   initializePromise = null;
 
-  chrome.storage?.onChanged?.removeListener?.(
+  globalThis.chrome?.storage?.onChanged?.removeListener?.(
     handleFavoriteRecentEmoteStorageChanged
   );
 }
@@ -561,7 +563,7 @@ function readStorage() {
     }
 
     storage.get([FAVORITE_RECENT_EMOTES_STORAGE_KEY], (result) => {
-      const error = chrome.runtime.lastError;
+      const error = globalThis.chrome?.runtime?.lastError;
 
       if (error) {
         reject(new Error(error.message));
@@ -583,7 +585,7 @@ function writeStorage(value) {
     }
 
     storage.set(value, () => {
-      const error = chrome.runtime.lastError;
+      const error = globalThis.chrome?.runtime?.lastError;
 
       if (error) {
         reject(new Error(error.message));

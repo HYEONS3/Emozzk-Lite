@@ -91,7 +91,9 @@ export function startShortcutBindingsStorageSync() {
     return;
   }
 
-  chrome.storage.onChanged.addListener(handleShortcutBindingsStorageChanged);
+  globalThis.chrome.storage.onChanged.addListener(
+    handleShortcutBindingsStorageChanged
+  );
 }
 
 export function stopShortcutBindingsStorageSync() {
@@ -102,7 +104,7 @@ export function stopShortcutBindingsStorageSync() {
   storageSyncStarted = false;
   storageSyncGeneration += 1;
 
-  chrome.storage?.onChanged?.removeListener?.(
+  globalThis.chrome?.storage?.onChanged?.removeListener?.(
     handleShortcutBindingsStorageChanged
   );
 }
@@ -961,7 +963,9 @@ async function readShortcutBindingsStorageEntry() {
     return readShortcutBindingsStorageEntryFromLocalStorage();
   }
 
-  const result = await chrome.storage.local.get(SHORTCUT_BINDINGS_STORAGE_KEY);
+  const result = await globalThis.chrome.storage.local.get(
+    SHORTCUT_BINDINGS_STORAGE_KEY
+  );
   const hasStoredValue = Object.prototype.hasOwnProperty.call(
     result,
     SHORTCUT_BINDINGS_STORAGE_KEY
@@ -982,7 +986,7 @@ async function writeShortcutBindingSetStateToStorage(state) {
   }
 
   await storageWriteQueue.run(() => {
-    return chrome.storage.local.set({
+    return globalThis.chrome.storage.local.set({
       [SHORTCUT_BINDINGS_STORAGE_KEY]: storageValue,
     });
   });
@@ -1062,7 +1066,7 @@ async function removeShortcutBindingsFromStorage() {
   }
 
   await storageWriteQueue.run(() => {
-    return chrome.storage.local.remove(SHORTCUT_BINDINGS_STORAGE_KEY);
+    return globalThis.chrome.storage.local.remove(SHORTCUT_BINDINGS_STORAGE_KEY);
   });
 }
 

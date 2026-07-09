@@ -60,7 +60,9 @@ export function startExtensionSettingsStorageSync() {
     return;
   }
 
-  chrome.storage.onChanged.addListener(handleExtensionSettingsStorageChanged);
+  globalThis.chrome.storage.onChanged.addListener(
+    handleExtensionSettingsStorageChanged
+  );
 }
 
 export function stopExtensionSettingsStorageSync() {
@@ -71,7 +73,7 @@ export function stopExtensionSettingsStorageSync() {
   storageSyncStarted = false;
   storageSyncGeneration += 1;
 
-  chrome.storage?.onChanged?.removeListener?.(
+  globalThis.chrome?.storage?.onChanged?.removeListener?.(
     handleExtensionSettingsStorageChanged
   );
 }
@@ -175,7 +177,9 @@ async function readExtensionSettingsFromStorage() {
     return readExtensionSettingsFromLocalStorage();
   }
 
-  const result = await chrome.storage.local.get(EXTENSION_SETTINGS_STORAGE_KEY);
+  const result = await globalThis.chrome.storage.local.get(
+    EXTENSION_SETTINGS_STORAGE_KEY
+  );
 
   return normalizeExtensionSettings(result?.[EXTENSION_SETTINGS_STORAGE_KEY]);
 }
@@ -189,7 +193,7 @@ async function writeExtensionSettingsToStorage(settings) {
   }
 
   await storageWriteQueue.run(() => {
-    return chrome.storage.local.set({
+    return globalThis.chrome.storage.local.set({
       [EXTENSION_SETTINGS_STORAGE_KEY]: normalizedSettings,
     });
   });
