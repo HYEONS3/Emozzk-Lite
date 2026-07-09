@@ -196,6 +196,8 @@ let phaseFirstHintConsumeScheduled = false;
 
 let started = false;
 let isRendering = false;
+let skipNextOwnRenderMutationBatch = false;
+let skipNextOwnRenderMutationBatchTimer = 0;
 const favoriteRenderScheduler = createFrameScheduler(() => {
   renderFavoriteEmoteSection();
 });
@@ -238,6 +240,8 @@ export function stopFavoriteEmoteSectionRenderer() {
   stopFavoriteSectionMutationObserver();
 
   favoriteRenderScheduler.stop();
+  skipNextOwnRenderMutationBatch = false;
+  clearSkipNextOwnRenderMutationBatchTimer();
 
   clearFavoriteRenderState();
   exitShortcutSetRenameModeSilently();
@@ -247,6 +251,7 @@ export function stopFavoriteEmoteSectionRenderer() {
 
 export function scheduleFavoriteEmoteSectionRender() {
   if (!started) return;
+  if (isRendering) return;
 
   favoriteRenderScheduler.schedule();
 }
@@ -431,6 +436,7 @@ export function renderFavoriteEmoteSection() {
   } finally {
     markFavoriteAreaReady(area);
     isRendering = false;
+    ignoreNextOwnRenderMutationBatch();
   }
 }
 
@@ -2552,8 +2558,33 @@ function stopFavoriteSectionMutationObserver() {
   unsubscribePanelDomMutations(handleFavoriteSectionMutations);
 }
 
+function ignoreNextOwnRenderMutationBatch() {
+  skipNextOwnRenderMutationBatch = true;
+  clearSkipNextOwnRenderMutationBatchTimer();
+
+  skipNextOwnRenderMutationBatchTimer = window.setTimeout(() => {
+    skipNextOwnRenderMutationBatch = false;
+    skipNextOwnRenderMutationBatchTimer = 0;
+  }, 0);
+}
+
+function clearSkipNextOwnRenderMutationBatchTimer() {
+  if (!skipNextOwnRenderMutationBatchTimer) {
+    return;
+  }
+
+  window.clearTimeout(skipNextOwnRenderMutationBatchTimer);
+  skipNextOwnRenderMutationBatchTimer = 0;
+}
+
 function handleFavoriteSectionMutations(mutations) {
   if (isRendering) return;
+
+  if (skipNextOwnRenderMutationBatch) {
+    skipNextOwnRenderMutationBatch = false;
+    clearSkipNextOwnRenderMutationBatchTimer();
+    return;
+  }
 
   const hasRelevantMutation = mutations.some((mutation) => {
     return isRelevantMutation(mutation);
