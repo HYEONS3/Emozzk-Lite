@@ -15,7 +15,18 @@ import {
   isQuickEmoteInsertInProgress,
 } from './quick-emote-insert.js';
 
+import {
+  createEventListenerGroup,
+} from './event-listener-group.js';
+
+let attached = false;
+const eventListeners = createEventListenerGroup();
+
 export function attachEmoteClickFocusRestore() {
+  if (attached) return;
+
+  attached = true;
+
   /*
    * 사용자 직접 클릭에는 focus restore를 걸지 않는다.
    *
@@ -24,10 +35,19 @@ export function attachEmoteClickFocusRestore() {
    * 여기서 채팅창으로 focus를 보내면 사용자가 클릭 / Enter 등으로
    * 이모티콘을 연속 입력하려던 흐름이 채팅 전송으로 바뀔 수 있다.
    */
-  document.addEventListener('click', handleEmoteClick, false);
+  eventListeners.add(document, 'click', handleEmoteClick, false);
+}
+
+export function detachEmoteClickFocusRestore() {
+  if (!attached) return;
+
+  attached = false;
+
+  eventListeners.removeAll();
 }
 
 function handleEmoteClick(event) {
+  if (!attached) return;
   if (isEmoteBindInteractionModeActive()) return;
   if (isFavoriteToggleEvent(event)) return;
 

@@ -15,12 +15,18 @@ import {
   EXTENSION_SETTINGS_STORAGE_KEY,
 } from '../shared/extension-settings.js';
 
+import {
+  createEventListenerGroup,
+} from './event-listener-group.js';
+
 const RECENT_STORAGE_LIMIT_MESSAGE =
   'EMZK_LITE_RECENT_STORAGE_LIMIT_CHANGED';
 
 let started = false;
 let injected = false;
+let bridgeGeneration = 0;
 let cachedRecentStorageLimit = DEFAULT_RECENT_STORAGE_LIMIT;
+const eventListeners = createEventListenerGroup();
 
 export function startRecentEmoteStorageLimitBridge() {
   if (started) {
@@ -28,17 +34,33 @@ export function startRecentEmoteStorageLimitBridge() {
   }
 
   started = true;
+  bridgeGeneration += 1;
 
   injectPageScript();
 
-  void syncRecentStorageLimitFromSettings();
+  void syncRecentStorageLimitFromSettings({
+    generation: bridgeGeneration,
+  });
 
-  document.addEventListener(
+  eventListeners.add(
+    document,
     getFavoritesChangedEventName(),
     handleFavoritesChanged
   );
 
-  chrome.storage.onChanged.addListener(handleStorageChanged);
+  chrome.storage?.onChanged?.addListener?.(handleStorageChanged);
+}
+
+export function stopRecentEmoteStorageLimitBridge() {
+  if (!started) {
+    return;
+  }
+
+  started = false;
+  bridgeGeneration += 1;
+
+  eventListeners.removeAll();
+  chrome.storage?.onChanged?.removeListener?.(handleStorageChanged);
 }
 
 export function getCachedRecentStorageLimit() {
@@ -55,6 +77,12 @@ function injectPageScript() {
   }
 
   injected = true;
+  const generation = bridgeGeneration;
+
+  if (!chrome.runtime?.getURL) {
+    console.error('[Emozzk Lite] chrome.runtime.getURL is not available.');
+    return;
+  }
 
   const script = document.createElement('script');
 
@@ -63,6 +91,13 @@ function injectPageScript() {
 
   script.onload = () => {
     script.remove();
+
+    if (
+      !started ||
+      generation !== bridgeGeneration
+    ) {
+      return;
+    }
 
     postRecentStorageLimitToPage(cachedRecentStorageLimit);
   };
@@ -76,8 +111,18 @@ function injectPageScript() {
     .appendChild(script);
 }
 
-async function syncRecentStorageLimitFromSettings() {
+async function syncRecentStorageLimitFromSettings({
+  generation = bridgeGeneration,
+} = {}) {
   const settings = await readExtensionSettings();
+
+  if (
+    !started ||
+    generation !== bridgeGeneration
+  ) {
+    return;
+  }
+
   const limit = normalizeRecentStorageLimit(settings?.recentStorageLimit);
 
   if (setCachedRecentStorageLimit(limit)) {
@@ -90,6 +135,10 @@ async function syncRecentStorageLimitFromSettings() {
 
 async function readExtensionSettings() {
   try {
+    if (!chrome.storage?.local?.get) {
+      return {};
+    }
+
     const result = await chrome.storage.local.get(EXTENSION_SETTINGS_STORAGE_KEY);
 
     return result?.[EXTENSION_SETTINGS_STORAGE_KEY] || {};
@@ -100,6 +149,10 @@ async function readExtensionSettings() {
 }
 
 function handleStorageChanged(changes, areaName) {
+  if (!started) {
+    return;
+  }
+
   if (areaName !== 'local') {
     return;
   }
@@ -122,6 +175,10 @@ function handleStorageChanged(changes, areaName) {
 }
 
 function handleFavoritesChanged() {
+  if (!started) {
+    return;
+  }
+
   postRecentStorageLimitToPage(cachedRecentStorageLimit);
 }
 
@@ -137,6 +194,10 @@ function setCachedRecentStorageLimit(limit) {
 }
 
 function postRecentStorageLimitToPage(limit) {
+  if (!started) {
+    return;
+  }
+
   window.postMessage({
     source: 'emzk-lite',
     type: RECENT_STORAGE_LIMIT_MESSAGE,
