@@ -1,6 +1,6 @@
 {
   "name": "emozzk",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Keyboard controls for Chzzk's built-in emote panel",
   "type": "module",
   "private": true,

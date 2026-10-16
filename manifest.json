@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Emozzk - 치지직 이모티콘 단축키",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "자주 쓰는 치지직 이모티콘을 즐겨찾기에 모아두고, 원하는 키에 등록해 바로 사용할 수 있게 해주는 브라우저 확장 프로그램입니다.",
   "permissions": [
     "storage"
