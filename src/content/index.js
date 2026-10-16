@@ -48,6 +48,7 @@ import {
 import {
   initFavoriteRecentEmoteStorage,
   getCachedFavoriteRecentEmotes,
+  syncFavoriteRecentEmoteImages,
   stopFavoriteRecentEmoteStorageSync,
 } from './favorite-recent-emote-storage.js';
 
@@ -120,7 +121,7 @@ export function startContentScript() {
 	attachExtensionSettingsChangedHandler();
 
 	initializeStorages()
-		.finally(() => {
+		.finally(async () => {
       if (
         !started ||
         generation !== startGeneration
@@ -128,6 +129,10 @@ export function startContentScript() {
         return;
       }
 
+      await syncFavoriteRecentEmoteImages(readRecentEmotes()).catch((error) => {
+        console.error('[Emozzk Lite] failed to refresh favorite emote images:', error);
+      });
+      if (!started || generation !== startGeneration) return;
 			syncRecentLocalStorageWithFavoriteCache();
 			syncRecentStorageLimitBridgeState();
 

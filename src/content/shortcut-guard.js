@@ -37,3 +37,29 @@ function getElementFromTarget(target) {
 
   return null;
 }
+
+export function getDonationAmountInput(
+  target = document.activeElement
+) {
+  const element = getElementFromTarget(target);
+
+  if (!element) {
+    return null;
+  }
+
+  const input = element.closest('input#donation-money');
+
+  if (!(input instanceof HTMLInputElement)) {
+    return null;
+  }
+
+  const dialog = input.closest(
+    '[role="alertdialog"][aria-modal="true"]'
+  );
+
+  if (!dialog) {
+    return null;
+  }
+
+  return input;
+}

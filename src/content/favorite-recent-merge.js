@@ -1,5 +1,6 @@
 import {
   getRecentEmoteId,
+  getRecentEmoteImageUrl,
   normalizeRecentEmotes,
 } from './recent-emote-storage.js';
 
@@ -17,7 +18,7 @@ export function mergeFavoriteAndRecentEmotes({
    * 즐겨찾기는 최근 이모티콘 limit에 포함하지 않는다.
    * maxRecentEmoteCount는 "즐겨찾기를 제외한 일반 최근 이모티콘 수"로만 적용한다.
    */
-  const normalizedFavorites = normalizeRecentEmotes(favorites);
+  const normalizedFavorites = refreshFavoriteEmoteImages(favorites, recent);
   const normalizedRecent = normalizeRecentEmotes(recent);
 
   const favoriteIds = new Set(
@@ -40,6 +41,23 @@ export function mergeFavoriteAndRecentEmotes({
     ...normalizedFavorites,
     ...normalRecent,
   ];
+}
+
+export function refreshFavoriteEmoteImages(favorites, recent) {
+  const recentById = new Map(
+    normalizeRecentEmotes(recent).map((emote) => [getRecentEmoteId(emote), emote])
+  );
+
+  return normalizeRecentEmotes(favorites).map((favorite) => {
+    const current = recentById.get(getRecentEmoteId(favorite));
+    const imageUrl = getRecentEmoteImageUrl(current);
+
+    if (!imageUrl || imageUrl === getRecentEmoteImageUrl(favorite)) {
+      return favorite;
+    }
+
+    return { ...favorite, imageUrl };
+  });
 }
 
 export function removeFavoriteEmotesFromRecent({

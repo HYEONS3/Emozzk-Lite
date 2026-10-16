@@ -62,6 +62,11 @@ export function beginQuickEmotePanelSession() {
 
   cancelQuickEmotePanelSessionRelease();
 
+  if (isDonationDialogQuickInsertContext()) {
+    revealQuickEmotePanelForUser();
+    return false;
+  }
+
   if (
     !isQuickInsertPanelHiddenEnabled() ||
     findEmotePanel()
@@ -142,6 +147,24 @@ export function waitForQuickEmotePanelSessionRelease() {
 function isQuickInsertPanelHiddenEnabled() {
   return Boolean(
     getCachedExtensionSettings().experimentalQuickInsertPanelHidden
+  );
+}
+
+function isDonationDialogQuickInsertContext() {
+  const active = document.activeElement;
+
+  if (!(active instanceof Element)) {
+    return false;
+  }
+
+  const dialog = active.closest('[role="dialog"], [role="alertdialog"]');
+
+  if (!(dialog instanceof Element)) {
+    return false;
+  }
+
+  return Boolean(
+    dialog.querySelector('#donation-money, [class*="_is_donation_"]')
   );
 }
 

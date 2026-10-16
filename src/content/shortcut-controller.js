@@ -1,8 +1,4 @@
 import {
-  isTypingTarget,
-} from './shortcut-guard.js';
-
-import {
   openEmotePanel,
   closeEmotePanel,
 } from './emote-trigger.js';
@@ -88,6 +84,11 @@ import {
   isQuickEmotePanelSessionActive,
   revealQuickEmotePanelForUser,
 } from './quick-emote-panel-session.js';
+
+import {
+  getDonationAmountInput,
+  isTypingTarget,
+} from './shortcut-guard.js';
 
 const EVENT_PHASE_KEYDOWN = 'keydown';
 const EVENT_PHASE_KEYUP = 'keyup';
@@ -206,6 +207,15 @@ function handleShortcutEvent(event) {
   }
 
 	const state = getShortcutContext(event);
+
+	if (state.isDonationAmountTyping) {
+		handleShortcutKeyDown({
+			event,
+			state,
+		});
+
+		return;
+	}
 
 	if (state.isNonChatTyping) {
 		return;
@@ -346,6 +356,10 @@ function handleShortcutKeyDown({
       binding: primaryBinding,
     });
   }
+
+	if (state.isDonationAmountTyping) {
+		state.donationAmountInput?.blur();
+	}
 
   const pressKey = getActivePressKeyFromEvent(event);
 
@@ -729,6 +743,9 @@ function isShortcutBindingAllowedInState({
     return false;
   }
 
+	if (state.isDonationAmountTyping) {
+		return true;
+	}
   /*
    * 검색창이나 다른 입력 요소를 사용 중이면 단축키를 가로채지 않는다.
    */
@@ -799,15 +816,26 @@ function blockKeyboardEvent({
 
 function getShortcutContext(event) {
   const chatInput = findChatInput();
+
+  const donationAmountInput =
+    getDonationAmountInput(event.target) ||
+    getDonationAmountInput(document.activeElement);
+
   const isTyping = isTypingContext(event);
   const isChatTyping = isChatInputContext(event, chatInput);
+  const isDonationAmountTyping = Boolean(donationAmountInput);
 
   return {
     panel: findEmotePanel(),
     chatInput,
+    donationAmountInput,
     isTyping,
     isChatTyping,
-    isNonChatTyping: isTyping && !isChatTyping,
+    isDonationAmountTyping,
+    isNonChatTyping:
+      isTyping &&
+      !isChatTyping &&
+      !isDonationAmountTyping,
   };
 }
 
@@ -1097,3 +1125,4 @@ function handleShortcutSetNavigationKeyUp(event) {
 
   return true;
 }
+

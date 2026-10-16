@@ -11,6 +11,10 @@ import {
   createStorageWriteQueue,
 } from './storage-write-queue.js';
 
+import {
+  refreshFavoriteEmoteImages,
+} from './favorite-recent-merge.js';
+
 const FAVORITE_RECENT_EMOTES_STORAGE_KEY = 'emozzk_lite_favorite_recent_emotes_v1';
 const FAVORITE_RECENT_EMOTES_STORAGE_VERSION = 2;
 const MAX_FAVORITE_RECENT_EMOTE_COUNT = 200;
@@ -153,6 +157,19 @@ export async function setFavoriteRecentEmotes(emotes) {
   favoriteSetOrdersCache = snapshot.setOrders;
 
   return getCachedFavoriteRecentEmotes();
+}
+
+export async function syncFavoriteRecentEmoteImages(recent) {
+  await ensureInitialized();
+
+  const next = refreshFavoriteEmoteImages(favoriteEmotesCache, recent);
+  const changed = next.some((emote, index) => emote !== favoriteEmotesCache[index]);
+
+  if (changed) {
+    await setFavoriteRecentEmotes(next);
+  }
+
+  return changed;
 }
 
 export async function setFavoriteRecentSetOrder(setId, order) {
@@ -330,8 +347,9 @@ export async function ensureFavoriteRecentEmoteAppended(emote) {
   }
 
   if (isFavoriteRecentEmoteId(id)) {
+    const changed = await syncFavoriteRecentEmoteImages([emote]);
     return createToggleResult({
-      changed: false,
+      changed,
       added: false,
       removed: false,
     });

@@ -174,6 +174,7 @@ function handlePointerDown(event) {
     placeholder: null,
     dragMetrics: null,
     scrollContainer: null,
+    pointerCaptureElement: null,
 
 		insertionLockItem: null,
 
@@ -194,7 +195,7 @@ function handlePointerDown(event) {
     'visibilitychange',
     handleActiveDragVisibilityChange
   );
-  activeDragListeners.add(window, 'blur', handleActiveDragWindowBlur, true);
+
 }
 
 function handlePointerMove(event) {
@@ -227,6 +228,10 @@ function handlePointerMove(event) {
     }
 
     startDrag(event);
+
+    if (!activeDrag?.started) {
+      return;
+    }
   }
 
   event.preventDefault();
@@ -308,10 +313,6 @@ function handleActiveDragVisibilityChange() {
   cancelActiveDrag();
 }
 
-function handleActiveDragWindowBlur() {
-  cancelActiveDrag();
-}
-
 function handleNativeDragStart(event) {
   const target = event.target;
 
@@ -383,6 +384,8 @@ function startDrag(event) {
   }
 
   activeDrag.ghostMetrics = getGhostMetrics(activeDrag.ghostItem);
+
+  captureActiveDragPointer();
 
   /*
    * drag가 실제로 시작되는 순간부터 커서가 ghost 이미지의 중심을 잡도록 한다.
@@ -786,6 +789,8 @@ function cleanupDrag({
     startOrder,
     frameId,
     autoScrollFrameId,
+    pointerCaptureElement,
+    pointerId,
   } = activeDrag;
 
   if (frameId) {
@@ -795,6 +800,11 @@ function cleanupDrag({
   if (autoScrollFrameId) {
     cancelAnimationFrame(autoScrollFrameId);
   }
+
+  releaseActiveDragPointer({
+    element: pointerCaptureElement,
+    pointerId,
+  });
 
   activeDragListeners.removeAll();
 
@@ -823,6 +833,52 @@ function cleanupDrag({
   }
 
   activeDrag = null;
+}
+
+function captureActiveDragPointer() {
+  if (!activeDrag) return;
+
+  const {
+    item,
+    pointerId,
+  } = activeDrag;
+
+  if (
+    !(item instanceof HTMLElement) ||
+    typeof item.setPointerCapture !== 'function'
+  ) {
+    return;
+  }
+
+  try {
+    item.setPointerCapture(pointerId);
+    activeDrag.pointerCaptureElement = item;
+  } catch {
+    activeDrag.pointerCaptureElement = null;
+  }
+}
+
+function releaseActiveDragPointer({
+  element,
+  pointerId,
+}) {
+  if (
+    !(element instanceof HTMLElement) ||
+    typeof element.releasePointerCapture !== 'function'
+  ) {
+    return;
+  }
+
+  try {
+    if (element.hasPointerCapture?.(pointerId)) {
+      element.releasePointerCapture(pointerId);
+    }
+  } catch {
+    /*
+     * Pointer capture can already be released by the browser when the pointer
+     * is cancelled or the element is detached.
+     */
+  }
 }
 
 function isActiveDragDomConnected() {

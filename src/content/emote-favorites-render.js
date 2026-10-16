@@ -18,6 +18,7 @@ import {
   getCachedFavoriteRecentSetOrders,
   hasCustomFavoriteRecentSetOrder,
   resetFavoriteRecentSetOrder,
+  syncFavoriteRecentEmoteImages,
 } from './favorite-recent-emote-storage.js';
 
 import {
@@ -2250,11 +2251,14 @@ function reconcileFavoriteItems({
 		collectEmoteItemsFrom(recentList);
 
 	const allItems = [
-		...currentFavoriteItems,
 		...recentItems,
+		...currentFavoriteItems,
 	];
 
 	const recentEmotes = readRecentEmotes();
+  void syncFavoriteRecentEmoteImages(recentEmotes).catch((error) => {
+    console.error('[Emozzk Lite] failed to refresh favorite emote images:', error);
+  });
 
   /*
    * 저장된 최근 목록은 있는데 DOM 항목이 하나도 없다면

@@ -1640,13 +1640,29 @@ html.emzk-lite-shortcut-set-dragging * {
 /* Quick insert                                                               */
 /* ========================================================================== */
 html.emzk-lite-quick-insert-panel-stealth
-  [role="alertdialog"][aria-modal="true"]:has(#emoji_area),
+  [role="alertdialog"][aria-modal="true"]:has(#emoji_area):not(:has(#donation-money)),
 html.emzk-lite-quick-insert-panel-stealth
-  [role="dialog"][aria-modal="true"]:has(#emoji_area) {
+  [role="dialog"][aria-modal="true"]:has(#emoji_area):not(:has(#donation-money)) {
   clip-path: inset(100%) !important;
   pointer-events: none !important;
   transition: none !important;
   animation: none !important;
+}
+
+html.emzk-lite-quick-insert-panel-stealth
+  [role="alertdialog"][aria-modal="true"]:has(#donation-money)
+  [role="alertdialog"][aria-modal="true"]:has(#emoji_area),
+html.emzk-lite-quick-insert-panel-stealth
+  [role="alertdialog"][aria-modal="true"]:has(#donation-money)
+  [role="dialog"][aria-modal="true"]:has(#emoji_area),
+html.emzk-lite-quick-insert-panel-stealth
+  [role="dialog"][aria-modal="true"]:has(#donation-money)
+  [role="alertdialog"][aria-modal="true"]:has(#emoji_area),
+html.emzk-lite-quick-insert-panel-stealth
+  [role="dialog"][aria-modal="true"]:has(#donation-money)
+  [role="dialog"][aria-modal="true"]:has(#emoji_area) {
+  clip-path: none !important;
+  pointer-events: auto !important;
 }
 
 .emzk-lite-quick-insert-trigger-snapshot {
